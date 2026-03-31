@@ -1,8 +1,8 @@
-# Mnemo: Milestones
+# RecallOS: Milestones
 
 ## Overview
 
-I'm building Mnemo in three milestones. Each one proves something specific and builds on the last.
+I'm building RecallOS in three milestones. Each one proves something specific and builds on the last.
 
 - **Milestone 1:** Prove the engine works for one specific domain
 - **Milestone 2:** Ship the SDK so developers and agents can use it
@@ -98,7 +98,7 @@ This is the hardest technical problem in the project. Getting it right is the di
 
 **6. MCP server**
 
-This is the primary interface. Mnemo runs as an MCP server from day one. When a user opens Claude Desktop, ChatGPT, VS Code, Cursor, or any MCP-compatible tool, the model can query Mnemo for context.
+This is the primary interface. RecallOS runs as an MCP server from day one. When a user opens Claude Desktop, ChatGPT, VS Code, Cursor, or any MCP-compatible tool, the model can query RecallOS for context.
 
 The MCP server exposes three types of capabilities:
 
@@ -110,12 +110,12 @@ I don't need to build provider adapters for each AI model. If it speaks MCP, it 
 
 **7. Ingestion layer (hybrid approach)**
 
-Mnemo needs to learn what you said to your AI tools. Two strategies working together:
+RecallOS needs to learn what you said to your AI tools. Two strategies working together:
 
-- **Primary: Log scraper.** A background watcher monitors local chat logs from Claude Desktop, Cursor, VS Code, Windsurf, etc. These tools already save chats to the user's disk (SQLite, JSON) for session restore. Mnemo watches those folders, parses new entries, and indexes them automatically. Zero friction, truly invisible, and fulfills the local-first promise, since it is just indexing data that's already on the user's machine.
-- **Secondary: Self-reporting tool.** Mnemo exposes a `record_interaction` MCP tool. The connected model is told (via MCP instructions) to call this tool with a summary after every exchange. Clean, protocol-native, and catches things the log scraper might miss.
+- **Primary: Log scraper.** A background watcher monitors local chat logs from Claude Desktop, Cursor, VS Code, Windsurf, etc. These tools already save chats to the user's disk (SQLite, JSON) for session restore. RecallOS watches those folders, parses new entries, and indexes them automatically. Zero friction, truly invisible, and fulfills the local-first promise, since it is just indexing data that's already on the user's machine.
+- **Secondary: Self-reporting tool.** RecallOS exposes a `record_interaction` MCP tool. The connected model is told (via MCP instructions) to call this tool with a summary after every exchange. Clean, protocol-native, and catches things the log scraper might miss.
 
-This hybrid gives Mnemo full cross-tool continuity. Talk to Claude in the morning, open ChatGPT in the afternoon, and ChatGPT can ask Mnemo: *"What did the user discuss earlier today?"* Mnemo returns the Claude conversation context. Seamless continuity across tools that don't know about each other.
+This hybrid gives RecallOS full cross-tool continuity. Talk to Claude in the morning, open ChatGPT in the afternoon, and ChatGPT can ask RecallOS: *"What did the user discuss earlier today?"* RecallOS returns the Claude conversation context. Seamless continuity across tools that don't know about each other.
 
 **8. Memory dashboard**
 
@@ -140,13 +140,13 @@ A simple local web UI. It's not a chat app, but an admin panel for your memory:
 
 Exit criteria for Milestone 1:
 
-- [ ] Mnemo runs as a background daemon and MCP server
+- [ ] RecallOS runs as a background daemon and MCP server
 - [ ] User can connect Claude Desktop (or another MCP client) to the engine and get context-enriched responses
 - [ ] Memory is stored locally and persists between sessions
 - [ ] Context compiler selects relevant memory for each request
 - [ ] MCP Resources, Tools, and Prompts all work correctly
 - [ ] Memory dashboard shows the user exactly which memory items exist, which were used, and which models accessed them
-- [ ] In a head-to-head comparison, responses with Mnemo context are more consistent and accurate than responses with raw chat history
+- [ ] In a head-to-head comparison, responses with RecallOS context are more consistent and accurate than responses with raw chat history
 - [ ] A user can talk to Claude in the morning and ChatGPT in the afternoon, and both get the same personal context from the engine
 - [ ] User can inspect, edit, and delete memory items through the dashboard
 
@@ -167,11 +167,11 @@ This is a serious engineering effort. The core components (memory extraction, co
 
 ### What I'm proving
 
-That Mnemo can be used as embeddable infrastructure, not just as a standalone MCP server, but as a library that developers embed in their own apps and that AI agents use to maintain persistent memory across sessions.
+That RecallOS can be used as embeddable infrastructure, not just as a standalone MCP server, but as a library that developers embed in their own apps and that AI agents use to maintain persistent memory across sessions.
 
 ### Why this matters
 
-Shipping the SDK as Milestone 2 (rather than generalizing first) sharpens the architecture early. Building a clean API forces good separation of concerns, makes the internals more modular, and strengthens the open-source story. It also puts Mnemo in the hands of developers and agent builders sooner, which drives real-world feedback before I try to generalize to every domain.
+Shipping the SDK as Milestone 2 (rather than generalizing first) sharpens the architecture early. Building a clean API forces good separation of concerns, makes the internals more modular, and strengthens the open-source story. It also puts RecallOS in the hands of developers and agent builders sooner, which drives real-world feedback before I try to generalize to every domain.
 
 ### What I need to build
 
@@ -179,7 +179,7 @@ Shipping the SDK as Milestone 2 (rather than generalizing first) sharpens the ar
 
 A clean, well-documented SDK that lets developers:
 
-- Initialize a Mnemo instance
+- Initialize a RecallOS instance
 - Store and retrieve memory programmatically
 - Trigger context compilation for a given request
 - Get compiled context as a structured object they can use however they want
@@ -205,7 +205,7 @@ These aren't just "memory items." They're specialized patterns that agents need 
 
 **3. Plugin system**
 
-Make it easy to extend Mnemo:
+Make it easy to extend RecallOS:
 
 - Custom storage backends (different databases, cloud storage, encrypted storage)
 - Custom memory extractors (domain-specific extraction logic)
@@ -232,7 +232,7 @@ When things go wrong (and they will), developers need tools to understand why:
 
 **6. CLI and deployment**
 
-- CLI for developers to interact with Mnemo from the terminal
+- CLI for developers to interact with RecallOS from the terminal
 - Docker image for easy deployment
 - Improved daemon management (install, start, stop, status, logs)
 
@@ -240,7 +240,7 @@ When things go wrong (and they will), developers need tools to understand why:
 
 Exit criteria for Milestone 2:
 
-- [ ] A third-party developer can build an app with Mnemo memory in under a day using only the SDK docs
+- [ ] A third-party developer can build an app with RecallOS memory in under a day using only the SDK docs
 - [ ] An agent can resume meaningful work after interruption using checkpointed state
 - [ ] An agent doesn't repeat previously failed approaches (failure memory works)
 - [ ] SDK supports at least 2 languages plus REST API
@@ -265,7 +265,7 @@ That the engine works for any type of task, not just the one domain I picked in 
 
 ### Why this matters
 
-Milestone 1 proves the architecture. Milestone 2 puts it in developers' hands. Milestone 3 proves it's truly general-purpose. If Mnemo only works for travel planning, it's a travel app, not a context engine. I need to show that the same core (storage, extraction, conflict resolution, compilation) handles coding, writing, research, health, finance, and anything else a user throws at it. Combined with the SDK from Milestone 2, this is also where long-running agent context becomes real, because generalization plus a clean API together enable agents that maintain state across diverse tasks over extended periods.
+Milestone 1 proves the architecture. Milestone 2 puts it in developers' hands. Milestone 3 proves it's truly general-purpose. If RecallOS only works for travel planning, it's a travel app, not a context engine. I need to show that the same core (storage, extraction, conflict resolution, compilation) handles coding, writing, research, health, finance, and anything else a user throws at it. Combined with the SDK from Milestone 2, this is also where long-running agent context becomes real, because generalization plus a clean API together enable agents that maintain state across diverse tasks over extended periods.
 
 ### What changes from earlier milestones
 
@@ -291,7 +291,7 @@ This likely means:
 - Adaptive token budgeting based on task complexity
 - Learning from user feedback (if the user ignores or corrects context, adjust scoring)
 
-A key advantage here: because Mnemo is local, I can run heavy background processes during idle time on the user's GPU or CPU. Things like Graph RAG (linking memories into knowledge graphs), temporal indexing (tracking how preferences evolve), and memory consolidation (merging redundant facts). This kind of deep processing would be prohibitively expensive at scale for a cloud provider, but it's free on the user's own hardware.
+A key advantage here: because RecallOS is local, I can run heavy background processes during idle time on the user's GPU or CPU. Things like Graph RAG (linking memories into knowledge graphs), temporal indexing (tracking how preferences evolve), and memory consolidation (merging redundant facts). This kind of deep processing would be prohibitively expensive at scale for a cloud provider, but it's free on the user's own hardware.
 
 **3. Better memory extraction**
 
@@ -299,7 +299,7 @@ The extraction system needs to handle a wider variety of conversational patterns
 
 **4. MCP client connections**
 
-Connect to external MCP servers to pull in context from calendars, documents, code repositories, and other tools, not just from conversation history. Mnemo becomes both an MCP server (providing context to AI models) and an MCP client (pulling context from external data sources).
+Connect to external MCP servers to pull in context from calendars, documents, code repositories, and other tools, not just from conversation history. RecallOS becomes both an MCP server (providing context to AI models) and an MCP client (pulling context from external data sources).
 
 **5. Better dashboard**
 
@@ -307,7 +307,7 @@ The memory dashboard needs to handle the complexity of multi-domain memory witho
 
 **6. The 100GB problem**
 
-This is where Mnemo beats the big providers. OpenAI cannot afford to let every user store 100GB of searchable vector data on their servers for $20/month. But on a user's NVMe drive, I can use high-intensity indexing (like GraphRAG) that finds deep connections between a chat from 2024 and a file from 2026. When a model queries Mnemo for context, the engine performs a high-speed local search and returns just the 10-20 most relevant paragraphs.
+This is where RecallOS beats the big providers. OpenAI cannot afford to let every user store 100GB of searchable vector data on their servers for $20/month. But on a user's NVMe drive, I can use high-intensity indexing (like GraphRAG) that finds deep connections between a chat from 2024 and a file from 2026. When a model queries RecallOS for context, the engine performs a high-speed local search and returns just the 10-20 most relevant paragraphs.
 
 ### How I know it works
 
@@ -328,11 +328,11 @@ Exit criteria for Milestone 3:
 
 These stay true in every milestone:
 
-**Infrastructure, not app.** Mnemo is not a chat UI or a destination. It's a background daemon and MCP server that makes every existing AI tool better. Users keep their favorite interfaces. The project focuses on memory and context logic.
+**Infrastructure, not app.** RecallOS is not a chat UI or a destination. It's a background daemon and MCP server that makes every existing AI tool better. Users keep their favorite interfaces. The project focuses on memory and context logic.
 
 **Local-first.** User memory lives on the user's machine unless they explicitly choose otherwise.
 
-**Model-agnostic.** The memory layer must work across providers. No single-vendor dependency. Any tool that speaks MCP connects to Mnemo.
+**Model-agnostic.** The memory layer must work across providers. No single-vendor dependency. Any tool that speaks MCP connects to RecallOS.
 
 **Inspectable.** Users and developers can always see what memory exists, what context was used, and why, whether through the dashboard, CLI, or SDK.
 

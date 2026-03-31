@@ -1,8 +1,8 @@
-# Mnemo: Vision
+# RecallOS: Vision
 
 ## The one-sentence version
 
-**AI models are the brain. Mnemo is the soul. The brain can be swapped. The soul stays with you.**
+**AI models are the brain. RecallOS is the soul. The brain can be swapped. The soul stays with you.**
 
 ## What I believe
 
@@ -14,13 +14,13 @@ That's the wrong architecture. The memory should belong to you, not to the model
 
 ## What I'm building
 
-Mnemo is a local-first context engine, the user-owned state layer for AI. It's not an app. It's infrastructure.
+RecallOS is a local-first context engine, the user-owned state layer for AI. It's not an app. It's infrastructure.
 
-It collects your memory over time: every preference, fact, and interaction across every AI tool you use. But it doesn't dump all of that into the next conversation. Memory is everything Mnemo knows about you. Context is the small, relevant slice it picks for right now. That distinction is the whole point.
+It collects your memory over time: every preference, fact, and interaction across every AI tool you use. But it doesn't dump all of that into the next conversation. Memory is everything RecallOS knows about you. Context is the small, relevant slice it picks for right now. That distinction is the whole point.
 
-It runs as a background service on your machine, a local context daemon. When you open any MCP-compatible tool, that tool can query Mnemo: "What should I know about this user right now?" Mnemo searches your local memory, picks the pieces that matter for this specific request, and sends back just that, not your full history.
+It runs as a background service on your machine, a local context daemon. When you open any MCP-compatible tool, that tool can query RecallOS: "What should I know about this user right now?" RecallOS searches your local memory, picks the pieces that matter for this specific request, and sends back just that, not your full history.
 
-You keep using whatever AI tools you already like. Mnemo works behind the scenes, making all of them smarter about you. The model provider never sees your full history. They only see the small slice of relevant context that Mnemo chooses to send for this specific prompt, even if you have gigabytes of indexed personal data sitting on your local drive.
+You keep using whatever AI tools you already like. RecallOS works behind the scenes, making all of them smarter about you. The model provider never sees your full history. They only see the small slice of relevant context that RecallOS chooses to send for this specific prompt, even if you have gigabytes of indexed personal data sitting on your local drive.
 
 ## Why it matters
 
@@ -40,9 +40,9 @@ Here's the future I'm building toward:
 
 - **Users** have a context daemon running in the background on their machine. They talk to one model in the morning and another in the afternoon, and both know them equally well, because both are connected to the same local memory. The AI providers only see what the engine chooses to share for each specific request.
 
-- **Developers** use the Mnemo SDK to give their apps persistent, portable user memory without building it from scratch or locking into a single provider.
+- **Developers** use the RecallOS SDK to give their apps persistent, portable user memory without building it from scratch or locking into a single provider.
 
-- **Agents** use Mnemo to maintain state across sessions, remembering what they've tried, what worked, what failed, and what the user's goals are. They can be interrupted and resume without losing their place.
+- **Agents** use RecallOS to maintain state across sessions, remembering what they've tried, what worked, what failed, and what the user's goals are. They can be interrupted and resume without losing their place.
 
 - **The memory format is open.** Just like you can move your files between computers, you can move your AI memory between tools. No lock-in. No walled gardens. Think of it as a Memory Passport: your context travels with you.
 
@@ -54,7 +54,7 @@ I'm not building a destination. I'm building the infrastructure layer that every
 
 **Milestone 1:** Prove the engine works for one domain. Show that local memory with proper context compilation beats raw chat history.
 
-**Milestone 2:** Ship the SDK. Let developers and agents use Mnemo as infrastructure.
+**Milestone 2:** Ship the SDK. Let developers and agents use RecallOS as infrastructure.
 
 **Milestone 3:** Generalize to a full context runtime for any domain and long-running agents. Make the model a true commodity: same engine, any task, any provider.
 

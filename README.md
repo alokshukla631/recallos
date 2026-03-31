@@ -1,14 +1,14 @@
-# Mnemo
+# RecallOS
 
-**AI models are the brain. Mnemo is the memory layer. The brain can be swapped. The memory stays with you.**
+**AI models are the brain. RecallOS is the memory layer. The brain can be swapped. The memory stays with you.**
 
-## What is Mnemo?
+## What is RecallOS?
 
-Mnemo is a free, open-source, local-first context engine. It collects your memory (preferences, facts, history) across every AI tool you use, but it doesn't dump all of that into the next conversation. It picks only the pieces that matter for what you're doing right now and sends just that to the model.
+RecallOS is a free, open-source, local-first context engine. It collects your memory (preferences, facts, history) across every AI tool you use, but it doesn't dump all of that into the next conversation. It picks only the pieces that matter for what you're doing right now and sends just that to the model.
 
-It runs quietly in the background on your computer. When you talk to Claude, ChatGPT, VS Code, Cursor, or any other AI tool that supports MCP, Mnemo gives that tool the right slice of your personal context. Not your whole history, just what's relevant to this specific request.
+It runs quietly in the background on your computer. When you talk to Claude, ChatGPT, VS Code, Cursor, or any other AI tool that supports MCP, RecallOS gives that tool the right slice of your personal context. Not your whole history, just what's relevant to this specific request.
 
-You keep using the AI tools you already like. Mnemo just makes them all smarter about you.
+You keep using the AI tools you already like. RecallOS just makes them all smarter about you.
 
 **AI providers do the thinking. You keep the memory.**
 
@@ -21,45 +21,45 @@ You keep using the AI tools you already like. Mnemo just makes them all smarter 
 
 ## How it works
 
-Mnemo has three parts:
+RecallOS has three parts:
 
 1. **The Engine (Rust)** runs in the background. It watches your local chat logs, pulls out useful facts (like "prefers window seats" or "works in Rust"), and keeps them organized. Written in Rust so it stays fast and light, using almost no memory while running 24/7.
 
-2. **The MCP Server (TypeScript)** is how AI tools talk to Mnemo. When Claude or ChatGPT needs to know something about you, it asks Mnemo through MCP. Mnemo picks the right pieces and sends them over. It uses the official MCP SDK so it works with everything.
+2. **The MCP Server (TypeScript)** is how AI tools talk to RecallOS. When Claude or ChatGPT needs to know something about you, it asks RecallOS through MCP. RecallOS picks the right pieces and sends them over. It uses the official MCP SDK so it works with everything.
 
-3. **The Dashboard** is a simple web page on your computer where you can see everything Mnemo knows about you. You can search it, fix mistakes, or delete things. It's where you inspect and manage your memory, not a chat app.
+3. **The Dashboard** is a simple web page on your computer where you can see everything RecallOS knows about you. You can search it, fix mistakes, or delete things. It's where you inspect and manage your memory, not a chat app.
 
-## How Mnemo learns what you said
+## How RecallOS learns what you said
 
-This is the golden question. MCP is sandboxed, so Mnemo can't "overhear" your chats. So how does it know what you discussed?
+This is the golden question. MCP is sandboxed, so RecallOS can't "overhear" your chats. So how does it know what you discussed?
 
 A hybrid approach:
 
 | Method | What happens | Role |
 |:---|:---|:---|
-| **Log scraper** (primary) | Mnemo watches the local files that Claude Desktop, Cursor, and VS Code already save on your computer, and reads new chats from there. Zero friction: it just indexes data that's already on your disk. | The main way Mnemo learns |
-| **Self-reporting tool** (secondary) | The AI tool calls a `record_interaction` function after each chat to tell Mnemo what was discussed. Catches things the log scraper might miss. | Fills in the gaps |
+| **Log scraper** (primary) | RecallOS watches the local files that Claude Desktop, Cursor, and VS Code already save on your computer, and reads new chats from there. Zero friction: it just indexes data that's already on your disk. | The main way RecallOS learns |
+| **Self-reporting tool** (secondary) | The AI tool calls a `record_interaction` function after each chat to tell RecallOS what was discussed. Catches things the log scraper might miss. | Fills in the gaps |
 
-**Why this matters:** This is what gives Mnemo cross-tool continuity. Talk to Claude in the morning, open ChatGPT in the afternoon. ChatGPT asks Mnemo what you discussed earlier. Seamless continuity across tools that don't know about each other.
+**Why this matters:** This is what gives RecallOS cross-tool continuity. Talk to Claude in the morning, open ChatGPT in the afternoon. ChatGPT asks RecallOS what you discussed earlier. Seamless continuity across tools that don't know about each other.
 
-## Why Mnemo is not just search or memory storage
+## Why RecallOS is not just search or memory storage
 
 Raw history is not the same as usable context. A pile of old transcripts does not help a model understand what matters right now.
 
-Mnemo goes further:
+RecallOS goes further:
 
-- **Structured memory extraction.** Mnemo doesn't just store conversations. It extracts structured memory items from them: preferences, facts, decisions, project details.
+- **Structured memory extraction.** RecallOS doesn't just store conversations. It extracts structured memory items from them: preferences, facts, decisions, project details.
 - **Rich metadata on every item.** Every memory item tracks its source, recency, scope, and confidence. This metadata is what makes retrieval intelligent rather than naive.
-- **Conflict resolution, not blind retrieval.** If you said "I like Python" last year but "use TypeScript for this project" yesterday, Mnemo knows which one applies right now. It resolves contradictions instead of dumping both into the prompt and hoping the model figures it out.
-- **Task-specific context compilation.** For each request, Mnemo compiles a context packet tailored to the current task, fitting it within the model's token budget. The model sees exactly what it needs, nothing more.
+- **Conflict resolution, not blind retrieval.** If you said "I like Python" last year but "use TypeScript for this project" yesterday, RecallOS knows which one applies right now. It resolves contradictions instead of dumping both into the prompt and hoping the model figures it out.
+- **Task-specific context compilation.** For each request, RecallOS compiles a context packet tailored to the current task, fitting it within the model's token budget. The model sees exactly what it needs, nothing more.
 
-## What makes Mnemo different
+## What makes RecallOS different
 
-- **Built for end users first. Extensible for developers. Useful for AI products and agents later.** Mem0 is made for programmers to add to their apps. Letta is made for AI agents. Mnemo is made for the person using AI every day, and it gives developers an SDK to build on top of that same foundation. You own your memory.
-- **Works across all your AI tools.** Use GPT in the morning, Claude in the afternoon. Mnemo gives both the same memory. I call this the "Memory Passport."
-- **Your data stays on your machine.** Your full history never leaves your computer. The AI only sees the small piece Mnemo picks for that specific question, even if you have hundreds of gigabytes saved locally.
+- **Built for end users first. Extensible for developers. Useful for AI products and agents later.** Mem0 is made for programmers to add to their apps. Letta is made for AI agents. RecallOS is made for the person using AI every day, and it gives developers an SDK to build on top of that same foundation. You own your memory.
+- **Works across all your AI tools.** Use GPT in the morning, Claude in the afternoon. RecallOS gives both the same memory. I call this the "Memory Passport."
+- **Your data stays on your machine.** Your full history never leaves your computer. The AI only sees the small piece RecallOS picks for that specific question, even if you have hundreds of gigabytes saved locally.
 - **Gets smarter in the background.** A small AI model runs on your computer to turn messy chat logs into clean, organized facts. It does this while your computer is idle, so it costs you nothing.
-- **Handles contradictions.** If you said "I like Python" last year but "use TypeScript for this project" yesterday, Mnemo knows which one matters right now.
+- **Handles contradictions.** If you said "I like Python" last year but "use TypeScript for this project" yesterday, RecallOS knows which one matters right now.
 - **You can see everything.** No black box. You can always check what memory was used, why it was picked, and fix it if it's wrong.
 
 ## Roadmap
@@ -82,13 +82,13 @@ Mnemo goes further:
 ```
 +---------------------------------------------------+
 |  Your AI Tools (Claude, ChatGPT, VS Code, Cursor) |
-|  talk to Mnemo through MCP                        |
+|  talk to RecallOS through MCP                        |
 +---------------------------------------------------+
-|  Mnemo MCP Server (TypeScript)                     |
+|  RecallOS MCP Server (TypeScript)                     |
 |  Shares your data, search tools, and templates     |
 |  Self-reporting tool catches extra interactions     |
 +---------------------------------------------------+
-|  Mnemo Engine (Rust, runs in the background)       |
+|  RecallOS Engine (Rust, runs in the background)       |
 |  Log scraper watches local chat files              |
 |  Extracts facts > Stores memory > Handles conflicts|
 |  Picks the right context for each request          |

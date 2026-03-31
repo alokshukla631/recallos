@@ -1,12 +1,12 @@
-# Mnemo: Project Proposal
+# RecallOS: Project Proposal
 
 ## What is this?
 
-Mnemo is an open-source, local-first context engine. It collects your memory (preferences, facts, history) across every AI tool you use, but it doesn't send all of that to the model. It picks only the relevant pieces for each specific request and delivers just that as context. Memory is everything Mnemo knows about you. Context is the small, useful slice it chooses to share right now.
+RecallOS is an open-source, local-first context engine. It collects your memory (preferences, facts, history) across every AI tool you use, but it doesn't send all of that to the model. It picks only the relevant pieces for each specific request and delivers just that as context. Memory is everything RecallOS knows about you. Context is the small, useful slice it chooses to share right now.
 
 It works with any AI model provider, including ChatGPT, Claude, Gemini, and local models, instead of replacing them.
 
-The idea is simple: **AI providers should supply the reasoning. Users should own their memory. Mnemo bridges the two by turning memory into the right context at the right time.**
+The idea is simple: **AI providers should supply the reasoning. Users should own their memory. RecallOS bridges the two by turning memory into the right context at the right time.**
 
 ## The Problem
 
@@ -67,11 +67,11 @@ There is an important difference between memory and context that most AI product
 
 A good AI system needs both. It needs to accumulate memory over time, and it needs to select the right context for each task. Today's AI products are weak at both. They either remember too little or dump too much irrelevant history into the conversation.
 
-The job of Mnemo is to do this well: **store durable memory locally, then compile the right working context for each request.**
+The job of RecallOS is to do this well: **store durable memory locally, then compile the right working context for each request.**
 
 ## The Solution
 
-Mnemo is not an app. It's infrastructure. It runs as a background service on your machine, a local context daemon that any AI tool can connect to.
+RecallOS is not an app. It's infrastructure. It runs as a background service on your machine, a local context daemon that any AI tool can connect to.
 
 ### Why not build an app?
 
@@ -81,52 +81,52 @@ Instead, I'm building the infrastructure layer that those platforms rent context
 
 ### How it works
 
-1. **Mnemo runs in the background on your machine.** It starts when your computer starts. You don't interact with it directly for most tasks.
+1. **RecallOS runs in the background on your machine.** It starts when your computer starts. You don't interact with it directly for most tasks.
 
 2. **It stores your memory locally.** Preferences, facts, history, and overrides, all on your machine, under your control.
 
-3. **Your AI tools connect to it via MCP.** When you open Claude Desktop, ChatGPT, VS Code, or any MCP-compatible tool, the model sees that a local Mnemo is available. When you ask a question, the model queries your engine: "Give me what you know about this user's current project." Mnemo searches your local memory, compiles the relevant pieces, and sends them back.
+3. **Your AI tools connect to it via MCP.** When you open Claude Desktop, ChatGPT, VS Code, or any MCP-compatible tool, the model sees that a local RecallOS is available. When you ask a question, the model queries your engine: "Give me what you know about this user's current project." RecallOS searches your local memory, compiles the relevant pieces, and sends them back.
 
 4. **The model answers with full context.** It has exactly the background it needs to give you a good answer, without you having to repeat yourself.
 
-5. **Mnemo watches and learns.** After the interaction, the engine records the exchange and updates memory. New facts, changed preferences, and completed tasks all get extracted and stored for future use.
+5. **RecallOS watches and learns.** After the interaction, the engine records the exchange and updates memory. New facts, changed preferences, and completed tasks all get extracted and stored for future use.
 
-### How Mnemo learns what you said (The Golden Question)
+### How RecallOS learns what you said (The Golden Question)
 
-By design, MCP is sandboxed. An MCP server can't "overhear" your conversation with Claude or ChatGPT unless it's explicitly invited. So if I build Mnemo strictly as an MCP server, it doesn't automatically "know" what you just said. This is the golden question of the architecture.
+By design, MCP is sandboxed. An MCP server can't "overhear" your conversation with Claude or ChatGPT unless it's explicitly invited. So if I build RecallOS strictly as an MCP server, it doesn't automatically "know" what you just said. This is the golden question of the architecture.
 
 The answer is a hybrid approach using two ingestion strategies:
 
 **Primary: The "Log Scraper" (Zero Friction)**
 
-Many AI tools (Cursor, Windsurf, Claude Desktop) save their own internal chat logs to the user's local computer in SQLite databases or JSON files for "Session Restore" purposes. Mnemo doesn't just wait for MCP calls. It runs a background watcher service that monitors these folders (like `~/Library/Application Support/Claude/` or `C:\Users\...\Cursor\`).
+Many AI tools (Cursor, Windsurf, Claude Desktop) save their own internal chat logs to the user's local computer in SQLite databases or JSON files for "Session Restore" purposes. RecallOS doesn't just wait for MCP calls. It runs a background watcher service that monitors these folders (like `~/Library/Application Support/Claude/` or `C:\Users\...\Cursor\`).
 
 The workflow:
 1. You chat with Claude.
 2. Claude Desktop writes that chat to its local cache.
-3. Mnemo sees the file change, parses the new lines, and indexes them into your local memory.
+3. RecallOS sees the file change, parses the new lines, and indexes them into your local memory.
 
 This is the primary ingestion method because it fulfills the local-first promise: it's just indexing data that is *already on the user's disk*. It works with any model without the model needing to "call" a tool. It's truly invisible to the user. The downside is that I have to write specific scrapers for each app (one for Claude Desktop, one for VS Code, one for Cursor, etc.).
 
 **Secondary: The "Self-Reporting" Tool (MCP Read Head)**
 
-Mnemo also gives the connected AI a tool called `record_interaction` or `save_to_memory`. In Mnemo's MCP instructions, the model is told: *"You are connected to a persistent memory engine. After every response you give to the user, call the `record_interaction` tool with a summary of this exchange."*
+RecallOS also gives the connected AI a tool called `record_interaction` or `save_to_memory`. In RecallOS's MCP instructions, the model is told: *"You are connected to a persistent memory engine. After every response you give to the user, call the `record_interaction` tool with a summary of this exchange."*
 
 The workflow:
 1. User: "I'm starting a new project in Rust."
 2. Claude (to itself): "I need to save this."
 3. Claude calls `record_interaction(text="User started Rust project")`.
-4. Mnemo receives the call and saves it to the local store.
+4. RecallOS receives the call and saves it to the local store.
 
 This is clean and officially supported by the protocol. It costs a few tokens per interaction and relies on the model being obedient, but it catches things the log scraper might miss.
 
 **Why this hybrid is a massive competitive advantage:**
 
-By scraping logs from every AI tool on the user's machine, Mnemo becomes the glue between competing AI companies. If I talk to Claude about my HVAC project, then open ChatGPT, ChatGPT can ask Mnemo: *"What did the user talk about earlier today?"* Mnemo returns the Claude conversation context. The user gets seamless continuity across tools that don't know about each other.
+By scraping logs from every AI tool on the user's machine, RecallOS becomes the glue between competing AI companies. If I talk to Claude about my HVAC project, then open ChatGPT, ChatGPT can ask RecallOS: *"What did the user talk about earlier today?"* RecallOS returns the Claude conversation context. The user gets seamless continuity across tools that don't know about each other.
 
 ### What the "product" actually is
 
-Mnemo is three things:
+RecallOS is three things:
 
 1. **The Engine.** A background daemon that watches for interaction logs, indexes them, extracts structured memory, and keeps your personal knowledge graph up to date.
 
@@ -142,47 +142,47 @@ This is fundamentally different from existing tools in the space:
 
 - **Mem0** is a database you call from your code to remember things about a user. It's developer-centric.
 - **Letta** is a runtime where the agent is the memory. It's agent-centric.
-- **Mnemo** is user-centric. The user owns the state layer. The user controls what gets remembered, what gets shared with which model, and what gets deleted.
+- **RecallOS** is user-centric. The user owns the state layer. The user controls what gets remembered, what gets shared with which model, and what gets deleted.
 
 That ownership of the state layer is the primary differentiator.
 
 ### What makes this different
 
-**User-owned state.** You own your memory. Not the model provider, not the app developer. You. This is the "Memory Passport" idea: if you spend three months teaching ChatGPT your coding style and project architecture, you should be able to move that learned context to Claude or Gemini without starting over. Mnemo makes the model a commodity. You can swap the brain while keeping the soul on your local machine.
+**User-owned state.** You own your memory. Not the model provider, not the app developer. You. This is the "Memory Passport" idea: if you spend three months teaching ChatGPT your coding style and project architecture, you should be able to move that learned context to Claude or Gemini without starting over. RecallOS makes the model a commodity. You can swap the brain while keeping the soul on your local machine.
 
-**The privacy advantage.** Because the raw history never leaves your local disk, you can index sensitive data (SSH keys, local database schemas, personal emails, financial records) that you would never paste into a web UI. Cloud providers face legal and cost barriers to storing 100GB of a single user's interaction history. You don't have that problem on your own machine. The pitch to users becomes: "Mnemo has indexed 200GB of your life. The AI providers only see the 2KB of relevant text the engine chooses to send them for this specific prompt."
+**The privacy advantage.** Because the raw history never leaves your local disk, you can index sensitive data (SSH keys, local database schemas, personal emails, financial records) that you would never paste into a web UI. Cloud providers face legal and cost barriers to storing 100GB of a single user's interaction history. You don't have that problem on your own machine. The pitch to users becomes: "RecallOS has indexed 200GB of your life. The AI providers only see the 2KB of relevant text the engine chooses to send them for this specific prompt."
 
-**Local intelligence.** By using local models (like Gemma 3 or Phi-4) for indexing and extraction, Mnemo can build a rich semantic map of your life that cloud providers can't see. And because it runs locally, it can do heavy background work (graph-based memory linking, temporal indexing, memory consolidation) during idle time on your GPU or CPU. That kind of deep processing would be prohibitively expensive at scale for a cloud provider, but it's free on your own hardware.
+**Local intelligence.** By using local models (like Gemma 3 or Phi-4) for indexing and extraction, RecallOS can build a rich semantic map of your life that cloud providers can't see. And because it runs locally, it can do heavy background work (graph-based memory linking, temporal indexing, memory consolidation) during idle time on your GPU or CPU. That kind of deep processing would be prohibitively expensive at scale for a cloud provider, but it's free on your own hardware.
 
-**Unlimited long-term horizon.** Standard search-based memory (RAG) often fails because it's sparse. It finds specific chunks but misses the overall picture and evolving preferences. Because Mnemo is local, it can maintain a continuously updated understanding of who you are over months and years, not just retrieve isolated snippets.
+**Unlimited long-term horizon.** Standard search-based memory (RAG) often fails because it's sparse. It finds specific chunks but misses the overall picture and evolving preferences. Because RecallOS is local, it can maintain a continuously updated understanding of who you are over months and years, not just retrieve isolated snippets.
 
-**Truth-preserving.** Mnemo doesn't just store raw text. It tracks where each piece of memory came from, when it was last confirmed, whether it's temporary or permanent, and what takes precedence when things conflict.
+**Truth-preserving.** RecallOS doesn't just store raw text. It tracks where each piece of memory came from, when it was last confirmed, whether it's temporary or permanent, and what takes precedence when things conflict.
 
 **Inspectable.** You can always see what memory was used for a given request and why. No black box.
 
 **Open source.** The code is open. The memory format is open. Anyone can contribute, audit, or build on top of it.
 
-### Why Mnemo is not just search or memory storage
+### Why RecallOS is not just search or memory storage
 
 The hard problem in AI memory is not storing text. It's turning raw conversation history into usable context.
 
 Raw conversation logs are noisy, redundant, and full of contradictions. If you just search old conversations and paste the results into a prompt, you get cluttered, stale, and often wrong context. That's what most memory tools do today, and it's why they feel unreliable.
 
-Mnemo takes a fundamentally different approach. Instead of storing raw text and searching it later, the engine extracts structured facts and preferences from every conversation: "the user prefers Python," "the user is working on Project X," "the user has a nut allergy." Every extracted memory item tracks its source, recency, scope, and confidence level.
+RecallOS takes a fundamentally different approach. Instead of storing raw text and searching it later, the engine extracts structured facts and preferences from every conversation: "the user prefers Python," "the user is working on Project X," "the user has a nut allergy." Every extracted memory item tracks its source, recency, scope, and confidence level.
 
-When memories conflict, Mnemo resolves them using explicit precedence rules. Newer information beats older. A preference stated for a specific project beats a general default. Something the user explicitly said beats something the system inferred. Temporary overrides (like "use TypeScript for this project") expire when the context changes.
+When memories conflict, RecallOS resolves them using explicit precedence rules. Newer information beats older. A preference stated for a specific project beats a general default. Something the user explicitly said beats something the system inferred. Temporary overrides (like "use TypeScript for this project") expire when the context changes.
 
-For each incoming request, Mnemo compiles a task-specific context packet that fits within the model's token budget. It scores every candidate memory item by relevance to the current task, freshness, and scope, then assembles the highest-value subset.
+For each incoming request, RecallOS compiles a task-specific context packet that fits within the model's token budget. It scores every candidate memory item by relevance to the current task, freshness, and scope, then assembles the highest-value subset.
 
-This is the difference between a search engine that finds old text and a context engine that prepares exactly what the model needs right now. Search retrieves. Mnemo reasons about what to include, what to exclude, and what takes priority.
+This is the difference between a search engine that finds old text and a context engine that prepares exactly what the model needs right now. Search retrieves. RecallOS reasons about what to include, what to exclude, and what takes priority.
 
 ### Architecture
 
-Mnemo is built as an MCP server. MCP (Model Context Protocol) is a standard that lets AI models plug into local data sources. When a user opens Claude Desktop, a Gemini CLI, or any MCP-compatible tool, the model can ask Mnemo: "What should I know about this user's current project?" Mnemo performs the local search, compiles the relevant context, and feeds the answer back.
+RecallOS is built as an MCP server. MCP (Model Context Protocol) is a standard that lets AI models plug into local data sources. When a user opens Claude Desktop, a Gemini CLI, or any MCP-compatible tool, the model can ask RecallOS: "What should I know about this user's current project?" RecallOS performs the local search, compiles the relevant context, and feeds the answer back.
 
-This is the right architecture for 2026 because MCP is already widely adopted, with over 10,000 public servers supported by all major providers. Building as an MCP server means Mnemo works with the ecosystem instead of against it.
+This is the right architecture for 2026 because MCP is already widely adopted, with over 10,000 public servers supported by all major providers. Building as an MCP server means RecallOS works with the ecosystem instead of against it.
 
-As an MCP server, Mnemo exposes three types of capabilities to connected AI models:
+As an MCP server, RecallOS exposes three types of capabilities to connected AI models:
 
 | MCP Capability | What It Does |
 | :--- | :--- |
@@ -196,7 +196,7 @@ The engine is built as a hybrid: Rust for the core, TypeScript for the MCP layer
 
 **The Engine (Rust):** This is the background daemon. It handles file watching (log scraping), the vector database, heavy text processing, and memory management. Rust is the right choice here because the engine needs to run 24/7 in the background without eating up resources. It uses almost zero idle memory, can't crash from memory leaks, and handles local vector search (via LanceDB) significantly faster than a Node.js process could. Rust is becoming the standard for high-performance local-first software (Zed editor, Tauri, etc.).
 
-**The MCP Server (TypeScript):** A thin Node.js/Deno wrapper that talks to the Rust engine via a local socket. This layer uses the official MCP SDK, making it easy to expose Resources, Tools, and Prompts to any connected AI tool. TypeScript also makes it easier for other developers to build plugins for Mnemo.
+**The MCP Server (TypeScript):** A thin Node.js/Deno wrapper that talks to the Rust engine via a local socket. This layer uses the official MCP SDK, making it easy to expose Resources, Tools, and Prompts to any connected AI tool. TypeScript also makes it easier for other developers to build plugins for RecallOS.
 
 This separation keeps the heavy lifting in Rust and the communication in TypeScript, the best of both worlds.
 
@@ -251,7 +251,7 @@ Several open-source projects have already shown that portable AI memory is a rea
 - **Letta** (formerly MemGPT, from UC Berkeley) takes a different approach where the AI model self-edits its own memory through tool calls, like an operating system managing RAM and disk.
 - **Supermemory** ranks first on major memory benchmarks and ships with a browser extension and MCP server.
 
-These projects prove the demand is real. But they all make different tradeoffs. Mem0's passive extraction is predictable but misses nuance. Letta's self-editing is adaptive but costs tokens and depends on model quality. None of them emphasize the full pipeline I care about: local-first storage, structured conflict resolution, truth-preserving context compilation, and full user inspectability. That's the gap Mnemo fills.
+These projects prove the demand is real. But they all make different tradeoffs. Mem0's passive extraction is predictable but misses nuance. Letta's self-editing is adaptive but costs tokens and depends on model quality. None of them emphasize the full pipeline I care about: local-first storage, structured conflict resolution, truth-preserving context compilation, and full user inspectability. That's the gap RecallOS fills.
 
 ## Who Is This For?
 
@@ -275,15 +275,15 @@ These projects prove the demand is real. But they all make different tradeoffs. 
 
 I'm building this in three milestones. Each one proves something new and builds on the last.
 
-**Milestone 1: Prove it works for one use case.** Pick a specific domain (like travel planning), build the daemon, MCP server, and context pipeline end-to-end. Show that a user connected to Mnemo through Claude Desktop or another MCP client gets materially better responses than raw chat history.
+**Milestone 1: Prove it works for one use case.** Pick a specific domain (like travel planning), build the daemon, MCP server, and context pipeline end-to-end. Show that a user connected to RecallOS through Claude Desktop or another MCP client gets materially better responses than raw chat history.
 
-**Milestone 2: Ship the SDK.** Turn Mnemo into embeddable infrastructure for developers and agents. Publish the SDK, document the APIs, build the plugin system, and make it easy for anyone to integrate Mnemo into their own apps or agent workflows.
+**Milestone 2: Ship the SDK.** Turn RecallOS into embeddable infrastructure for developers and agents. Publish the SDK, document the APIs, build the plugin system, and make it easy for anyone to integrate RecallOS into their own apps or agent workflows.
 
 **Milestone 3: Generalize to a full context runtime.** Expand the engine so it handles any domain, not just the one I started with. Make the memory schema flexible, the context compiler adaptable, and the system robust enough to serve as the persistent context layer for long-running agents and complex multi-step workflows.
 
 ## What Success Looks Like
 
-When Mnemo works, a user should be able to say:
+When RecallOS works, a user should be able to say:
 
 > "I talked to Claude this morning about my project and switched to ChatGPT this afternoon. ChatGPT already knew everything, my preferences, my project context, what I discussed with Claude, because they're both connected to the same local engine. I didn't have to repeat anything. I can see exactly what each model was told about me. And I can correct it when it's wrong."
 
@@ -291,11 +291,11 @@ That's the behavior change I'm building toward.
 
 ## Risks and Honest Challenges
 
-**Competition.** The AI memory space already has strong existing projects with large communities and significant traction. I'm not entering an empty market. My bet is that none of them are user-centric. They're built for developers or agents, not for end users who want to own their state layer. Mnemo's differentiation is in the full pipeline: local-first storage, structured conflict resolution, truth-preserving context compilation, and full inspectability. But I have to prove that matters, not just assert it.
+**Competition.** The AI memory space already has strong existing projects with large communities and significant traction. I'm not entering an empty market. My bet is that none of them are user-centric. They're built for developers or agents, not for end users who want to own their state layer. RecallOS's differentiation is in the full pipeline: local-first storage, structured conflict resolution, truth-preserving context compilation, and full inspectability. But I have to prove that matters, not just assert it.
 
 **Adoption.** Open-source infrastructure projects need a community. Building one takes time and good developer experience.
 
-**Context injection latency.** If Mnemo needs to search a large memory store and compile context before sending the prompt to the model, the user might experience a 1-3 second delay. I'll need a high-performance local store (something like LanceDB or DuckDB) to keep this fast.
+**Context injection latency.** If RecallOS needs to search a large memory store and compile context before sending the prompt to the model, the user might experience a 1-3 second delay. I'll need a high-performance local store (something like LanceDB or DuckDB) to keep this fast.
 
 **The extraction problem.** Raw chat logs are noisy. If I just store every conversation as-is, the injected context will be cluttered and waste tokens. I need a local "background refiner," a small, efficient model (like Llama 4 Scout or Qwen 2.5 Coder 7B) that runs locally to extract structured Facts and Traits from raw interactions before they're stored. Getting this extraction right is critical.
 
@@ -313,4 +313,4 @@ I'm not pretending these are easy problems. But they're the right problems to so
 
 The bet is simple: **the AI industry is going to need a standard memory and context layer, and it should be open source and user-owned.**
 
-If that's true, whoever builds it well and gets adoption wins. Mnemo is my attempt to be that project.
+If that's true, whoever builds it well and gets adoption wins. RecallOS is my attempt to be that project.
