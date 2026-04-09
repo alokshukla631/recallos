@@ -176,7 +176,14 @@ function Chat() {
       timestamp: new Date().toISOString(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const assistantPlaceholder: Message = {
+      role: "assistant",
+      content: "",
+      provider: selectedProvider,
+      timestamp: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, userMessage, assistantPlaceholder]);
     setInput("");
     setLoading(true);
 
@@ -184,8 +191,77 @@ function Chat() {
       textareaRef.current.style.height = "auto";
     }
 
+    // Track partial assistant state that the stream updates as it arrives
+    let buffer = "";
+    const state: {
+      content: string;
+      id?: string;
+      context?: ContextInfo;
+      memory_extracted?: number;
+      memory_reconciled?: {
+        added: number;
+        updated: number;
+        conflicts: number;
+        duplicates?: number;
+      };
+    } = { content: "" };
+
+    const updateAssistant = () => {
+      setMessages((prev) => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last && last.role === "assistant") {
+          next[next.length - 1] = {
+            ...last,
+            id: state.id ?? last.id,
+            content: state.content,
+            context: state.context ?? last.context,
+            memory_extracted: state.memory_extracted ?? last.memory_extracted,
+            memory_reconciled: state.memory_reconciled ?? last.memory_reconciled,
+          };
+        }
+        return next;
+      });
+    };
+
+    const handleEvent = (event: string, data: any) => {
+      if (event === "conversation") {
+        if (data.conversation_id) setConversationId(data.conversation_id);
+      } else if (event === "memory") {
+        state.memory_extracted = data.extracted;
+        state.memory_reconciled = {
+          added: data.added,
+          updated: data.updated,
+          conflicts: data.conflicts,
+          duplicates: data.duplicates,
+        };
+        updateAssistant();
+      } else if (event === "context") {
+        state.context = {
+          context_text: data.context_text,
+          included_count: data.included_count,
+          omitted_count: data.omitted_count,
+        };
+        updateAssistant();
+      } else if (event === "delta") {
+        state.content += data.text;
+        updateAssistant();
+      } else if (event === "done") {
+        if (data.assistant_message) {
+          state.id = data.assistant_message.id;
+          if (data.assistant_message.content) {
+            state.content = data.assistant_message.content;
+          }
+        }
+        updateAssistant();
+      } else if (event === "error") {
+        state.content = `Error: ${data.error}`;
+        updateAssistant();
+      }
+    };
+
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("/api/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -196,38 +272,49 @@ function Chat() {
         }),
       });
 
-      if (!res.ok) {
+      if (!res.ok || !res.body) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || `Request failed with status ${res.status}`);
       }
 
-      const data = await res.json();
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
 
-      if (data.conversation_id) {
-        setConversationId(data.conversation_id);
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE events are separated by \n\n
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() ?? "";
+        for (const part of parts) {
+          const lines = part.split("\n");
+          let eventName = "message";
+          let dataLine = "";
+          for (const line of lines) {
+            if (line.startsWith("event: ")) {
+              eventName = line.slice(7).trim();
+            } else if (line.startsWith("data: ")) {
+              dataLine += line.slice(6);
+            }
+          }
+          if (dataLine) {
+            try {
+              const parsed = JSON.parse(dataLine);
+              handleEvent(eventName, parsed);
+            } catch {
+              // ignore malformed event
+            }
+          }
+        }
       }
 
-      const assistantMessage: Message = {
-        id: data.assistant_message?.id,
-        role: "assistant",
-        content: data.assistant_message?.content || "",
-        provider: selectedProvider,
-        timestamp: new Date().toISOString(),
-        context: data.context,
-        memory_extracted: data.memory_extracted,
-        memory_reconciled: data.memory_reconciled,
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
       fetchConversations();
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : "Something went wrong";
-      const errorMessage: Message = {
-        role: "assistant",
-        content: `Error: ${errorMsg}`,
-        timestamp: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      state.content = `Error: ${errorMsg}`;
+      updateAssistant();
     } finally {
       setLoading(false);
     }

@@ -124,6 +124,136 @@ router.post("/", async (req: Request, res: Response) => {
   }
 });
 
+// POST /stream - streaming version of the chat pipeline (SSE)
+router.post("/stream", async (req: Request, res: Response) => {
+  const { message, provider, conversation_id, trip_id } = req.body;
+
+  if (!message || !provider) {
+    res.status(400).json({ error: "message and provider are required" });
+    return;
+  }
+
+  // Set up SSE headers
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders?.();
+
+  const send = (event: string, data: unknown) => {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    const convId = conversation_id || uuidv4();
+
+    ensureConversation(convId, message, trip_id);
+
+    const providerRow = queryOne(
+      "SELECT api_key FROM provider_settings WHERE provider = ?",
+      [provider]
+    ) as { api_key: string } | undefined;
+
+    if (!providerRow) {
+      send("error", {
+        error: `No API key configured for provider "${provider}". Add one in Settings.`,
+      });
+      res.end();
+      return;
+    }
+
+    send("conversation", { conversation_id: convId });
+
+    const userEvent = await storeEvent(convId, "user", message, provider, trip_id);
+    const candidates = await extractMemory(message, userEvent.id, trip_id);
+    const reconcileResult = await reconcileMemory(candidates, userEvent.id);
+
+    send("memory", {
+      extracted: candidates.length,
+      added: reconcileResult.added.length,
+      updated: reconcileResult.updated.length,
+      conflicts: reconcileResult.conflicts.length,
+      duplicates: reconcileResult.duplicates.length,
+    });
+
+    const compiled = await compileContext(convId, message, trip_id);
+
+    send("context", {
+      included_count: compiled.includedIds.length,
+      omitted_count: compiled.omittedIds.length,
+      context_text: compiled.contextText,
+    });
+
+    const recentTurns = await getRecentTurns(convId, 20);
+    const chatMessages: ChatMessage[] = recentTurns
+      .filter((e) => e.role === "user" || e.role === "assistant")
+      .map((e) => ({ role: e.role as "user" | "assistant", content: e.content }));
+
+    const adapter = getAdapter(provider);
+    const stream = adapter.chatStream(
+      providerRow.api_key,
+      SYSTEM_PROMPT,
+      chatMessages,
+      compiled.contextText
+    );
+
+    let fullContent = "";
+    let finalResult: { content: string; usage?: unknown } | undefined;
+
+    while (true) {
+      const next = await stream.next();
+      if (next.done) {
+        finalResult = next.value as { content: string; usage?: unknown };
+        break;
+      }
+      const delta = next.value;
+      fullContent += delta;
+      send("delta", { text: delta });
+    }
+
+    const assistantContent = finalResult?.content ?? fullContent;
+    const assistantEvent = await storeEvent(
+      convId,
+      "assistant",
+      assistantContent,
+      provider,
+      trip_id
+    );
+
+    const snapshot = await saveSnapshot(
+      userEvent.id,
+      provider,
+      compiled.contextPacket,
+      compiled.includedIds,
+      compiled.omittedIds,
+      compiled.rationale,
+      compiled.contextText
+    );
+
+    send("done", {
+      assistant_message: {
+        id: assistantEvent.id,
+        role: "assistant",
+        content: assistantContent,
+      },
+      snapshot_id: snapshot.id,
+      usage: finalResult?.usage,
+    });
+
+    res.end();
+  } catch (err) {
+    console.error("POST /api/chat/stream error:", err);
+    const errMessage = err instanceof Error ? err.message : "Internal server error";
+    try {
+      send("error", { error: errMessage });
+      res.end();
+    } catch {
+      // ignore
+    }
+  }
+});
+
 // GET /conversations - list conversations with titles
 router.get("/conversations", (_req: Request, res: Response) => {
   try {

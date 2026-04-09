@@ -22,6 +22,13 @@ export interface ProviderAdapter {
     messages: ChatMessage[],
     compiledContextText: string
   ): Promise<ChatResponse>;
+
+  chatStream(
+    apiKey: string,
+    systemPrompt: string,
+    messages: ChatMessage[],
+    compiledContextText: string
+  ): AsyncGenerator<string, ChatResponse, unknown>;
 }
 
 // ---------------------------------------------------------------------------
@@ -73,6 +80,60 @@ class OpenAIAdapter implements ProviderAdapter {
       throw new Error(`OpenAI adapter error: ${message}`);
     }
   }
+
+  async *chatStream(
+    apiKey: string,
+    systemPrompt: string,
+    messages: ChatMessage[],
+    compiledContextText: string
+  ): AsyncGenerator<string, ChatResponse, unknown> {
+    const client = new OpenAI({ apiKey });
+
+    const systemContent = compiledContextText
+      ? `${systemPrompt}\n\n${compiledContextText}`
+      : systemPrompt;
+
+    const openaiMessages: OpenAI.ChatCompletionMessageParam[] = [
+      { role: "system", content: systemContent },
+      ...messages.map((m) => ({
+        role: m.role as "user" | "assistant" | "system",
+        content: m.content,
+      })),
+    ];
+
+    let full = "";
+    let usage: ChatResponse["usage"] = undefined;
+
+    try {
+      const stream = await client.chat.completions.create({
+        model: "gpt-4o",
+        messages: openaiMessages,
+        stream: true,
+        stream_options: { include_usage: true },
+      });
+
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta?.content ?? "";
+        if (delta) {
+          full += delta;
+          yield delta;
+        }
+        if (chunk.usage) {
+          usage = {
+            prompt_tokens: chunk.usage.prompt_tokens,
+            completion_tokens: chunk.usage.completion_tokens,
+            total_tokens: chunk.usage.total_tokens,
+          };
+        }
+      }
+
+      return { content: full, usage };
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Unknown OpenAI error";
+      throw new Error(`OpenAI adapter error: ${message}`);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -118,6 +179,66 @@ class AnthropicAdapter implements ProviderAdapter {
           completion_tokens: response.usage.output_tokens,
           total_tokens:
             response.usage.input_tokens + response.usage.output_tokens,
+        },
+      };
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Unknown Anthropic error";
+      throw new Error(`Anthropic adapter error: ${message}`);
+    }
+  }
+
+  async *chatStream(
+    apiKey: string,
+    systemPrompt: string,
+    messages: ChatMessage[],
+    compiledContextText: string
+  ): AsyncGenerator<string, ChatResponse, unknown> {
+    const client = new Anthropic({ apiKey });
+
+    const systemContent = compiledContextText
+      ? `${systemPrompt}\n\n${compiledContextText}`
+      : systemPrompt;
+
+    const anthropicMessages: Anthropic.MessageParam[] = messages
+      .filter((m) => m.role !== "system")
+      .map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      }));
+
+    let full = "";
+    let inputTokens = 0;
+    let outputTokens = 0;
+
+    try {
+      const stream = client.messages.stream({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 4096,
+        system: systemContent,
+        messages: anthropicMessages,
+      });
+
+      for await (const event of stream) {
+        if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+          const delta = event.delta.text;
+          if (delta) {
+            full += delta;
+            yield delta;
+          }
+        } else if (event.type === "message_start") {
+          inputTokens = event.message.usage.input_tokens;
+        } else if (event.type === "message_delta") {
+          outputTokens = event.usage.output_tokens;
+        }
+      }
+
+      return {
+        content: full,
+        usage: {
+          prompt_tokens: inputTokens,
+          completion_tokens: outputTokens,
+          total_tokens: inputTokens + outputTokens,
         },
       };
     } catch (error: unknown) {
