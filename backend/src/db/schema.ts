@@ -20,6 +20,16 @@ export async function initDatabase(filePath: string): Promise<Database> {
   db.run("PRAGMA foreign_keys = ON;");
 
   db.run(`
+    CREATE TABLE IF NOT EXISTS conversations (
+      id TEXT PRIMARY KEY,
+      title TEXT,
+      trip_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS events (
       id TEXT PRIMARY KEY,
       conversation_id TEXT NOT NULL,

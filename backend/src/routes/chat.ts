@@ -7,6 +7,13 @@ import { reconcileMemory } from "../modules/memory-reconciler.js";
 import { compileContext } from "../modules/context-compiler.js";
 import { getAdapter, type ChatMessage } from "../modules/provider-adapter.js";
 import { saveSnapshot } from "../modules/context-snapshot.js";
+import {
+  ensureConversation,
+  listConversations,
+  getConversation,
+  updateConversationTitle,
+  deleteConversation,
+} from "../modules/conversations.js";
 
 const router = Router();
 
@@ -23,6 +30,9 @@ router.post("/", async (req: Request, res: Response) => {
     }
 
     const convId = conversation_id || uuidv4();
+
+    // Step 0: Ensure the conversation row exists (creates on first message)
+    ensureConversation(convId, message, trip_id);
 
     // Step 1: Get API key for the provider
     const providerRow = queryOne(
@@ -113,21 +123,51 @@ router.post("/", async (req: Request, res: Response) => {
   }
 });
 
-// GET /conversations - list conversations
+// GET /conversations - list conversations with titles
 router.get("/conversations", (_req: Request, res: Response) => {
   try {
-    const rows = queryAll(
-      `SELECT conversation_id, trip_id,
-              MIN(created_at) AS started_at,
-              MAX(created_at) AS last_message_at,
-              COUNT(*) AS message_count
-       FROM events
-       GROUP BY conversation_id
-       ORDER BY last_message_at DESC`
-    );
-    res.json(rows);
+    res.json(listConversations());
   } catch (err) {
     console.error("GET /api/chat/conversations error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /conversations/:id - rename a conversation
+router.patch("/conversations/:id", (req: Request, res: Response) => {
+  try {
+    const { title } = req.body;
+    const id = req.params.id as string;
+    if (!title || typeof title !== "string") {
+      res.status(400).json({ error: "title is required" });
+      return;
+    }
+    const conv = getConversation(id);
+    if (!conv) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+    updateConversationTitle(id, title);
+    res.json(getConversation(id));
+  } catch (err) {
+    console.error("PATCH /api/chat/conversations/:id error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /conversations/:id - remove a conversation and its events
+router.delete("/conversations/:id", (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const conv = getConversation(id);
+    if (!conv) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+    deleteConversation(id);
+    res.json({ message: "Conversation deleted" });
+  } catch (err) {
+    console.error("DELETE /api/chat/conversations/:id error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
