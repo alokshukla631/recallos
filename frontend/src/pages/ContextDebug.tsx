@@ -147,69 +147,77 @@ function ContextDebug() {
                 </div>
               )}
 
-              {/* Included IDs */}
-              <div className="detail-section">
-                <h4>
-                  Included Memory IDs (
-                  {(() => {
-                    const arr = parseJsonField(detail.included_memory_ids);
-                    return Array.isArray(arr) ? arr.length : 0;
-                  })()}
-                  )
-                </h4>
-                <div className="id-list">
-                  {(() => {
-                    const arr = parseJsonField(detail.included_memory_ids);
-                    if (Array.isArray(arr) && arr.length > 0) {
-                      return arr.map((id: number, i: number) => (
-                        <span key={i} className="id-chip included">
-                          {id}
-                        </span>
-                      ));
-                    }
-                    return <span className="debug-muted">None</span>;
-                  })()}
-                </div>
-              </div>
-
-              {/* Omitted IDs */}
-              <div className="detail-section">
-                <h4>
-                  Omitted Memory IDs (
-                  {(() => {
-                    const arr = parseJsonField(detail.omitted_memory_ids);
-                    return Array.isArray(arr) ? arr.length : 0;
-                  })()}
-                  )
-                </h4>
-                <div className="id-list">
-                  {(() => {
-                    const arr = parseJsonField(detail.omitted_memory_ids);
-                    if (Array.isArray(arr) && arr.length > 0) {
-                      return arr.map((id: number, i: number) => (
-                        <span key={i} className="id-chip omitted">
-                          {id}
-                        </span>
-                      ));
-                    }
-                    return <span className="debug-muted">None</span>;
-                  })()}
-                </div>
-              </div>
-
-              {/* Rationale */}
-              {detail.rationale_json && (
-                <div className="detail-section">
-                  <h4>Rationale</h4>
-                  <pre className="detail-pre">
-                    {JSON.stringify(
-                      parseJsonField(detail.rationale_json),
-                      null,
-                      2
-                    )}
-                  </pre>
-                </div>
-              )}
+              {/* Compilation Trace Table */}
+              {(() => {
+                const rationaleObj = parseJsonField(detail.rationale_json);
+                const trace = rationaleObj?.trace;
+                if (!Array.isArray(trace) || trace.length === 0) {
+                  return (
+                    <>
+                      {/* Fallback: Included IDs */}
+                      <div className="detail-section">
+                        <h4>
+                          Included ({getIdCount(detail.included_memory_ids)}) / Omitted ({getIdCount(detail.omitted_memory_ids)})
+                        </h4>
+                        <div className="id-list">
+                          {(() => {
+                            const arr = parseJsonField(detail.included_memory_ids);
+                            if (Array.isArray(arr) && arr.length > 0) {
+                              return arr.map((id: string, i: number) => (
+                                <span key={i} className="id-chip included">{String(id).slice(0, 8)}</span>
+                              ));
+                            }
+                            return <span className="debug-muted">None</span>;
+                          })()}
+                        </div>
+                      </div>
+                      {rationaleObj && (
+                        <div className="detail-section">
+                          <h4>Rationale</h4>
+                          <pre className="detail-pre">
+                            {JSON.stringify(rationaleObj, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                    </>
+                  );
+                }
+                const included = trace.filter((t: any) => t.decision === "included");
+                const omitted = trace.filter((t: any) => t.decision === "omitted");
+                return (
+                  <div className="detail-section">
+                    <h4>Compilation Trace ({included.length} included, {omitted.length} omitted)</h4>
+                    <table className="trace-table">
+                      <thead>
+                        <tr>
+                          <th>Decision</th>
+                          <th>Key</th>
+                          <th>Type</th>
+                          <th>Value</th>
+                          <th>BM25</th>
+                          <th>Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {trace.map((t: any, i: number) => (
+                          <tr key={i} className={t.decision === "included" ? "trace-included" : "trace-omitted"}>
+                            <td>
+                              <span className={`trace-badge ${t.decision}`}>
+                                {t.decision}
+                              </span>
+                            </td>
+                            <td className="trace-key">{t.key}</td>
+                            <td>{t.type}</td>
+                            <td className="trace-value">{t.value}</td>
+                            <td className="trace-score">{t.bm25_score.toFixed(3)}</td>
+                            <td className="trace-reason">{t.reason}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
 
               {/* Compiled context JSON */}
               {detail.compiled_context_json && (

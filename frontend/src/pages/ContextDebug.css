@@ -216,6 +216,86 @@
   font-size: 0.8rem;
 }
 
+/* Trace table */
+.trace-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  margin-top: 8px;
+}
+
+.trace-table th {
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  font-weight: 600;
+}
+
+.trace-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: top;
+}
+
+.trace-table tr.trace-included {
+  background: rgba(34, 197, 94, 0.04);
+}
+
+.trace-table tr.trace-omitted {
+  background: rgba(239, 68, 68, 0.04);
+}
+
+.trace-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.trace-badge.included {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.trace-badge.omitted {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+.trace-key {
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.75rem;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trace-value {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trace-score {
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.75rem;
+  color: var(--color-accent);
+}
+
+.trace-reason {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .debug-split {

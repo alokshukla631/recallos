@@ -12,12 +12,24 @@ export interface ContextPacket {
   ambiguities: string[];
 }
 
+export interface TraceEntry {
+  memory_item_id: string;
+  key: string;
+  type: string;
+  value: string;
+  scope: string;
+  bm25_score: number;
+  decision: "included" | "omitted";
+  reason: string;
+}
+
 export interface CompiledContext {
   contextPacket: ContextPacket;
   contextText: string;
   includedIds: string[];
   omittedIds: string[];
   rationale: Record<string, string>;
+  trace: TraceEntry[];
 }
 
 function getActiveMemoryItems(tripId?: string): MemoryItem[] {
@@ -104,18 +116,48 @@ export async function compileContext(
   const included: MemoryItem[] = [];
   const omitted: MemoryItem[] = [];
   const rationale: Record<string, string> = {};
+  const trace: TraceEntry[] = [];
 
   for (const item of allItems) {
     const score = scoreMap.get(item.id) ?? 0;
     const alwaysInclude = item.type === "override" || item.type === "constraint";
     if (score >= RELEVANCE_THRESHOLD || alwaysInclude) {
       included.push(item);
+      const reason = alwaysInclude && score < RELEVANCE_THRESHOLD
+        ? `Always included (type=${item.type})`
+        : `BM25 score ${score.toFixed(3)} above threshold ${RELEVANCE_THRESHOLD}`;
       rationale[item.id] = `Included: bm25=${score.toFixed(2)}, type=${item.type}`;
+      trace.push({
+        memory_item_id: item.id,
+        key: item.key,
+        type: item.type,
+        value: item.value,
+        scope: item.scope,
+        bm25_score: parseFloat(score.toFixed(4)),
+        decision: "included",
+        reason,
+      });
     } else {
       omitted.push(item);
       rationale[item.id] = `Omitted: bm25=${score.toFixed(2)}, below threshold`;
+      trace.push({
+        memory_item_id: item.id,
+        key: item.key,
+        type: item.type,
+        value: item.value,
+        scope: item.scope,
+        bm25_score: parseFloat(score.toFixed(4)),
+        decision: "omitted",
+        reason: `BM25 score ${score.toFixed(3)} below threshold ${RELEVANCE_THRESHOLD}`,
+      });
     }
   }
+
+  // Sort trace: included first (by score desc), then omitted (by score desc)
+  trace.sort((a, b) => {
+    if (a.decision !== b.decision) return a.decision === "included" ? -1 : 1;
+    return b.bm25_score - a.bm25_score;
+  });
 
   const groups = groupByCategory(included);
   const domain = detectDomain(allItems);
@@ -179,5 +221,6 @@ export async function compileContext(
     includedIds: included.map((i) => i.id),
     omittedIds: omitted.map((i) => i.id),
     rationale,
+    trace,
   };
 }

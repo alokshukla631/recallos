@@ -83,14 +83,14 @@ router.post("/", async (req: Request, res: Response) => {
       trip_id
     );
 
-    // Step 9: Save context snapshot
+    // Step 9: Save context snapshot (include traces in rationale)
     const snapshot = await saveSnapshot(
       userEvent.id,
       provider,
       compiled.contextPacket,
       compiled.includedIds,
       compiled.omittedIds,
-      compiled.rationale,
+      { rationale: compiled.rationale, trace: compiled.trace },
       compiled.contextText
     );
 
@@ -227,7 +227,7 @@ router.post("/stream", async (req: Request, res: Response) => {
       compiled.contextPacket,
       compiled.includedIds,
       compiled.omittedIds,
-      compiled.rationale,
+      { rationale: compiled.rationale, trace: compiled.trace },
       compiled.contextText
     );
 
