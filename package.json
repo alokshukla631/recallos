@@ -1,0 +1,17 @@
+{
+  "name": "recallos",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RecallOS - local-first AI memory and context layer (desktop runner)",
+  "scripts": {
+    "install:all": "npm install && npm --prefix backend install && npm --prefix frontend install",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev": "concurrently -n backend,frontend -c blue,magenta \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "bench": "npm --prefix backend run bench",
+    "start": "npm run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
