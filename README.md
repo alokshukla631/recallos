@@ -81,16 +81,49 @@ This is the working MVP, focused on travel planning as a proof-of-concept domain
 - **Entity extraction** - Extracts dates (ISO, relative, month-day), destinations (300+ cities/countries), amounts (multi-currency), and durations
 - **Memory reconciliation** - 5-level precedence (explicit trip override > explicit trip > explicit global > inferred > stale), duplicate detection with re-confirmation, conflict logging
 - **BM25 ranking** - Full BM25 with IDF, term frequency saturation, length normalization, and lightweight stemming
-- **Context compilation** - Scores all active memory against the current message, includes relevant items plus all constraints/overrides, detects ambiguities
+- **Context compilation** - Scores all active memory against the current message, includes relevant items plus all constraints/overrides, detects ambiguities. Full trace logged per snapshot.
 - **Streaming** - SSE endpoint streams tokens as they arrive from the provider
 - **Provider adapters** - OpenAI (gpt-4o) and Anthropic (Claude Sonnet) with both batch and streaming support
+- **Memory Passport** - Export/import your entire memory as a portable JSON file. Swap the AI, keep the memory.
+- **Audit log** - Every memory create, supersede, reconfirm, and delete is tracked with a timestamp and explanation
+- **Full-text search** - BM25-powered search across all memory items
+- **Tags** - User-defined tags for free-form categorization beyond type/scope
+- **Agent state API** - Plans with steps, progress tracking, failure recording, and checkpoints for resumable agents
+
+### Developer tools
+
+- **REST API** - Full CRUD for memory, trips, chat, passport, context, agents, and settings
+- **OpenAPI spec** - Served at `/api/docs/openapi.json` with interactive Swagger UI at `/api/docs/`
+- **CLI** - `recallos` command-line tool for memory, trips, passport, chat, and providers
+- **Docker** - Multi-stage Dockerfile and docker-compose.yml for one-command deployment
 
 ### Tech stack
 
 - **Backend:** TypeScript, Express, sql.js (pure-JS SQLite, no native deps)
 - **Frontend:** React, Vite, TypeScript
+- **CLI:** TypeScript, Commander
 - **Database:** SQLite stored as a single file (`recallos.db`)
 - **No cloud dependencies.** Everything runs locally.
+
+## Docker
+
+```bash
+docker compose up --build
+```
+
+This builds and starts RecallOS on port 3001 with the database persisted in a Docker volume.
+
+## CLI
+
+```bash
+cd cli && npm install && npx tsx src/index.ts --help
+```
+
+Or after building: `recallos memory list`, `recallos chat "Plan a trip to Tokyo"`, etc.
+
+## API docs
+
+Start the backend and visit http://localhost:3001/api/docs/ for the interactive Swagger UI.
 
 ## Project structure
 
@@ -99,27 +132,30 @@ recallos/
   backend/
     src/
       db/           # SQLite schema and helpers
-      modules/      # Core pipeline (extraction, reconciliation, ranking, context)
-      routes/       # REST API endpoints
+      modules/      # Core pipeline (extraction, reconciliation, ranking, context, passport, audit, tags)
+      routes/       # REST API endpoints (chat, memory, trips, passport, agents, docs, settings)
       bench/        # Benchmark scenario runner
   frontend/
     src/
       pages/        # Chat, Trips, Memory, ContextDebug, Settings
       components/   # Shared layout
-  docs/             # Vision, proposal, milestones, MVP spec
+  cli/              # CLI tool
+  docs/             # Vision, proposal, milestones, specs
+  Dockerfile        # Multi-stage Docker build
+  docker-compose.yml
   start.bat         # Windows one-click launcher
   start.sh          # Mac/Linux one-click launcher
 ```
 
 ## The bigger picture
 
-This MVP proves the core thesis: the model does reasoning, RecallOS provides the memory/context layer. The memory is portable across providers.
+Milestone 1 proved the core thesis: the model does reasoning, RecallOS provides the memory/context layer. Milestone 2 made it developer-friendly with an API, CLI, Docker, and agent support.
 
 Future milestones include:
 - Rust engine for background processing
 - MCP server so any AI tool can query your memory
 - Log scraper for cross-tool continuity
-- SDKs for developers building on top of RecallOS
+- Multi-domain generalization beyond travel
 - Local embedding search (vector DB)
 
 See the [docs](docs/) folder for the full vision and roadmap.
@@ -131,6 +167,7 @@ See the [docs](docs/) folder for the full vision and roadmap.
 - [`docs/02-prfaq.md`](docs/02-prfaq.md) - Questions and answers
 - [`docs/03-milestones.md`](docs/03-milestones.md) - Detailed build plan
 - [`docs/04-mvp-spec.md`](docs/04-mvp-spec.md) - MVP specification
+- [`docs/05-m2-sdk-spec.md`](docs/05-m2-sdk-spec.md) - Milestone 2: SDK and developer tools
 
 ## License
 
