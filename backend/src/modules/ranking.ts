@@ -34,14 +34,32 @@ export interface ScoredDocument {
 }
 
 /**
- * Tokenizes text into lowercase words, removing punctuation and stopwords.
+ * Lightweight suffix stripper. Not a full Porter stemmer, but enough to fold
+ * common plural/verb forms (seat/seats, book/booking/booked, fly/flying/flies)
+ * together so BM25 retrieval isn't defeated by morphology.
+ */
+function stem(word: string): string {
+  if (word.length <= 3) return word;
+  // Order matters: strip longer suffixes first
+  if (word.endsWith("ies") && word.length > 4) return word.slice(0, -3) + "y";
+  if (word.endsWith("sses")) return word.slice(0, -2);
+  if (word.endsWith("ing") && word.length > 5) return word.slice(0, -3);
+  if (word.endsWith("ed") && word.length > 4) return word.slice(0, -2);
+  if (word.endsWith("es") && word.length > 4) return word.slice(0, -2);
+  if (word.endsWith("s") && !word.endsWith("ss") && word.length > 3) return word.slice(0, -1);
+  return word;
+}
+
+/**
+ * Tokenizes text into lowercase stemmed words, removing punctuation and stopwords.
  */
 export function tokenize(text: string): string[] {
   return text
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
     .split(/\s+/)
-    .filter((w) => w.length > 1 && !STOPWORDS.has(w));
+    .filter((w) => w.length > 1 && !STOPWORDS.has(w))
+    .map(stem);
 }
 
 /**

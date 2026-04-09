@@ -170,7 +170,12 @@ export async function extractMemory(
       const matched = rule.patterns.some((p) => p.test(sentence));
       if (!matched) continue;
 
-      const scope = detectScope(sentence);
+      const detectedScope = detectScope(sentence);
+      // Fall back to global if "this trip" was detected but no tripId is set,
+      // otherwise the item would be orphaned (scope=trip, trip_id=null) and
+      // never retrieved by the context compiler.
+      const scope: MemoryScope =
+        detectedScope === "trip" && !tripId ? "global" : detectedScope;
       const resolvedTripId = scope === "trip" ? tripId : undefined;
 
       const candidate: MemoryCandidate = {
