@@ -195,6 +195,8 @@ function ContextDebug() {
                           <th>Type</th>
                           <th>Value</th>
                           <th>BM25</th>
+                          <th>Recency</th>
+                          <th>Score</th>
                           <th>Reason</th>
                         </tr>
                       </thead>
@@ -209,7 +211,9 @@ function ContextDebug() {
                             <td className="trace-key">{t.key}</td>
                             <td>{t.type}</td>
                             <td className="trace-value">{t.value}</td>
-                            <td className="trace-score">{t.bm25_score.toFixed(3)}</td>
+                            <td className="trace-score">{(t.bm25_score ?? 0).toFixed(3)}</td>
+                            <td className="trace-score">{(t.recency_boost ?? 0).toFixed(3)}</td>
+                            <td className="trace-score">{(t.final_score ?? t.bm25_score ?? 0).toFixed(3)}</td>
                             <td className="trace-reason">{t.reason}</td>
                           </tr>
                         ))}
