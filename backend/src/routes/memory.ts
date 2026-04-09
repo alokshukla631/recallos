@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { queryAll, queryOne, runSql } from "../db/index.js";
+import { logAudit, getAuditForItem, getRecentAudit } from "../modules/audit.js";
 
 const router = Router();
 
@@ -82,6 +83,28 @@ router.put("/:id", (req: Request, res: Response) => {
   }
 });
 
+// GET /audit/recent - get recent audit log entries
+router.get("/audit/recent", (req: Request, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 50;
+    res.json(getRecentAudit(limit));
+  } catch (err) {
+    console.error("GET /api/memory/audit/recent error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /audit/:id - get audit log for a specific memory item
+router.get("/audit/:id", (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    res.json(getAuditForItem(id));
+  } catch (err) {
+    console.error("GET /api/memory/audit/:id error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // DELETE /:id - soft delete
 router.delete("/:id", (req: Request, res: Response) => {
   try {
@@ -91,6 +114,7 @@ router.delete("/:id", (req: Request, res: Response) => {
       return;
     }
     runSql("UPDATE memory_items SET status = 'stale' WHERE id = ?", [req.params.id]);
+    logAudit(req.params.id as string, "deleted", "Manually deleted by user");
     res.json({ message: "Memory item marked as stale" });
   } catch (err) {
     console.error("DELETE /api/memory/:id error:", err);

@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { queryAll, queryOne, runSql } from "../db/index.js";
 import type { MemoryCandidate, MemoryType, MemoryScope } from "./memory-extractor.js";
+import { logAudit } from "./audit.js";
 
 export interface MemoryItem {
   id: string;
@@ -196,6 +197,7 @@ export async function reconcileMemory(
     const duplicate = findDuplicate(candidate);
     if (duplicate) {
       const reconfirmed = reconfirmItem(duplicate.id, duplicate.confidence);
+      logAudit(duplicate.id, "reconfirmed", `Same value repeated: "${candidate.value.slice(0, 80)}"`);
       duplicates.push(reconfirmed);
       continue;
     }
@@ -204,6 +206,7 @@ export async function reconcileMemory(
 
     if (!existing) {
       const item = insertMemoryItem(candidate, eventId);
+      logAudit(item.id, "created", `Extracted from user message. Type=${candidate.type}, scope=${candidate.scope}`);
       added.push(item);
       continue;
     }
@@ -214,6 +217,8 @@ export async function reconcileMemory(
     if (newPrecedence > existingPrecedence) {
       const newItem = insertMemoryItem(candidate, eventId);
       supersedeItem(existing.id, newItem.id);
+      logAudit(newItem.id, "created", `Supersedes existing (precedence ${newPrecedence} > ${existingPrecedence})`);
+      logAudit(existing.id, "superseded", `Replaced by ${newItem.id} with higher precedence`);
       updated.push(newItem);
 
       const conflict = recordConflict(
@@ -227,6 +232,8 @@ export async function reconcileMemory(
     } else if (newPrecedence === existingPrecedence) {
       const newItem = insertMemoryItem(candidate, eventId);
       supersedeItem(existing.id, newItem.id);
+      logAudit(newItem.id, "created", `Same precedence (${newPrecedence}), newer wins`);
+      logAudit(existing.id, "superseded", `Replaced by newer item ${newItem.id}`);
       updated.push(newItem);
 
       const conflict = recordConflict(
@@ -240,6 +247,8 @@ export async function reconcileMemory(
     } else {
       const newItem = insertMemoryItem(candidate, eventId);
       runSql("UPDATE memory_items SET status = 'stale' WHERE id = ?", [newItem.id]);
+      logAudit(newItem.id, "marked_stale", `Lower precedence (${newPrecedence} < ${existingPrecedence}), kept existing`);
+      updated.push(newItem);
 
       const conflict = recordConflict(
         candidate.key,
