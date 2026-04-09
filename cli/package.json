@@ -1,0 +1,21 @@
+{
+  "name": "recallos-cli",
+  "version": "0.1.0",
+  "description": "RecallOS CLI - manage memory, trips, and chat from the terminal",
+  "type": "module",
+  "bin": {
+    "recallos": "./dist/index.js"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "commander": "^13.1.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}
