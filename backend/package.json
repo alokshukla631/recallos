@@ -7,10 +7,12 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "bench": "tsx src/bench/scenarios.ts"
+    "bench": "tsx src/bench/scenarios.ts",
+    "mcp": "tsx src/mcp-server.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "cors": "^2.8.5",
     "express": "^4.21.0",
     "openai": "^4.77.0",
