@@ -9,6 +9,7 @@ import contextRouter from "./routes/context.js";
 import tripsRouter from "./routes/trips.js";
 import passportRouter from "./routes/passport.js";
 import docsRouter from "./routes/docs.js";
+import agentsRouter from "./routes/agents.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -24,6 +25,7 @@ app.use("/api/context", contextRouter);
 app.use("/api/trips", tripsRouter);
 app.use("/api/passport", passportRouter);
 app.use("/api/docs", docsRouter);
+app.use("/api/agents", agentsRouter);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });

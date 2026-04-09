@@ -102,6 +102,42 @@ export async function initDatabase(filePath: string): Promise<Database> {
   `);
 
   db.run(`
+    CREATE TABLE IF NOT EXISTS agent_plans (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      status TEXT DEFAULT 'active' CHECK (status IN ('active', 'completed', 'failed', 'cancelled')),
+      metadata_json TEXT DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS agent_steps (
+      id TEXT PRIMARY KEY,
+      plan_id TEXT NOT NULL REFERENCES agent_plans(id),
+      step_index INTEGER NOT NULL,
+      description TEXT NOT NULL,
+      status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'failed', 'skipped')),
+      result TEXT,
+      error TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS agent_checkpoints (
+      id TEXT PRIMARY KEY,
+      plan_id TEXT REFERENCES agent_plans(id),
+      label TEXT NOT NULL,
+      state_json TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS memory_tags (
       id TEXT PRIMARY KEY,
       memory_item_id TEXT NOT NULL REFERENCES memory_items(id),
