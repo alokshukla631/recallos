@@ -203,3 +203,15 @@
   font-size: 0.85rem;
   margin-bottom: 12px;
 }
+
+.passport-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.import-label {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}

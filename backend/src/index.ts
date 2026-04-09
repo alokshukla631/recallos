@@ -7,6 +7,7 @@ import memoryRouter from "./routes/memory.js";
 import settingsRouter from "./routes/settings.js";
 import contextRouter from "./routes/context.js";
 import tripsRouter from "./routes/trips.js";
+import passportRouter from "./routes/passport.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -20,6 +21,7 @@ app.use("/api/memory", memoryRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api/context", contextRouter);
 app.use("/api/trips", tripsRouter);
+app.use("/api/passport", passportRouter);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });

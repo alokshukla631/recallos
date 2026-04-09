@@ -245,6 +245,74 @@ function Settings() {
           )}
 
           <div className="settings-section data-section">
+            <h3>Memory Passport</h3>
+            <p>
+              Export your memory as a portable JSON file, or import one from
+              another RecallOS instance. Swap the AI model, keep the memory.
+            </p>
+            <div className="passport-actions">
+              <button
+                className="btn btn-primary"
+                onClick={async () => {
+                  try {
+                    const res = await fetch("/api/passport/export");
+                    if (!res.ok) throw new Error("Export failed");
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `recallos-passport-${new Date().toISOString().slice(0, 10)}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showStatus("passport", "Memory exported", "success");
+                  } catch {
+                    showStatus("passport", "Export failed", "error");
+                  }
+                }}
+              >
+                Export Memory
+              </button>
+              <label className="btn btn-secondary import-label">
+                Import Memory
+                <input
+                  type="file"
+                  accept=".json"
+                  style={{ display: "none" }}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      const text = await file.text();
+                      const passport = JSON.parse(text);
+                      const res = await fetch("/api/passport/import", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(passport),
+                      });
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.error || "Import failed");
+                      showStatus(
+                        "passport",
+                        `Imported: ${data.memories_created} memories, ${data.trips_created} trips (${data.memories_skipped} skipped)`,
+                        "success"
+                      );
+                    } catch (err) {
+                      const msg = err instanceof Error ? err.message : "Import failed";
+                      showStatus("passport", msg, "error");
+                    }
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+            {statusMessages["passport"] && (
+              <p className={`status-msg ${statusMessages["passport"].type}`}>
+                {statusMessages["passport"].text}
+              </p>
+            )}
+          </div>
+
+          <div className="settings-section data-section">
             <h3>Data Management</h3>
             <p>
               Remove all stored memories, conversations, and configuration.
