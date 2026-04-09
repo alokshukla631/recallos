@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { queryAll, queryOne, runSql } from "../db/index.js";
 import { logAudit, getAuditForItem, getRecentAudit } from "../modules/audit.js";
+import { bm25Rank } from "../modules/ranking.js";
 
 const router = Router();
 
@@ -79,6 +80,49 @@ router.put("/:id", (req: Request, res: Response) => {
     res.json(queryOne("SELECT * FROM memory_items WHERE id = ?", [req.params.id]));
   } catch (err) {
     console.error("PUT /api/memory/:id error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /search - full-text search across memory items using BM25
+router.get("/search", (req: Request, res: Response) => {
+  try {
+    const q = (req.query.q as string || "").trim();
+    if (!q) {
+      res.json([]);
+      return;
+    }
+
+    const allItems = queryAll(
+      "SELECT * FROM memory_items WHERE status = 'active' ORDER BY created_at DESC"
+    ) as any[];
+
+    if (allItems.length === 0) {
+      res.json([]);
+      return;
+    }
+
+    const docs = allItems.map((item) => ({
+      id: item.id as string,
+      text: `${item.key} ${item.value} ${item.type}`,
+    }));
+
+    const ranked = bm25Rank(q, docs);
+    const scoreMap = new Map(ranked.map((r) => [r.id, r.score]));
+
+    // Filter out zero-score results and sort by score
+    const results = allItems
+      .map((item) => ({
+        ...item,
+        search_score: scoreMap.get(item.id as string) ?? 0,
+      }))
+      .filter((item) => item.search_score > 0)
+      .sort((a, b) => b.search_score - a.search_score)
+      .slice(0, 50);
+
+    res.json(results);
+  } catch (err) {
+    console.error("GET /api/memory/search error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

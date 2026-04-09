@@ -25,6 +25,10 @@ function Memory() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Search
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+
   // Filters
   const [statusFilter, setStatusFilter] = useState("active");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -56,8 +60,30 @@ function Memory() {
   }, [statusFilter, typeFilter, scopeFilter]);
 
   useEffect(() => {
-    fetchMemories();
-  }, [fetchMemories]);
+    if (!searchQuery.trim()) {
+      fetchMemories();
+    }
+  }, [fetchMemories, searchQuery]);
+
+  const handleSearch = async () => {
+    const q = searchQuery.trim();
+    if (!q) {
+      fetchMemories();
+      return;
+    }
+    setSearching(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/memory/search?q=${encodeURIComponent(q)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setItems(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      setError(err.message || "Search failed");
+    } finally {
+      setSearching(false);
+    }
+  };
 
   const handleEdit = (item: MemoryItem) => {
     setEditingId(item.id);
@@ -130,6 +156,40 @@ function Memory() {
             <span className="stat-label">{scope}</span>
           </div>
         ))}
+      </div>
+
+      {/* Search bar */}
+      <div className="memory-search">
+        <input
+          type="text"
+          placeholder="Search memory (e.g. 'hotel preference', 'Tokyo')..."
+          value={searchQuery}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
+            if (!e.target.value.trim()) fetchMemories();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleSearch();
+          }}
+        />
+        <button
+          className="btn btn-primary"
+          onClick={handleSearch}
+          disabled={searching || !searchQuery.trim()}
+        >
+          {searching ? "Searching..." : "Search"}
+        </button>
+        {searchQuery.trim() && (
+          <button
+            className="btn btn-secondary"
+            onClick={() => {
+              setSearchQuery("");
+              fetchMemories();
+            }}
+          >
+            Clear
+          </button>
+        )}
       </div>
 
       {/* Filter bar */}
