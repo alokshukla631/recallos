@@ -1,3 +1,5 @@
+import { extractEntities } from "./entity-extractor.js";
+
 export type MemoryType = "preference" | "constraint" | "fact" | "goal" | "override";
 export type MemoryScope = "global" | "trip";
 
@@ -191,6 +193,51 @@ export async function extractMemory(
 
       // Only match the first (highest priority) rule per sentence
       break;
+    }
+  }
+
+  // Entity pass: pull out structured entities and promote them to facts/goals/constraints
+  const entities = extractEntities(text);
+  const entityScope = tripId ? "trip" : "global";
+  for (const entity of entities) {
+    let entityType: MemoryType;
+    let key: string;
+    switch (entity.type) {
+      case "destination":
+        entityType = "goal";
+        key = `destination_${toSnakeCase(entity.normalized)}`;
+        break;
+      case "date":
+        entityType = "fact";
+        key = `date_${entity.normalized}`;
+        break;
+      case "amount":
+        entityType = "constraint";
+        key = `budget_${entity.normalized.replace(/\s+/g, "_")}`;
+        break;
+      case "duration":
+        entityType = "fact";
+        key = `duration_${entity.normalized.replace(/\s+/g, "_")}`;
+        break;
+      default:
+        continue;
+    }
+
+    const candidate: MemoryCandidate = {
+      key,
+      type: entityType,
+      value: entity.normalized,
+      scope: entityScope,
+      tripId: entityScope === "trip" ? tripId : undefined,
+      confidence: 0.88,
+      authority: "explicit",
+    };
+
+    const isDuplicate = candidates.some(
+      (c) => c.key === candidate.key && c.value === candidate.value
+    );
+    if (!isDuplicate) {
+      candidates.push(candidate);
     }
   }
 
