@@ -1,4 +1,4 @@
-export type EntityType = "date" | "destination" | "amount" | "duration";
+export type EntityType = "date" | "destination" | "amount" | "duration" | "technology" | "language";
 
 export interface Entity {
   type: EntityType;
@@ -6,8 +6,10 @@ export interface Entity {
   normalized: string;
 }
 
-// Minimal known-destinations list to prove the pattern. Users can extend it.
-// These are matched case-insensitively and must be surrounded by word boundaries.
+// ---------------------------------------------------------------------------
+// Destinations (travel domain)
+// ---------------------------------------------------------------------------
+
 const KNOWN_DESTINATIONS = [
   // Countries
   "Japan", "France", "Italy", "Spain", "Germany", "Thailand", "Vietnam",
@@ -17,6 +19,10 @@ const KNOWN_DESTINATIONS = [
   "Scotland", "Australia", "New Zealand", "Canada", "Peru", "Chile", "Colombia",
   "Indonesia", "Malaysia", "Singapore", "Philippines", "South Korea", "Taiwan",
   "Hong Kong", "UAE", "Dubai", "Israel", "Jordan", "Kenya", "Tanzania",
+  "Czech Republic", "Poland", "Hungary", "Romania", "Croatia", "Slovenia",
+  "Costa Rica", "Panama", "Cuba", "Jamaica", "Dominican Republic",
+  "South Africa", "Ghana", "Ethiopia", "Nigeria", "Rwanda",
+  "Sri Lanka", "Nepal", "Myanmar", "Cambodia", "Laos",
   // Cities
   "Tokyo", "Kyoto", "Osaka", "Sapporo", "Paris", "Lyon", "Nice", "Rome",
   "Milan", "Venice", "Florence", "Naples", "Barcelona", "Madrid", "Seville",
@@ -30,6 +36,12 @@ const KNOWN_DESTINATIONS = [
   "Bali", "Jakarta", "Kuala Lumpur", "Seoul", "Taipei", "Tel Aviv", "Petra",
   "Nairobi", "Zanzibar", "New York", "Los Angeles", "San Francisco", "Chicago",
   "Boston", "Seattle", "Miami", "Austin", "Denver", "Las Vegas",
+  "Prague", "Budapest", "Warsaw", "Krakow", "Dubrovnik", "Split", "Ljubljana",
+  "San Jose", "Havana", "Cape Town", "Johannesburg", "Addis Ababa",
+  "Colombo", "Kathmandu", "Yangon", "Siem Reap", "Luang Prabang",
+  "Ho Chi Minh City", "Da Nang", "Phnom Penh", "Maldives",
+  "Washington DC", "Philadelphia", "Portland", "Nashville", "New Orleans",
+  "Honolulu", "San Diego", "Atlanta", "Dallas", "Houston",
 ];
 
 const DESTINATION_REGEX = new RegExp(
@@ -37,7 +49,54 @@ const DESTINATION_REGEX = new RegExp(
   "gi"
 );
 
-// Month names for date parsing
+// ---------------------------------------------------------------------------
+// Technologies (coding domain)
+// ---------------------------------------------------------------------------
+
+const KNOWN_TECHNOLOGIES = [
+  // Languages
+  "TypeScript", "JavaScript", "Python", "Rust", "Go", "Java", "C#", "C\\+\\+",
+  "Ruby", "PHP", "Swift", "Kotlin", "Scala", "Elixir", "Haskell", "Lua",
+  "Dart", "R", "Julia", "Perl", "Clojure", "Zig", "OCaml",
+  // Frontend frameworks
+  "React", "Vue", "Angular", "Svelte", "Next\\.js", "Nuxt", "Remix",
+  "Astro", "SolidJS", "Qwik", "Gatsby",
+  // Backend frameworks
+  "Express", "FastAPI", "Django", "Flask", "Spring Boot", "Rails",
+  "NestJS", "Hono", "Actix", "Axum", "Gin", "Echo", "Fiber",
+  // Databases
+  "PostgreSQL", "MySQL", "MongoDB", "Redis", "SQLite", "DynamoDB",
+  "Supabase", "Firebase", "Prisma", "Drizzle", "Cassandra", "Neo4j",
+  // Cloud / Infra
+  "AWS", "Azure", "GCP", "Vercel", "Netlify", "Cloudflare", "Docker",
+  "Kubernetes", "Terraform", "Pulumi",
+  // Tools
+  "Git", "GitHub", "GitLab", "VS Code", "Cursor", "Vim", "Neovim",
+  "IntelliJ", "WebStorm", "Xcode", "Android Studio",
+  // AI / ML
+  "TensorFlow", "PyTorch", "LangChain", "LlamaIndex", "OpenAI",
+  "Anthropic", "Hugging Face",
+  // Other
+  "GraphQL", "REST", "gRPC", "Webpack", "Vite", "Tailwind", "Bootstrap",
+  "Material UI", "Chakra UI", "Storybook",
+];
+
+const TECH_REGEX = new RegExp(
+  `\\b(${KNOWN_TECHNOLOGIES.join("|")})\\b`,
+  "gi"
+);
+
+// Programming languages specifically (subset for language entity type)
+const PROGRAMMING_LANGUAGES = new Set([
+  "typescript", "javascript", "python", "rust", "go", "java", "c#", "c++",
+  "ruby", "php", "swift", "kotlin", "scala", "elixir", "haskell", "lua",
+  "dart", "r", "julia", "perl", "clojure", "zig", "ocaml",
+]);
+
+// ---------------------------------------------------------------------------
+// Dates
+// ---------------------------------------------------------------------------
+
 const MONTHS: Record<string, number> = {
   january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
   july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
@@ -140,15 +199,17 @@ function extractDates(text: string, now: Date = new Date()): Entity[] {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Destinations
+// ---------------------------------------------------------------------------
+
 function extractDestinations(text: string): Entity[] {
   const out: Entity[] = [];
   const seen = new Set<string>();
   let m: RegExpExecArray | null;
-  // Reset lastIndex because DESTINATION_REGEX is a shared global regex
   DESTINATION_REGEX.lastIndex = 0;
   while ((m = DESTINATION_REGEX.exec(text)) !== null) {
     const raw = m[1];
-    // Canonical form: title case
     const canonical = raw
       .split(/\s+/)
       .map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase())
@@ -160,6 +221,10 @@ function extractDestinations(text: string): Entity[] {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Amounts / Currency
+// ---------------------------------------------------------------------------
+
 function extractAmounts(text: string): Entity[] {
   const out: Entity[] = [];
   const seen = new Set<string>();
@@ -170,8 +235,8 @@ function extractAmounts(text: string): Entity[] {
     out.push({ type: "amount", value: raw, normalized });
   }
 
-  // Symbol + number: $500, €1,200, £50.5
-  const symbolRe = /([$€£¥₹])\s?(\d{1,3}(?:[,\s]\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s?([kKmM])?/g;
+  // Symbol + number: $500, EUR1,200, GBP50.5
+  const symbolRe = /([$\u20AC\u00A3\u00A5\u20B9])\s?(\d{1,3}(?:[,\s]\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s?([kKmM])?/g;
   let m: RegExpExecArray | null;
   while ((m = symbolRe.exec(text)) !== null) {
     const symbol = m[1];
@@ -182,10 +247,10 @@ function extractAmounts(text: string): Entity[] {
     }
     const currency =
       symbol === "$" ? "USD"
-        : symbol === "€" ? "EUR"
-        : symbol === "£" ? "GBP"
-        : symbol === "¥" ? "JPY"
-        : symbol === "₹" ? "INR"
+        : symbol === "\u20AC" ? "EUR"
+        : symbol === "\u00A3" ? "GBP"
+        : symbol === "\u00A5" ? "JPY"
+        : symbol === "\u20B9" ? "INR"
         : "USD";
     push(m[0], `${num} ${currency}`);
   }
@@ -204,10 +269,13 @@ function extractAmounts(text: string): Entity[] {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Durations
+// ---------------------------------------------------------------------------
+
 function extractDurations(text: string): Entity[] {
   const out: Entity[] = [];
-  // "7 days", "two weeks", "3 nights", "a week"
-  const re = /\b(\d+|a|an|two|three|four|five|six|seven|eight|nine|ten)\s+(day|days|night|nights|week|weeks|month|months)\b/gi;
+  const re = /\b(\d+|a|an|two|three|four|five|six|seven|eight|nine|ten)\s+(day|days|night|nights|week|weeks|month|months|year|years|hour|hours)\b/gi;
   const wordToNum: Record<string, number> = {
     a: 1, an: 1, two: 2, three: 3, four: 4, five: 5,
     six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
@@ -228,8 +296,35 @@ function extractDurations(text: string): Entity[] {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Technologies
+// ---------------------------------------------------------------------------
+
+function extractTechnologies(text: string): Entity[] {
+  const out: Entity[] = [];
+  const seen = new Set<string>();
+  let m: RegExpExecArray | null;
+  TECH_REGEX.lastIndex = 0;
+  while ((m = TECH_REGEX.exec(text)) !== null) {
+    const raw = m[1];
+    const lower = raw.toLowerCase().replace(/\\/g, "");
+    if (seen.has(lower)) continue;
+    seen.add(lower);
+
+    // Determine if it's a programming language or a technology
+    const entityType: EntityType = PROGRAMMING_LANGUAGES.has(lower) ? "language" : "technology";
+    out.push({ type: entityType, value: raw, normalized: raw });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Main export
+// ---------------------------------------------------------------------------
+
 /**
  * Extracts structured entities from free-form text.
+ * Covers: dates, destinations, amounts, durations, technologies, programming languages.
  */
 export function extractEntities(text: string, now: Date = new Date()): Entity[] {
   return [
@@ -237,5 +332,6 @@ export function extractEntities(text: string, now: Date = new Date()): Entity[] 
     ...extractDestinations(text),
     ...extractAmounts(text),
     ...extractDurations(text),
+    ...extractTechnologies(text),
   ];
 }

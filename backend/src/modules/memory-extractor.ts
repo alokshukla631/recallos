@@ -11,120 +11,231 @@ export interface MemoryCandidate {
   tripId?: string;
   confidence: number;
   authority: "explicit" | "inferred";
+  domain?: string;
 }
 
 interface ExtractionRule {
   patterns: RegExp[];
   type: MemoryType;
   confidence: number;
+  domain?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Extraction rules - ordered by priority (first match wins per sentence)
+// ---------------------------------------------------------------------------
+
 const EXTRACTION_RULES: ExtractionRule[] = [
+  // Overrides (highest priority - user is changing something)
   {
     patterns: [
-      /\b(?:instead|actually|changed my mind|override|no longer|not anymore|switch(?:ed)? to)\b/i,
+      /\b(?:instead|actually|changed my mind|override|no longer|not anymore|switch(?:ed)? to|forget what I said|scratch that|disregard|cancel that)\b/i,
     ],
     type: "override",
     confidence: 0.9,
   },
+
+  // Constraints (hard limits across any domain)
   {
     patterns: [
-      /\b(?:budget|under|max|limit|cap|no more than|at most|ceiling|maximum)\b/i,
+      /\b(?:budget|under|max|limit|cap|no more than|at most|ceiling|maximum|minimum|at least|no fewer|must not|cannot|can't|must have|require|need to have|deadline|due by|expires?)\b/i,
     ],
     type: "constraint",
     confidence: 0.85,
   },
+
+  // Goals - Travel
   {
     patterns: [
-      /\b(?:plan|book|trip|visit|travel to|go to|fly to|heading to|destination)\b/i,
+      /\b(?:plan|book|trip|visit|travel to|go to|fly to|heading to|destination|vacation|getaway|journey)\b/i,
     ],
     type: "goal",
     confidence: 0.75,
+    domain: "travel",
   },
+
+  // Goals - Coding / Tech
   {
     patterns: [
-      /\b(?:prefer|preference|like|want|always|love|enjoy|favor|rather)\b/i,
+      /\b(?:build|develop|implement|create|deploy|ship|launch|migrate|refactor|debug|automate|set up|integrate)\b/i,
+    ],
+    type: "goal",
+    confidence: 0.7,
+    domain: "coding",
+  },
+
+  // Goals - Work / Professional
+  {
+    patterns: [
+      /\b(?:finish|complete|deliver|submit|present|publish|hire|onboard|promote)\b/i,
+    ],
+    type: "goal",
+    confidence: 0.7,
+    domain: "work",
+  },
+
+  // Goals - Learning
+  {
+    patterns: [
+      /\b(?:learn|study|practice|master|understand|prepare for|take a course|certification|exam)\b/i,
+    ],
+    type: "goal",
+    confidence: 0.7,
+    domain: "learning",
+  },
+
+  // Preferences (across all domains)
+  {
+    patterns: [
+      /\b(?:prefer|preference|like|want|always|love|enjoy|favor|rather|usually|tend to|my go-to|my favorite|my style)\b/i,
     ],
     type: "preference",
     confidence: 0.8,
   },
+
+  // Facts - Personal identity
   {
     patterns: [
-      /\b(?:I am|my name is|I live|I have|I work|I'm a|I speak|my (?:email|phone|age))\b/i,
+      /\b(?:I am|my name is|I live|I have|I work|I'm a|I speak|my (?:email|phone|age|birthday)|I was born|my address)\b/i,
     ],
     type: "fact",
     confidence: 0.85,
+    domain: "personal",
+  },
+
+  // Facts - Coding / Tech
+  {
+    patterns: [
+      /\b(?:I (?:use|code in|develop (?:in|with)|program in)|my (?:stack|editor|IDE|setup|environment|framework|database|OS|operating system)|we use|our (?:stack|codebase|repo|infrastructure))\b/i,
+    ],
+    type: "fact",
+    confidence: 0.85,
+    domain: "coding",
+  },
+
+  // Facts - Work / Professional
+  {
+    patterns: [
+      /\b(?:I work (?:at|for)|my (?:role|title|team|company|manager|department|position)|my job|my salary|I report to|I manage|my direct reports)\b/i,
+    ],
+    type: "fact",
+    confidence: 0.85,
+    domain: "work",
+  },
+
+  // Facts - Health / Dietary
+  {
+    patterns: [
+      /\b(?:I'm (?:allergic|intolerant|diabetic|vegan|vegetarian|lactose)|I (?:don't|can't) eat|dietary|my (?:allergy|allergies|condition|medication|doctor)|gluten.free|nut.free)\b/i,
+    ],
+    type: "fact",
+    confidence: 0.85,
+    domain: "health",
+  },
+
+  // Facts - Finance
+  {
+    patterns: [
+      /\b(?:my (?:income|salary|savings|investments|portfolio|bank|credit)|I (?:earn|save|invest|owe)|my (?:monthly|annual) (?:income|expenses|rent))\b/i,
+    ],
+    type: "fact",
+    confidence: 0.85,
+    domain: "finance",
+  },
+
+  // Facts - Communication / Schedule
+  {
+    patterns: [
+      /\b(?:my timezone|I'm (?:in|based in|located in)|my (?:schedule|availability|hours|calendar)|I'm available|I'm (?:free|busy) (?:on|at|from|until))\b/i,
+    ],
+    type: "fact",
+    confidence: 0.8,
+    domain: "communication",
+  },
+
+  // Facts - Writing style
+  {
+    patterns: [
+      /\b(?:my (?:writing|tone|voice|style) is|I write (?:in|with)|I (?:don't )?use (?:em dashes|oxford comma|semicolons)|keep it (?:casual|formal|simple|brief|short))\b/i,
+    ],
+    type: "fact",
+    confidence: 0.8,
+    domain: "writing",
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Scope detection
+// ---------------------------------------------------------------------------
+
 const TRIP_SCOPE_PATTERNS = [
   /\b(?:for this trip|this time|just for now|on this trip|this booking|this reservation)\b/i,
+];
+
+// These patterns detect project/session scope but still map to "trip" in the DB
+// since the schema currently only supports global/trip. The domain tag preserves context.
+const PROJECT_SCOPE_PATTERNS = [
+  /\b(?:for this project|in this repo|in this codebase|for this feature|for this task|this sprint)\b/i,
 ];
 
 function detectScope(text: string): MemoryScope {
   for (const pattern of TRIP_SCOPE_PATTERNS) {
     if (pattern.test(text)) return "trip";
   }
+  for (const pattern of PROJECT_SCOPE_PATTERNS) {
+    if (pattern.test(text)) return "trip"; // maps to trip scope until schema supports more
+  }
   return "global";
 }
 
-function extractKey(text: string, type: MemoryType): string {
-  // Generate a snake_case key from the text
-  const cleaned = text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, "")
-    .trim();
+// ---------------------------------------------------------------------------
+// Key extraction
+// ---------------------------------------------------------------------------
 
-  // Try to extract a meaningful key based on type
-  switch (type) {
-    case "preference": {
-      const prefMatch = text.match(
-        /(?:prefer|like|want|always|love|enjoy|favor|rather)\s+(.+?)(?:\.|$)/i
-      );
-      if (prefMatch) {
-        return toSnakeCase(prefMatch[1].trim().slice(0, 40)) + "_preference";
-      }
-      break;
-    }
-    case "constraint": {
-      const constMatch = text.match(
-        /(?:budget|under|max|limit|cap|no more than|at most|maximum)\s+(.+?)(?:\.|$)/i
-      );
-      if (constMatch) {
-        return toSnakeCase(constMatch[1].trim().slice(0, 40)) + "_constraint";
-      }
-      break;
-    }
-    case "goal": {
-      const goalMatch = text.match(
-        /(?:plan|book|trip|visit|travel to|go to|fly to)\s+(.+?)(?:\.|$)/i
-      );
-      if (goalMatch) {
-        return toSnakeCase(goalMatch[1].trim().slice(0, 40)) + "_goal";
-      }
-      break;
-    }
-    case "fact": {
-      const factMatch = text.match(
-        /(?:I am|my name is|I live|I have|I work|I'm a)\s+(.+?)(?:\.|$)/i
-      );
-      if (factMatch) {
-        return toSnakeCase(factMatch[1].trim().slice(0, 40)) + "_fact";
-      }
-      break;
-    }
-    case "override": {
-      const overrideMatch = text.match(
-        /(?:instead|actually|changed my mind|override|switch(?:ed)? to)\s*,?\s*(.+?)(?:\.|$)/i
-      );
-      if (overrideMatch) {
-        return toSnakeCase(overrideMatch[1].trim().slice(0, 40)) + "_override";
-      }
-      break;
+// Domain-specific key extraction patterns
+const KEY_PATTERNS: Array<{ regex: RegExp; suffix: string }> = [
+  // Preferences
+  { regex: /(?:prefer|like|want|always|love|enjoy|favor|rather|usually|my go-to|my favorite|my style)\s+(.+?)(?:\.|$)/i, suffix: "_preference" },
+  // Constraints
+  { regex: /(?:budget|under|max|limit|cap|no more than|at most|maximum|minimum|at least|deadline|due by)\s+(.+?)(?:\.|$)/i, suffix: "_constraint" },
+  // Goals - travel
+  { regex: /(?:plan|book|trip|visit|travel to|go to|fly to)\s+(.+?)(?:\.|$)/i, suffix: "_goal" },
+  // Goals - coding
+  { regex: /(?:build|develop|implement|create|deploy|ship|launch|migrate|refactor)\s+(.+?)(?:\.|$)/i, suffix: "_goal" },
+  // Goals - work
+  { regex: /(?:finish|complete|deliver|submit|present|publish)\s+(.+?)(?:\.|$)/i, suffix: "_goal" },
+  // Goals - learning
+  { regex: /(?:learn|study|practice|master|understand|prepare for)\s+(.+?)(?:\.|$)/i, suffix: "_goal" },
+  // Facts - personal
+  { regex: /(?:I am|my name is|I live|I have|I work|I'm a)\s+(.+?)(?:\.|$)/i, suffix: "_fact" },
+  // Facts - coding
+  { regex: /(?:I (?:use|code in|develop (?:in|with)|program in))\s+(.+?)(?:\.|$)/i, suffix: "_fact" },
+  { regex: /(?:my (?:stack|editor|IDE|setup|framework|database|OS))\s+(?:is\s+)?(.+?)(?:\.|$)/i, suffix: "_fact" },
+  // Facts - work
+  { regex: /(?:I work (?:at|for))\s+(.+?)(?:\.|$)/i, suffix: "_fact" },
+  { regex: /(?:my (?:role|title|team|company|manager|department))\s+(?:is\s+)?(.+?)(?:\.|$)/i, suffix: "_fact" },
+  // Facts - health
+  { regex: /(?:I'm (?:allergic|intolerant|diabetic|vegan|vegetarian))\s*(?:to\s+)?(.+?)(?:\.|$)/i, suffix: "_fact" },
+  { regex: /(?:I (?:don't|can't) eat)\s+(.+?)(?:\.|$)/i, suffix: "_restriction" },
+  // Overrides
+  { regex: /(?:instead|actually|changed my mind|override|switch(?:ed)? to)\s*,?\s*(.+?)(?:\.|$)/i, suffix: "_override" },
+  // Writing
+  { regex: /(?:my (?:writing|tone|voice|style))\s+(?:is\s+)?(.+?)(?:\.|$)/i, suffix: "_style" },
+];
+
+function extractKey(text: string, type: MemoryType): string {
+  for (const { regex, suffix } of KEY_PATTERNS) {
+    const match = text.match(regex);
+    if (match && match[1]) {
+      return toSnakeCase(match[1].trim().slice(0, 40)) + suffix;
     }
   }
 
   // Fallback: use first few meaningful words
+  const cleaned = text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "")
+    .trim();
   const words = cleaned.split(/\s+/).slice(0, 4).join("_");
   return words || "unknown";
 }
@@ -139,7 +250,6 @@ function toSnakeCase(str: string): string {
 }
 
 function extractValue(text: string): string {
-  // Return a cleaned version of the text as the value
   return text.trim().replace(/\s+/g, " ");
 }
 
@@ -153,9 +263,37 @@ function splitSentences(text: string): string[] {
     .filter((s) => s.length > 3);
 }
 
+// ---------------------------------------------------------------------------
+// Domain detection from text
+// ---------------------------------------------------------------------------
+
+const DOMAIN_KEYWORDS: Record<string, RegExp> = {
+  travel: /\b(?:trip|travel|flight|hotel|book|destination|airport|airline|seat|vacation|resort|cruise|passport|visa|luggage)\b/i,
+  coding: /\b(?:code|programming|developer|software|api|database|frontend|backend|deploy|git|repo|debug|compile|framework|library|npm|pip)\b/i,
+  work: /\b(?:meeting|project|deadline|client|presentation|report|team|manager|stakeholder|sprint|roadmap|quarterly)\b/i,
+  health: /\b(?:allergy|diet|vegetarian|vegan|exercise|medication|doctor|health|fitness|calories|weight|sleep)\b/i,
+  finance: /\b(?:budget|salary|invest|savings|expense|income|tax|portfolio|stocks|crypto|retirement|loan)\b/i,
+  learning: /\b(?:study|course|exam|tutorial|homework|lecture|certification|skill|lesson|training)\b/i,
+  writing: /\b(?:writing|tone|voice|style|essay|article|blog|draft|edit|proofread|grammar|format)\b/i,
+};
+
+function detectDomainFromText(text: string): string | undefined {
+  for (const [domain, regex] of Object.entries(DOMAIN_KEYWORDS)) {
+    if (regex.test(text)) return domain;
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Main extraction function
+// ---------------------------------------------------------------------------
+
 /**
  * Parses user text to extract structured memory candidates using rule-based
  * keyword pattern matching. Returns an array of candidates without saving to DB.
+ *
+ * Works across multiple domains: travel, coding, work, health, finance,
+ * learning, writing, communication, and general personal facts.
  */
 export async function extractMemory(
   text: string,
@@ -178,6 +316,9 @@ export async function extractMemory(
         detectedScope === "trip" && !tripId ? "global" : detectedScope;
       const resolvedTripId = scope === "trip" ? tripId : undefined;
 
+      // Detect domain from the sentence or use the rule's domain
+      const domain = rule.domain || detectDomainFromText(sentence);
+
       const candidate: MemoryCandidate = {
         key: extractKey(sentence, rule.type),
         type: rule.type,
@@ -186,6 +327,7 @@ export async function extractMemory(
         tripId: resolvedTripId,
         confidence: rule.confidence,
         authority: rule.confidence >= 0.8 ? "explicit" : "inferred",
+        domain,
       };
 
       // Avoid duplicate keys within same extraction pass
@@ -207,10 +349,13 @@ export async function extractMemory(
   for (const entity of entities) {
     let entityType: MemoryType;
     let key: string;
+    let domain: string | undefined;
+
     switch (entity.type) {
       case "destination":
         entityType = "goal";
         key = `destination_${toSnakeCase(entity.normalized)}`;
+        domain = "travel";
         break;
       case "date":
         entityType = "fact";
@@ -219,10 +364,21 @@ export async function extractMemory(
       case "amount":
         entityType = "constraint";
         key = `budget_${entity.normalized.replace(/\s+/g, "_")}`;
+        domain = "finance";
         break;
       case "duration":
         entityType = "fact";
         key = `duration_${entity.normalized.replace(/\s+/g, "_")}`;
+        break;
+      case "technology":
+        entityType = "fact";
+        key = `tech_${toSnakeCase(entity.normalized)}`;
+        domain = "coding";
+        break;
+      case "language":
+        entityType = "fact";
+        key = `language_${toSnakeCase(entity.normalized)}`;
+        domain = "coding";
         break;
       default:
         continue;
@@ -236,6 +392,7 @@ export async function extractMemory(
       tripId: entityScope === "trip" ? tripId : undefined,
       confidence: 0.88,
       authority: "explicit",
+      domain,
     };
 
     const isDuplicate = candidates.some(
