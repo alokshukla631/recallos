@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { queryAll, queryOne, runSql } from "../db/index.js";
 import { logAudit, getAuditForItem, getRecentAudit } from "../modules/audit.js";
 import { bm25Rank } from "../modules/ranking.js";
+import { addTag, removeTag, getTagsForItem, getAllTags } from "../modules/tags.js";
 
 const router = Router();
 
@@ -145,6 +146,59 @@ router.get("/audit/:id", (req: Request, res: Response) => {
     res.json(getAuditForItem(id));
   } catch (err) {
     console.error("GET /api/memory/audit/:id error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /tags - list all tags with counts
+router.get("/tags", (_req: Request, res: Response) => {
+  try {
+    res.json(getAllTags());
+  } catch (err) {
+    console.error("GET /api/memory/tags error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /:id/tags - get tags for a specific memory item
+router.get("/:id/tags", (req: Request, res: Response) => {
+  try {
+    res.json(getTagsForItem(req.params.id as string));
+  } catch (err) {
+    console.error("GET /api/memory/:id/tags error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /:id/tags - add a tag to a memory item
+router.post("/:id/tags", (req: Request, res: Response) => {
+  try {
+    const { tag } = req.body;
+    if (!tag || typeof tag !== "string" || !tag.trim()) {
+      res.status(400).json({ error: "tag is required" });
+      return;
+    }
+    const id = req.params.id as string;
+    const existing = queryOne("SELECT id FROM memory_items WHERE id = ?", [id]);
+    if (!existing) {
+      res.status(404).json({ error: "Memory item not found" });
+      return;
+    }
+    addTag(id, tag);
+    res.json(getTagsForItem(id));
+  } catch (err) {
+    console.error("POST /api/memory/:id/tags error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /:id/tags/:tag - remove a tag from a memory item
+router.delete("/:id/tags/:tag", (req: Request, res: Response) => {
+  try {
+    removeTag(req.params.id as string, req.params.tag as string);
+    res.json(getTagsForItem(req.params.id as string));
+  } catch (err) {
+    console.error("DELETE /api/memory/:id/tags/:tag error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

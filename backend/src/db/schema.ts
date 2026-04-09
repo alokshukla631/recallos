@@ -102,6 +102,16 @@ export async function initDatabase(filePath: string): Promise<Database> {
   `);
 
   db.run(`
+    CREATE TABLE IF NOT EXISTS memory_tags (
+      id TEXT PRIMARY KEY,
+      memory_item_id TEXT NOT NULL REFERENCES memory_items(id),
+      tag TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(memory_item_id, tag)
+    )
+  `);
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS memory_audit_log (
       id TEXT PRIMARY KEY,
       memory_item_id TEXT NOT NULL,
