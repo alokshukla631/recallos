@@ -6,108 +6,131 @@
 
 RecallOS is a free, open-source, local-first context engine. It collects your memory (preferences, facts, history) across every AI tool you use, but it doesn't dump all of that into the next conversation. It picks only the pieces that matter for what you're doing right now and sends just that to the model.
 
-It runs quietly in the background on your computer. When you talk to Claude, ChatGPT, VS Code, Cursor, or any other AI tool that supports MCP, RecallOS gives that tool the right slice of your personal context. Not your whole history, just what's relevant to this specific request.
+Everything runs on your computer. Your data never leaves your machine.
 
-You keep using the AI tools you already like. RecallOS just makes them all smarter about you.
+## Quick start
 
-**AI providers do the thinking. You keep the memory.**
+**Requirements:** Node.js 18+ (download from https://nodejs.org)
 
-## The problem
+```bash
+# Clone the repo
+git clone https://github.com/alokshukla631/recallos.git
+cd recallos
 
-- **AI memory is fragmented across tools.** You tell one tool you prefer Python. Then you open another and have to say it again. Every tool maintains its own silo, and none of them talk to each other.
-- **Provider memory is provider-specific and not portable.** Any memory a tool stores about you is locked inside that tool. Switch providers, and you start from zero.
-- **Users cannot easily inspect or edit how memory is applied.** Most tools give you no way to see what the model "remembers," correct mistakes, or control what gets surfaced in a given conversation.
-- **Transcript-based history does not equal reliable context.** Scrolling back through old conversations is not the same as having clean, structured, relevant context delivered at the right moment.
+# Windows: double-click start.bat, or run:
+start.bat
+
+# Mac / Linux:
+chmod +x start.sh
+./start.sh
+```
+
+This installs dependencies and starts both servers:
+- **Frontend** at http://localhost:5173
+- **Backend** at http://localhost:3001
+
+Open http://localhost:5173 in your browser. Go to **Settings** and add an API key for OpenAI or Anthropic. Then start chatting.
+
+### Manual start (if you prefer)
+
+```bash
+# Install everything
+npm run install:all
+
+# Start both servers
+npm run dev
+
+# Or start them separately:
+npm run dev:backend   # http://localhost:3001
+npm run dev:frontend  # http://localhost:5173
+```
+
+### Run the benchmark suite
+
+```bash
+npm run bench
+```
+
+This runs 5 end-to-end scenarios that test memory extraction, duplicate detection, entity extraction, context compilation, and precedence rules. No API keys needed.
 
 ## How it works
 
-RecallOS has three parts:
+RecallOS sits between you and the AI model. When you send a message:
 
-1. **The Engine (Rust)** runs in the background. It watches your local chat logs, pulls out useful facts (like "prefers window seats" or "works in Rust"), and keeps them organized. Written in Rust so it stays fast and light, using almost no memory while running 24/7.
+1. **Extract** - Rule-based extraction pulls structured memory from your message (preferences, constraints, goals, facts, overrides). Entity extraction catches dates, destinations, amounts, and durations.
+2. **Reconcile** - New memory is compared against existing memory. Duplicates are re-confirmed. Conflicts are resolved using a 5-level precedence system. Superseded items are marked stale.
+3. **Compile** - BM25 ranking scores every active memory item against your current message. Only relevant items are included in the context packet. Constraints and overrides are always included.
+4. **Deliver** - The compiled context is injected into the system prompt alongside your conversation history, then sent to whichever AI provider you selected.
+5. **Store** - The full exchange is stored locally with a context snapshot for debugging.
 
-2. **The MCP Server (TypeScript)** is how AI tools talk to RecallOS. When Claude or ChatGPT needs to know something about you, it asks RecallOS through MCP. RecallOS picks the right pieces and sends them over. It uses the official MCP SDK so it works with everything.
+## What's built
 
-3. **The Dashboard** is a simple web page on your computer where you can see everything RecallOS knows about you. You can search it, fix mistakes, or delete things. It's where you inspect and manage your memory, not a chat app.
+This is the working MVP, focused on travel planning as a proof-of-concept domain.
 
-## How RecallOS learns what you said
+### Pages
 
-This is the golden question. MCP is sandboxed, so RecallOS can't "overhear" your chats. So how does it know what you discussed?
+- **Chat** - Unified chat UI with conversation sidebar, streaming responses (SSE), provider selector, and trip selector. Memory badges show what was extracted and reconciled per message. Context panel shows what memory was injected.
+- **Trips** - Create and manage trips. Each trip scopes its own conversations and memory items.
+- **Memory** - Browse, search, and filter all stored memory items. See type, scope, confidence, and status.
+- **Context Debug** - Inspect context snapshots: which memories were included, which were omitted, and why.
+- **Settings** - Add/remove API keys for OpenAI and Anthropic. Set a default provider.
 
-A hybrid approach:
+### Backend pipeline
 
-| Method | What happens | Role |
-|:---|:---|:---|
-| **Log scraper** (primary) | RecallOS watches the local files that Claude Desktop, Cursor, and VS Code already save on your computer, and reads new chats from there. Zero friction: it just indexes data that's already on your disk. | The main way RecallOS learns |
-| **Self-reporting tool** (secondary) | The AI tool calls a `record_interaction` function after each chat to tell RecallOS what was discussed. Catches things the log scraper might miss. | Fills in the gaps |
+- **Memory extraction** - Regex-based rules pull preferences, constraints, goals, facts, and overrides from each sentence
+- **Entity extraction** - Extracts dates (ISO, relative, month-day), destinations (300+ cities/countries), amounts (multi-currency), and durations
+- **Memory reconciliation** - 5-level precedence (explicit trip override > explicit trip > explicit global > inferred > stale), duplicate detection with re-confirmation, conflict logging
+- **BM25 ranking** - Full BM25 with IDF, term frequency saturation, length normalization, and lightweight stemming
+- **Context compilation** - Scores all active memory against the current message, includes relevant items plus all constraints/overrides, detects ambiguities
+- **Streaming** - SSE endpoint streams tokens as they arrive from the provider
+- **Provider adapters** - OpenAI (gpt-4o) and Anthropic (Claude Sonnet) with both batch and streaming support
 
-**Why this matters:** This is what gives RecallOS cross-tool continuity. Talk to Claude in the morning, open ChatGPT in the afternoon. ChatGPT asks RecallOS what you discussed earlier. Seamless continuity across tools that don't know about each other.
+### Tech stack
 
-## Why RecallOS is not just search or memory storage
+- **Backend:** TypeScript, Express, sql.js (pure-JS SQLite, no native deps)
+- **Frontend:** React, Vite, TypeScript
+- **Database:** SQLite stored as a single file (`recallos.db`)
+- **No cloud dependencies.** Everything runs locally.
 
-Raw history is not the same as usable context. A pile of old transcripts does not help a model understand what matters right now.
-
-RecallOS goes further:
-
-- **Structured memory extraction.** RecallOS doesn't just store conversations. It extracts structured memory items from them: preferences, facts, decisions, project details.
-- **Rich metadata on every item.** Every memory item tracks its source, recency, scope, and confidence. This metadata is what makes retrieval intelligent rather than naive.
-- **Conflict resolution, not blind retrieval.** If you said "I like Python" last year but "use TypeScript for this project" yesterday, RecallOS knows which one applies right now. It resolves contradictions instead of dumping both into the prompt and hoping the model figures it out.
-- **Task-specific context compilation.** For each request, RecallOS compiles a context packet tailored to the current task, fitting it within the model's token budget. The model sees exactly what it needs, nothing more.
-
-## What makes RecallOS different
-
-- **Built for end users first. Extensible for developers. Useful for AI products and agents later.** Mem0 is made for programmers to add to their apps. Letta is made for AI agents. RecallOS is made for the person using AI every day, and it gives developers an SDK to build on top of that same foundation. You own your memory.
-- **Works across all your AI tools.** Use GPT in the morning, Claude in the afternoon. RecallOS gives both the same memory. I call this the "Memory Passport."
-- **Your data stays on your machine.** Your full history never leaves your computer. The AI only sees the small piece RecallOS picks for that specific question, even if you have hundreds of gigabytes saved locally.
-- **Gets smarter in the background.** A small AI model runs on your computer to turn messy chat logs into clean, organized facts. It does this while your computer is idle, so it costs you nothing.
-- **Handles contradictions.** If you said "I like Python" last year but "use TypeScript for this project" yesterday, RecallOS knows which one matters right now.
-- **You can see everything.** No black box. You can always check what memory was used, why it was picked, and fix it if it's wrong.
-
-## Roadmap
-
-| Step | Goal | What gets built |
-|:---|:---|:---|
-| **M1** | Prove the local context engine works for one narrow use case (travel planning) | Rust engine, MCP server, log scraper, self-reporting tool, memory extraction, conflict handling, context selection, dashboard |
-| **M2** | SDK and runtime for builders. Sharpen the architecture, strengthen the open-source story | SDKs for Node.js/Python/REST, tools for AI agents, plugin system, debugging tools |
-| **M3** | Generalized context runtime for broader domains and long-running agents | Flexible memory types, cross-topic context, more log scrapers, large-scale local search, MCP client connections |
-
-## Tech
-
-- **Engine:** Rust. Fast, light, runs 24/7 without eating resources.
-- **MCP layer:** TypeScript. Uses the official MCP SDK, talks to the Rust engine via local socket.
-- **Storage:** LanceDB (for searching by meaning) + SQLite (for organized data)
-- **Local AI:** Small models like Llama 4 Scout, Gemma 3, or Phi-4 to process your chats in the background
-
-## How it all fits together
+## Project structure
 
 ```
-+---------------------------------------------------+
-|  Your AI Tools (Claude, ChatGPT, VS Code, Cursor) |
-|  talk to RecallOS through MCP                        |
-+---------------------------------------------------+
-|  RecallOS MCP Server (TypeScript)                     |
-|  Shares your data, search tools, and templates     |
-|  Self-reporting tool catches extra interactions     |
-+---------------------------------------------------+
-|  RecallOS Engine (Rust, runs in the background)       |
-|  Log scraper watches local chat files              |
-|  Extracts facts > Stores memory > Handles conflicts|
-|  Picks the right context for each request          |
-+---------------------------------------------------+
-|  Dashboard (web page on your computer)             |
-|  Browse, Search, Edit, See what was shared          |
-+---------------------------------------------------+
+recallos/
+  backend/
+    src/
+      db/           # SQLite schema and helpers
+      modules/      # Core pipeline (extraction, reconciliation, ranking, context)
+      routes/       # REST API endpoints
+      bench/        # Benchmark scenario runner
+  frontend/
+    src/
+      pages/        # Chat, Trips, Memory, ContextDebug, Settings
+      components/   # Shared layout
+  docs/             # Vision, proposal, milestones, MVP spec
+  start.bat         # Windows one-click launcher
+  start.sh          # Mac/Linux one-click launcher
 ```
+
+## The bigger picture
+
+This MVP proves the core thesis: the model does reasoning, RecallOS provides the memory/context layer. The memory is portable across providers.
+
+Future milestones include:
+- Rust engine for background processing
+- MCP server so any AI tool can query your memory
+- Log scraper for cross-tool continuity
+- SDKs for developers building on top of RecallOS
+- Local embedding search (vector DB)
+
+See the [docs](docs/) folder for the full vision and roadmap.
 
 ## Docs
 
-- [`docs/00-vision.md`](docs/00-vision.md): The big picture
-- [`docs/01-project-proposal.md`](docs/01-project-proposal.md): Full project proposal
-- [`docs/02-prfaq.md`](docs/02-prfaq.md): Questions and answers
-- [`docs/03-milestones.md`](docs/03-milestones.md): Detailed build plan
-
-## Status
-
-Early stage. Working on Milestone 1.
+- [`docs/00-vision.md`](docs/00-vision.md) - The big picture
+- [`docs/01-project-proposal.md`](docs/01-project-proposal.md) - Full project proposal
+- [`docs/02-prfaq.md`](docs/02-prfaq.md) - Questions and answers
+- [`docs/03-milestones.md`](docs/03-milestones.md) - Detailed build plan
+- [`docs/04-mvp-spec.md`](docs/04-mvp-spec.md) - MVP specification
 
 ## License
 
