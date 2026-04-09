@@ -33,6 +33,13 @@ interface Conversation {
   message_count: number;
 }
 
+interface Trip {
+  id: string;
+  name: string;
+  destination: string | null;
+  status: string;
+}
+
 interface EventRow {
   id: string;
   role: "user" | "assistant" | "system";
@@ -44,6 +51,8 @@ interface EventRow {
 function Chat() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [selectedProvider, setSelectedProvider] = useState("");
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [selectedTripId, setSelectedTripId] = useState<string>("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -58,6 +67,7 @@ function Chat() {
   useEffect(() => {
     fetchProviders();
     fetchConversations();
+    fetchTrips();
   }, []);
 
   useEffect(() => {
@@ -95,6 +105,17 @@ function Chat() {
     }
   }, []);
 
+  async function fetchTrips() {
+    try {
+      const res = await fetch("/api/trips");
+      if (!res.ok) return;
+      const data: Trip[] = await res.json();
+      setTrips(data);
+    } catch {
+      setTrips([]);
+    }
+  }
+
   async function openConversation(id: string) {
     try {
       const res = await fetch(`/api/chat/conversations/${id}`);
@@ -112,6 +133,11 @@ function Chat() {
       setMessages(msgs);
       setConversationId(id);
       setExpandedContexts(new Set());
+      // Sync the trip selector to the conversation's trip
+      const conv = conversations.find((c) => c.id === id);
+      if (conv) {
+        setSelectedTripId(conv.trip_id ?? "");
+      }
     } catch {
       // ignore
     }
@@ -122,6 +148,7 @@ function Chat() {
     setConversationId(null);
     setExpandedContexts(new Set());
     setInput("");
+    setSelectedTripId("");
     textareaRef.current?.focus();
   }
 
@@ -165,6 +192,7 @@ function Chat() {
           message: text,
           provider: selectedProvider,
           conversation_id: conversationId || undefined,
+          trip_id: selectedTripId || undefined,
         }),
       });
 
@@ -303,20 +331,44 @@ function Chat() {
         <div className="chat-header">
           <h2>Chat</h2>
           {hasProviders && (
-            <div className="provider-select">
-              <label>Provider</label>
-              <select
-                value={selectedProvider}
-                onChange={(e) => setSelectedProvider(e.target.value)}
-                disabled={loading}
-              >
-                {providers.map((p) => (
-                  <option key={p.provider} value={p.provider}>
-                    {p.provider}
-                    {p.is_default ? " (default)" : ""}
-                  </option>
-                ))}
-              </select>
+            <div className="chat-header-controls">
+              {trips.length > 0 && (
+                <div className="provider-select">
+                  <label>Trip</label>
+                  <select
+                    value={selectedTripId}
+                    onChange={(e) => setSelectedTripId(e.target.value)}
+                    disabled={loading || (messages.length > 0 && !!conversationId)}
+                    title={
+                      messages.length > 0 && conversationId
+                        ? "Trip is locked after the conversation starts"
+                        : "Scope this chat to a trip"
+                    }
+                  >
+                    <option value="">No trip (global)</option>
+                    {trips.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="provider-select">
+                <label>Provider</label>
+                <select
+                  value={selectedProvider}
+                  onChange={(e) => setSelectedProvider(e.target.value)}
+                  disabled={loading}
+                >
+                  {providers.map((p) => (
+                    <option key={p.provider} value={p.provider}>
+                      {p.provider}
+                      {p.is_default ? " (default)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
         </div>

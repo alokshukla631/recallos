@@ -134,11 +134,17 @@
   margin: 0;
 }
 
+.chat-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-left: auto;
+}
+
 .provider-select {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
 }
 
 .provider-select label {
