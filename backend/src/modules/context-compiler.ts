@@ -1,4 +1,5 @@
 import { queryAll } from "../db/index.js";
+import { bm25Rank } from "./ranking.js";
 import type { MemoryItem } from "./memory-reconciler.js";
 
 export interface ContextPacket {
@@ -37,29 +38,24 @@ function getActiveMemoryItems(tripId?: string): MemoryItem[] {
   ) as unknown as MemoryItem[];
 }
 
-function scoreRelevance(item: MemoryItem, message: string): number {
-  const messageWords = new Set(
-    message
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, "")
-      .split(/\s+/)
-      .filter((w) => w.length > 2)
-  );
+/**
+ * Scores each memory item against the current message using BM25 ranking.
+ * Returns a map of itemId -> score (normalized to 0..1 based on max score).
+ */
+function scoreAllBm25(items: MemoryItem[], message: string): Map<string, number> {
+  const docs = items.map((item) => ({
+    id: item.id,
+    text: `${item.key} ${item.value} ${item.type}`,
+  }));
 
-  const itemWords = `${item.key} ${item.value} ${item.type}`
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, "")
-    .split(/\s+/)
-    .filter((w) => w.length > 2);
+  const ranked = bm25Rank(message, docs);
+  const maxScore = Math.max(...ranked.map((r) => r.score), 0);
 
-  if (itemWords.length === 0) return 0;
-
-  let overlap = 0;
-  for (const word of itemWords) {
-    if (messageWords.has(word)) overlap++;
+  const normalized = new Map<string, number>();
+  for (const { id, score } of ranked) {
+    normalized.set(id, maxScore > 0 ? score / maxScore : 0);
   }
-
-  return overlap / itemWords.length;
+  return normalized;
 }
 
 function groupByCategory(items: MemoryItem[]): Record<string, MemoryItem[]> {
@@ -102,24 +98,22 @@ export async function compileContext(
 ): Promise<CompiledContext> {
   const allItems = getActiveMemoryItems(tripId);
 
-  const scored = allItems.map((item) => ({
-    item,
-    score: scoreRelevance(item, currentMessage),
-  }));
+  const scoreMap = scoreAllBm25(allItems, currentMessage);
 
-  const RELEVANCE_THRESHOLD = 0.05;
+  const RELEVANCE_THRESHOLD = 0.1;
   const included: MemoryItem[] = [];
   const omitted: MemoryItem[] = [];
   const rationale: Record<string, string> = {};
 
-  for (const { item, score } of scored) {
+  for (const item of allItems) {
+    const score = scoreMap.get(item.id) ?? 0;
     const alwaysInclude = item.type === "override" || item.type === "constraint";
     if (score >= RELEVANCE_THRESHOLD || alwaysInclude) {
       included.push(item);
-      rationale[item.id] = `Included: score=${score.toFixed(2)}, type=${item.type}`;
+      rationale[item.id] = `Included: bm25=${score.toFixed(2)}, type=${item.type}`;
     } else {
       omitted.push(item);
-      rationale[item.id] = `Omitted: score=${score.toFixed(2)}, below threshold`;
+      rationale[item.id] = `Omitted: bm25=${score.toFixed(2)}, below threshold`;
     }
   }
 
