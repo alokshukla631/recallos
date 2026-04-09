@@ -34,6 +34,67 @@ export interface ReconcileResult {
   added: MemoryItem[];
   updated: MemoryItem[];
   conflicts: Conflict[];
+  duplicates: MemoryItem[];
+}
+
+/**
+ * Normalizes a memory value for duplicate comparison.
+ * Lowercases, collapses whitespace, strips trailing punctuation.
+ */
+function normalizeForDedup(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[.!?,;:"']+$/g, "")
+    .trim();
+}
+
+/**
+ * Checks if the candidate is a duplicate of an existing active item.
+ * Duplicate = same key, same type, same normalized value, same scope (and trip if scoped).
+ */
+function findDuplicate(
+  candidate: MemoryCandidate
+): MemoryItem | undefined {
+  const normalizedCandidate = normalizeForDedup(candidate.value);
+
+  const rows =
+    candidate.scope === "trip" && candidate.tripId
+      ? (queryAll(
+          `SELECT * FROM memory_items
+           WHERE key = ? AND type = ? AND scope = 'trip' AND trip_id = ? AND status = 'active'`,
+          [candidate.key, candidate.type, candidate.tripId]
+        ) as unknown as MemoryItem[])
+      : (queryAll(
+          `SELECT * FROM memory_items
+           WHERE key = ? AND type = ? AND scope = 'global' AND status = 'active'`,
+          [candidate.key, candidate.type]
+        ) as unknown as MemoryItem[]);
+
+  for (const row of rows) {
+    if (normalizeForDedup(row.value) === normalizedCandidate) {
+      return row;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Re-confirms an existing memory item: bumps last_confirmed_at and
+ * optionally raises confidence for repeated mentions.
+ */
+function reconfirmItem(itemId: string, currentConfidence: number): MemoryItem {
+  const now = new Date().toISOString();
+  // Cap at 0.99 so repeated mentions keep nudging it but never saturate
+  const nextConfidence = Math.min(0.99, currentConfidence + 0.05);
+  runSql(
+    `UPDATE memory_items SET last_confirmed_at = ?, confidence = ? WHERE id = ?`,
+    [now, nextConfidence, itemId]
+  );
+  return queryOne(
+    "SELECT * FROM memory_items WHERE id = ?",
+    [itemId]
+  ) as unknown as MemoryItem;
 }
 
 /**
@@ -128,8 +189,17 @@ export async function reconcileMemory(
   const added: MemoryItem[] = [];
   const updated: MemoryItem[] = [];
   const conflicts: Conflict[] = [];
+  const duplicates: MemoryItem[] = [];
 
   for (const candidate of candidates) {
+    // First, check for exact duplicates and re-confirm them
+    const duplicate = findDuplicate(candidate);
+    if (duplicate) {
+      const reconfirmed = reconfirmItem(duplicate.id, duplicate.confidence);
+      duplicates.push(reconfirmed);
+      continue;
+    }
+
     const existing = findExistingByKey(candidate.key, candidate.scope, candidate.tripId);
 
     if (!existing) {
@@ -182,5 +252,5 @@ export async function reconcileMemory(
     }
   }
 
-  return { added, updated, conflicts };
+  return { added, updated, conflicts, duplicates };
 }

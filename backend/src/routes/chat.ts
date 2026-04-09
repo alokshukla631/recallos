@@ -107,6 +107,7 @@ router.post("/", async (req: Request, res: Response) => {
         added: reconcileResult.added.length,
         updated: reconcileResult.updated.length,
         conflicts: reconcileResult.conflicts.length,
+        duplicates: reconcileResult.duplicates.length,
       },
       context: {
         snapshot_id: snapshot.id,

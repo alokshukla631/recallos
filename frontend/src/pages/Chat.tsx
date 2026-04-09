@@ -21,7 +21,7 @@ interface Message {
   timestamp: string;
   context?: ContextInfo;
   memory_extracted?: number;
-  memory_reconciled?: { added: number; updated: number; conflicts: number };
+  memory_reconciled?: { added: number; updated: number; conflicts: number; duplicates?: number };
 }
 
 interface Conversation {
@@ -422,6 +422,13 @@ function Chat() {
                             {msg.memory_reconciled.updated} updated
                           </span>
                         )}
+                        {msg.memory_reconciled &&
+                          msg.memory_reconciled.duplicates != null &&
+                          msg.memory_reconciled.duplicates > 0 && (
+                            <span className="memory-badge">
+                              {msg.memory_reconciled.duplicates} re-confirmed
+                            </span>
+                          )}
                       </div>
                     )}
                   {expandedContexts.has(i) && msg.context && (
