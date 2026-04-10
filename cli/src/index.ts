@@ -210,6 +210,35 @@ providers
     }
   });
 
+// ── MCP ────────────────────────────────────────────────────────────────────
+
+const mcp = program.command("mcp").description("MCP server configuration");
+
+mcp
+  .command("config")
+  .description("Show the MCP config entry to paste into Claude Desktop")
+  .action(async () => {
+    const data = await get("/api/settings/mcp/config");
+    console.log("\n  MCP config entry for Claude Desktop:\n");
+    console.log(`  Config path: ${data.claude_desktop_config_path || "unknown"}\n`);
+    console.log("  Add this under \"mcpServers\" in your config:\n");
+    console.log(`  "recallos": ${JSON.stringify(data.config, null, 4)}`);
+    console.log("\n  Or run: recallos mcp install\n");
+  });
+
+mcp
+  .command("install")
+  .description("Auto-install the MCP config into Claude Desktop")
+  .action(async () => {
+    const result = await post("/api/settings/mcp/install", {});
+    if (result.installed) {
+      console.log(`MCP config installed at: ${result.config_path}`);
+      console.log("Restart Claude Desktop to connect.");
+    } else {
+      console.error("Failed to install MCP config.");
+    }
+  });
+
 // ── Scraper ────────────────────────────────────────────────────────────────
 
 const scraper = program.command("scraper").description("Scrape chat logs from local AI tools");

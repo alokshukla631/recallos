@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { queryAll, queryOne, runSql } from "../db/index.js";
+import { generateMcpConfig, generateClaudeDesktopConfig, getClaudeDesktopConfigPath, installClaudeDesktopConfig } from "../modules/mcp-config.js";
 
 const router = Router();
 
@@ -95,6 +96,42 @@ router.delete("/providers/:provider", (req: Request, res: Response) => {
     res.json({ message: `Provider ${req.params.provider} removed` });
   } catch (err) {
     console.error("DELETE /api/settings/providers/:provider error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /mcp/config - get the MCP config entry for RecallOS
+router.get("/mcp/config", (_req: Request, res: Response) => {
+  try {
+    const config = generateMcpConfig();
+    const configPath = getClaudeDesktopConfigPath();
+    res.json({
+      config,
+      claude_desktop_config_path: configPath,
+      instructions: "Add this entry under 'mcpServers' in your Claude Desktop config, or use POST /api/settings/mcp/install to auto-install.",
+    });
+  } catch (err) {
+    console.error("GET /api/settings/mcp/config error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /mcp/install - auto-install MCP config into Claude Desktop
+router.post("/mcp/install", (req: Request, res: Response) => {
+  try {
+    const { db_path } = req.body;
+    const writtenPath = installClaudeDesktopConfig(db_path);
+    if (!writtenPath) {
+      res.status(400).json({ error: "Could not determine Claude Desktop config path for this platform" });
+      return;
+    }
+    res.json({
+      installed: true,
+      config_path: writtenPath,
+      message: "RecallOS MCP server config installed. Restart Claude Desktop to connect.",
+    });
+  } catch (err) {
+    console.error("POST /api/settings/mcp/install error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
