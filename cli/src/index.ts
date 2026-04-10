@@ -210,6 +210,41 @@ providers
     }
   });
 
+// ── Scraper ────────────────────────────────────────────────────────────────
+
+const scraper = program.command("scraper").description("Scrape chat logs from local AI tools");
+
+scraper
+  .command("sources")
+  .description("List available log sources and their status")
+  .action(async () => {
+    const sources = await get("/api/scraper/sources");
+    for (const s of sources) {
+      const status = s.available ? "available" : "not found";
+      const scraped = s.lastScraped ? `last scraped: ${new Date(s.lastScraped).toLocaleString()}` : "never scraped";
+      console.log(`  ${s.name}: ${status} (${scraped})`);
+      if (s.path) console.log(`    path: ${s.path}`);
+    }
+  });
+
+scraper
+  .command("run")
+  .description("Scrape all available sources for new conversations")
+  .action(async () => {
+    console.log("Scraping local AI tool logs...");
+    const data = await post("/api/scraper/run", {});
+    console.log(`Scraped at: ${data.scraped_at}\n`);
+    for (const r of data.results) {
+      console.log(`  ${r.source}:`);
+      console.log(`    Messages found: ${r.messagesFound}`);
+      console.log(`    New messages: ${r.messagesNew}`);
+      console.log(`    Memory extracted: ${r.memoryExtracted}`);
+      if (r.errors.length > 0) {
+        console.log(`    Errors: ${r.errors.join(", ")}`);
+      }
+    }
+  });
+
 // ── Chat ────────────────────────────────────────────────────────────────────
 
 program
