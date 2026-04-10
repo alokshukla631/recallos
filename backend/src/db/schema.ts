@@ -55,25 +55,83 @@ export async function initDatabase(filePath: string): Promise<Database> {
     )
   `);
 
-  db.run(`
-    CREATE TABLE IF NOT EXISTS memory_items (
-      id TEXT PRIMARY KEY,
-      key TEXT NOT NULL,
-      type TEXT NOT NULL CHECK (type IN ('preference', 'constraint', 'fact', 'goal', 'override')),
-      value TEXT NOT NULL,
-      scope TEXT NOT NULL DEFAULT 'global' CHECK (scope IN ('global', 'trip')),
-      trip_id TEXT,
-      source_event_id TEXT REFERENCES events(id),
-      confidence REAL DEFAULT 0.8,
-      authority TEXT DEFAULT 'explicit',
-      status TEXT DEFAULT 'active' CHECK (status IN ('active', 'stale', 'superseded')),
-      superseded_by TEXT REFERENCES memory_items(id),
-      valid_from TEXT,
-      valid_to TEXT,
-      last_confirmed_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
+  // ---------------------------------------------------------------------------
+  // memory_items - with migration for expanded scope
+  // ---------------------------------------------------------------------------
+  // Check if memory_items table exists with the old schema (only global/trip).
+  // If so, migrate to the new schema that supports domain, project, and session scopes.
+  const tableExists = db.exec(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='memory_items'"
+  );
+
+  if (tableExists.length > 0 && tableExists[0].values.length > 0) {
+    // Table exists - check if it has the domain column (new schema indicator)
+    const columns = db.exec("PRAGMA table_info(memory_items)");
+    const colNames = columns[0]?.values.map((row: unknown[]) => row[1]) || [];
+    const hasDomainCol = colNames.includes("domain");
+
+    if (!hasDomainCol) {
+      // Migrate: add new columns to existing table
+      // SQLite allows ADD COLUMN but not changing CHECK constraints.
+      // We recreate the table with the expanded schema.
+      db.run("PRAGMA foreign_keys = OFF;");
+
+      db.run(`
+        CREATE TABLE memory_items_new (
+          id TEXT PRIMARY KEY,
+          key TEXT NOT NULL,
+          type TEXT NOT NULL CHECK (type IN ('preference', 'constraint', 'fact', 'goal', 'override')),
+          value TEXT NOT NULL,
+          scope TEXT NOT NULL DEFAULT 'global' CHECK (scope IN ('global', 'trip', 'domain', 'project', 'session')),
+          domain TEXT,
+          trip_id TEXT,
+          source_event_id TEXT REFERENCES events(id),
+          confidence REAL DEFAULT 0.8,
+          authority TEXT DEFAULT 'explicit',
+          status TEXT DEFAULT 'active' CHECK (status IN ('active', 'stale', 'superseded')),
+          superseded_by TEXT REFERENCES memory_items(id),
+          valid_from TEXT,
+          valid_to TEXT,
+          last_confirmed_at TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `);
+
+      db.run(`
+        INSERT INTO memory_items_new (id, key, type, value, scope, trip_id, source_event_id,
+          confidence, authority, status, superseded_by, valid_from, valid_to, last_confirmed_at, created_at)
+        SELECT id, key, type, value, scope, trip_id, source_event_id,
+          confidence, authority, status, superseded_by, valid_from, valid_to, last_confirmed_at, created_at
+        FROM memory_items
+      `);
+
+      db.run("DROP TABLE memory_items");
+      db.run("ALTER TABLE memory_items_new RENAME TO memory_items");
+      db.run("PRAGMA foreign_keys = ON;");
+    }
+  } else {
+    // Fresh database - create with full schema
+    db.run(`
+      CREATE TABLE IF NOT EXISTS memory_items (
+        id TEXT PRIMARY KEY,
+        key TEXT NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('preference', 'constraint', 'fact', 'goal', 'override')),
+        value TEXT NOT NULL,
+        scope TEXT NOT NULL DEFAULT 'global' CHECK (scope IN ('global', 'trip', 'domain', 'project', 'session')),
+        domain TEXT,
+        trip_id TEXT,
+        source_event_id TEXT REFERENCES events(id),
+        confidence REAL DEFAULT 0.8,
+        authority TEXT DEFAULT 'explicit',
+        status TEXT DEFAULT 'active' CHECK (status IN ('active', 'stale', 'superseded')),
+        superseded_by TEXT REFERENCES memory_items(id),
+        valid_from TEXT,
+        valid_to TEXT,
+        last_confirmed_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+  }
 
   db.run(`
     CREATE TABLE IF NOT EXISTS conflicts (

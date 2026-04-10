@@ -1,7 +1,7 @@
 import { extractEntities } from "./entity-extractor.js";
 
 export type MemoryType = "preference" | "constraint" | "fact" | "goal" | "override";
-export type MemoryScope = "global" | "trip";
+export type MemoryScope = "global" | "trip" | "domain" | "project" | "session";
 
 export interface MemoryCandidate {
   key: string;

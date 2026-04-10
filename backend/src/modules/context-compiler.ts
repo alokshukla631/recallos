@@ -35,12 +35,22 @@ export interface CompiledContext {
   trace: TraceEntry[];
 }
 
+/**
+ * Fetches active memory items respecting the scope hierarchy:
+ *   global + domain + trip/project (if tripId given) + session
+ * All global and domain-scoped items are always included.
+ * Trip/project-scoped items are included only when a tripId is provided.
+ * Session-scoped items are ephemeral and always included (they expire naturally).
+ */
 function getActiveMemoryItems(tripId?: string): MemoryItem[] {
   if (tripId) {
     return queryAll(
       `SELECT * FROM memory_items
        WHERE status = 'active'
-         AND (scope = 'global' OR (scope = 'trip' AND trip_id = ?))
+         AND (
+           scope IN ('global', 'domain', 'session')
+           OR ((scope = 'trip' OR scope = 'project') AND trip_id = ?)
+         )
        ORDER BY created_at DESC`,
       [tripId]
     ) as unknown as MemoryItem[];
@@ -48,7 +58,8 @@ function getActiveMemoryItems(tripId?: string): MemoryItem[] {
 
   return queryAll(
     `SELECT * FROM memory_items
-     WHERE status = 'active' AND scope = 'global'
+     WHERE status = 'active'
+       AND scope IN ('global', 'domain', 'session')
      ORDER BY created_at DESC`
   ) as unknown as MemoryItem[];
 }

@@ -9,6 +9,7 @@ export interface MemoryItem {
   type: MemoryType;
   value: string;
   scope: MemoryScope;
+  domain: string | null;
   trip_id: string | null;
   source_event_id: string | null;
   confidence: number;
@@ -59,18 +60,20 @@ function findDuplicate(
 ): MemoryItem | undefined {
   const normalizedCandidate = normalizeForDedup(candidate.value);
 
-  const rows =
-    candidate.scope === "trip" && candidate.tripId
-      ? (queryAll(
-          `SELECT * FROM memory_items
-           WHERE key = ? AND type = ? AND scope = 'trip' AND trip_id = ? AND status = 'active'`,
-          [candidate.key, candidate.type, candidate.tripId]
-        ) as unknown as MemoryItem[])
-      : (queryAll(
-          `SELECT * FROM memory_items
-           WHERE key = ? AND type = ? AND scope = 'global' AND status = 'active'`,
-          [candidate.key, candidate.type]
-        ) as unknown as MemoryItem[]);
+  let rows: MemoryItem[];
+  if ((candidate.scope === "trip" || candidate.scope === "project") && candidate.tripId) {
+    rows = queryAll(
+      `SELECT * FROM memory_items
+       WHERE key = ? AND type = ? AND scope = ? AND trip_id = ? AND status = 'active'`,
+      [candidate.key, candidate.type, candidate.scope, candidate.tripId]
+    ) as unknown as MemoryItem[];
+  } else {
+    rows = queryAll(
+      `SELECT * FROM memory_items
+       WHERE key = ? AND type = ? AND scope = ? AND status = 'active'`,
+      [candidate.key, candidate.type, candidate.scope]
+    ) as unknown as MemoryItem[];
+  }
 
   for (const row of rows) {
     if (normalizeForDedup(row.value) === normalizedCandidate) {
@@ -99,13 +102,26 @@ function reconfirmItem(itemId: string, currentConfidence: number): MemoryItem {
 }
 
 /**
+ * Scope hierarchy (most specific to least specific):
+ *   session > project > trip > domain > global
+ *
  * Precedence rules (highest to lowest):
- *   1. Explicit trip-specific override
- *   2. Explicit trip-specific preference
- *   3. Explicit global preference
- *   4. Inferred preference (lower confidence)
- *   5. Stale historical memory
+ *   1. Stale historical memory (lowest)
+ *   2. Inferred preference (lower confidence)
+ *   3. Explicit global
+ *   4. Explicit domain-scoped
+ *   5. Explicit trip/project-scoped
+ *   6. Explicit session-scoped
+ *   7. Override in any narrow scope (highest)
  */
+const SCOPE_WEIGHT: Record<string, number> = {
+  global: 0,
+  domain: 1,
+  trip: 2,
+  project: 2,
+  session: 3,
+};
+
 function getPrecedence(item: {
   type: string;
   scope: string;
@@ -115,33 +131,37 @@ function getPrecedence(item: {
 }): number {
   if (item.status === "stale") return 1;
 
-  const isTrip = item.scope === "trip";
+  const scopeWeight = SCOPE_WEIGHT[item.scope] ?? 0;
   const isExplicit = (item.authority ?? "explicit") === "explicit";
   const isOverride = item.type === "override";
 
-  if (isTrip && isExplicit && isOverride) return 5;
-  if (isTrip && isExplicit) return 4;
-  if (isExplicit) return 3;
-  if (!isExplicit) return 2;
+  // Base: 2 for inferred, 3 for explicit global
+  let base = isExplicit ? 3 : 2;
+  // Add scope weight (0-3) so narrower scopes rank higher
+  base += scopeWeight;
+  // Overrides get an extra +1 bump
+  if (isOverride) base += 1;
 
-  return 2;
+  return base;
 }
 
 function findExistingByKey(key: string, scope: string, tripId?: string): MemoryItem | undefined {
-  if (scope === "trip" && tripId) {
+  // For scoped items, look for an existing item at the same scope
+  if ((scope === "trip" || scope === "project") && tripId) {
     return queryOne(
       `SELECT * FROM memory_items
-       WHERE key = ? AND scope = 'trip' AND trip_id = ? AND status = 'active'
+       WHERE key = ? AND scope = ? AND trip_id = ? AND status = 'active'
        ORDER BY created_at DESC LIMIT 1`,
-      [key, tripId]
+      [key, scope, tripId]
     ) as unknown as MemoryItem | undefined;
   }
 
+  // For domain/session/global scope, match by scope
   return queryOne(
     `SELECT * FROM memory_items
-     WHERE key = ? AND scope = 'global' AND status = 'active'
+     WHERE key = ? AND scope = ? AND status = 'active'
      ORDER BY created_at DESC LIMIT 1`,
-    [key]
+    [key, scope]
   ) as unknown as MemoryItem | undefined;
 }
 
@@ -150,9 +170,9 @@ function insertMemoryItem(candidate: MemoryCandidate, eventId: string): MemoryIt
   const now = new Date().toISOString();
 
   runSql(
-    `INSERT INTO memory_items (id, key, type, value, scope, trip_id, source_event_id, confidence, authority, status, valid_from)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
-    [id, candidate.key, candidate.type, candidate.value, candidate.scope, candidate.tripId ?? null, eventId, candidate.confidence, candidate.authority, now]
+    `INSERT INTO memory_items (id, key, type, value, scope, domain, trip_id, source_event_id, confidence, authority, status, valid_from)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
+    [id, candidate.key, candidate.type, candidate.value, candidate.scope, candidate.domain ?? null, candidate.tripId ?? null, eventId, candidate.confidence, candidate.authority, now]
   );
 
   return queryOne("SELECT * FROM memory_items WHERE id = ?", [id]) as unknown as MemoryItem;

@@ -371,7 +371,7 @@ async function main() {
       key: z.string().describe("Short snake_case key (e.g. 'seat_preference', 'budget_limit')"),
       type: z.enum(["preference", "constraint", "fact", "goal", "override"]).describe("Memory type"),
       value: z.string().describe("The value to store"),
-      scope: z.enum(["global", "trip"]).default("global").describe("Whether this applies globally or to a specific trip"),
+      scope: z.enum(["global", "trip", "domain", "project", "session"]).default("global").describe("Whether this applies globally or to a specific trip"),
       trip_id: z.string().optional().describe("Trip ID if scope is 'trip'"),
     },
     async ({ key, type, value, scope, trip_id }) => {
@@ -408,7 +408,7 @@ async function main() {
     "List all active memory items, optionally filtered by type or scope.",
     {
       type: z.enum(["preference", "constraint", "fact", "goal", "override"]).optional().describe("Filter by memory type"),
-      scope: z.enum(["global", "trip"]).optional().describe("Filter by scope"),
+      scope: z.enum(["global", "trip", "domain", "project", "session"]).optional().describe("Filter by scope"),
       trip_id: z.string().optional().describe("Filter by trip ID"),
     },
     async ({ type, scope, trip_id }) => {
