@@ -1,5 +1,6 @@
 import { queryAll } from "../db/index.js";
 import { bm25Rank } from "./ranking.js";
+import { findRelated } from "./links.js";
 import type { MemoryItem } from "./memory-reconciler.js";
 
 export interface ContextPacket {
@@ -189,15 +190,36 @@ export async function compileContext(
   const scoreMap = scoreAllBm25(allItems, currentMessage);
 
   const RELEVANCE_THRESHOLD = 0.1;
+  const LINK_BOOST = 0.08; // Boost for items linked to high-scoring items
   const included: MemoryItem[] = [];
   const omitted: MemoryItem[] = [];
   const rationale: Record<string, string> = {};
   const trace: TraceEntry[] = [];
 
+  // First pass: find items that score above threshold (these are "anchor" items)
+  const anchorIds = new Set<string>();
   for (const item of allItems) {
     const bm25Score = scoreMap.get(item.id) ?? 0;
     const recency = recencyBoost(item);
-    const finalScore = bm25Score + recency;
+    if (bm25Score + recency >= RELEVANCE_THRESHOLD || item.type === "override" || item.type === "constraint") {
+      anchorIds.add(item.id);
+    }
+  }
+
+  // Second pass: find items related to anchors via memory links, give them a boost
+  const linkedToAnchors = new Set<string>();
+  for (const anchorId of anchorIds) {
+    const related = findRelated(anchorId, 1); // 1-hop neighbors only for context
+    for (const relatedId of related) {
+      linkedToAnchors.add(relatedId);
+    }
+  }
+
+  for (const item of allItems) {
+    const bm25Score = scoreMap.get(item.id) ?? 0;
+    const recency = recencyBoost(item);
+    const linkBoost = linkedToAnchors.has(item.id) && !anchorIds.has(item.id) ? LINK_BOOST : 0;
+    const finalScore = bm25Score + recency + linkBoost;
     const alwaysInclude = item.type === "override" || item.type === "constraint";
 
     if (finalScore >= RELEVANCE_THRESHOLD || alwaysInclude) {
