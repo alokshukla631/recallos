@@ -7,6 +7,7 @@ interface MemoryItem {
   type: string;
   value: string;
   scope: string;
+  domain: string | null;
   confidence: number;
   status: string;
   created_at: string;
@@ -18,6 +19,26 @@ const TYPE_COLORS: Record<string, string> = {
   fact: "#22c55e",
   goal: "#a855f7",
   override: "#f97316",
+};
+
+const SCOPE_COLORS: Record<string, string> = {
+  global: "#6b7280",
+  domain: "#8b5cf6",
+  trip: "#06b6d4",
+  project: "#f59e0b",
+  session: "#ec4899",
+};
+
+const DOMAIN_COLORS: Record<string, string> = {
+  travel: "#06b6d4",
+  coding: "#10b981",
+  work: "#f59e0b",
+  health: "#ef4444",
+  finance: "#8b5cf6",
+  learning: "#3b82f6",
+  writing: "#ec4899",
+  personal: "#6b7280",
+  communication: "#14b8a6",
 };
 
 function Memory() {
@@ -119,15 +140,19 @@ function Memory() {
   const totalActive = items.filter((i) => i.status === "active").length;
   const byType: Record<string, number> = {};
   const byScope: Record<string, number> = {};
+  const byDomain: Record<string, number> = {};
   for (const item of items) {
     byType[item.type] = (byType[item.type] || 0) + 1;
     byScope[item.scope] = (byScope[item.scope] || 0) + 1;
+    if (item.domain) {
+      byDomain[item.domain] = (byDomain[item.domain] || 0) + 1;
+    }
   }
 
   return (
     <div className="page memory-page">
       <h2>Memory</h2>
-      <p>Browse and manage stored memory items.</p>
+      <p>Browse and manage stored memory items across all domains.</p>
 
       {/* Stats summary */}
       <div className="memory-stats">
@@ -150,19 +175,32 @@ function Memory() {
             <span className="stat-label">{type}</span>
           </div>
         ))}
-        {Object.entries(byScope).map(([scope, count]) => (
-          <div className="stat-card" key={scope}>
-            <span className="stat-value">{count}</span>
-            <span className="stat-label">{scope}</span>
-          </div>
-        ))}
       </div>
+
+      {/* Domain breakdown */}
+      {Object.keys(byDomain).length > 0 && (
+        <div className="memory-stats domain-stats">
+          {Object.entries(byDomain)
+            .sort((a, b) => b[1] - a[1])
+            .map(([domain, count]) => (
+              <div className="stat-card" key={domain}>
+                <span
+                  className="stat-value"
+                  style={{ color: DOMAIN_COLORS[domain] || "var(--color-text)" }}
+                >
+                  {count}
+                </span>
+                <span className="stat-label">{domain}</span>
+              </div>
+            ))}
+        </div>
+      )}
 
       {/* Search bar */}
       <div className="memory-search">
         <input
           type="text"
-          placeholder="Search memory (e.g. 'hotel preference', 'Tokyo')..."
+          placeholder="Search memory (e.g. 'hotel preference', 'React framework')..."
           value={searchQuery}
           onChange={(e) => {
             setSearchQuery(e.target.value);
@@ -228,7 +266,10 @@ function Memory() {
           >
             <option value="all">All</option>
             <option value="global">Global</option>
+            <option value="domain">Domain</option>
             <option value="trip">Trip</option>
+            <option value="project">Project</option>
+            <option value="session">Session</option>
           </select>
         </label>
       </div>
@@ -253,6 +294,7 @@ function Memory() {
                 <th>Type</th>
                 <th>Value</th>
                 <th>Scope</th>
+                <th>Domain</th>
                 <th>Confidence</th>
                 <th>Status</th>
                 <th>Created</th>
@@ -305,7 +347,29 @@ function Memory() {
                     )}
                   </td>
                   <td>
-                    <span className="scope-badge">{item.scope}</span>
+                    <span
+                      className="scope-badge"
+                      style={{
+                        backgroundColor: SCOPE_COLORS[item.scope] || "#6b7280",
+                      }}
+                    >
+                      {item.scope}
+                    </span>
+                  </td>
+                  <td>
+                    {item.domain ? (
+                      <span
+                        className="domain-badge"
+                        style={{
+                          color: DOMAIN_COLORS[item.domain] || "var(--color-text-muted)",
+                          borderColor: DOMAIN_COLORS[item.domain] || "var(--color-text-muted)",
+                        }}
+                      >
+                        {item.domain}
+                      </span>
+                    ) : (
+                      <span className="domain-badge domain-none">-</span>
+                    )}
                   </td>
                   <td>{Math.round((item.confidence ?? 0) * 100)}%</td>
                   <td>
