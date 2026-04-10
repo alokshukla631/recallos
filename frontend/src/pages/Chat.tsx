@@ -13,6 +13,16 @@ interface ContextInfo {
   omitted_count: number;
 }
 
+interface StageTiming {
+  stage: string;
+  duration_ms: number;
+}
+
+interface PipelineTiming {
+  total_ms: number;
+  stages: StageTiming[];
+}
+
 interface Message {
   id?: string;
   role: "user" | "assistant";
@@ -22,6 +32,7 @@ interface Message {
   context?: ContextInfo;
   memory_extracted?: number;
   memory_reconciled?: { added: number; updated: number; conflicts: number; duplicates?: number };
+  timing?: PipelineTiming;
 }
 
 interface Conversation {
@@ -204,6 +215,7 @@ function Chat() {
         conflicts: number;
         duplicates?: number;
       };
+      timing?: PipelineTiming;
     } = { content: "" };
 
     const updateAssistant = () => {
@@ -218,6 +230,7 @@ function Chat() {
             context: state.context ?? last.context,
             memory_extracted: state.memory_extracted ?? last.memory_extracted,
             memory_reconciled: state.memory_reconciled ?? last.memory_reconciled,
+            timing: state.timing ?? last.timing,
           };
         }
         return next;
@@ -252,6 +265,9 @@ function Chat() {
           if (data.assistant_message.content) {
             state.content = data.assistant_message.content;
           }
+        }
+        if (data.timing) {
+          state.timing = data.timing;
         }
         updateAssistant();
       } else if (event === "error") {
@@ -516,6 +532,22 @@ function Chat() {
                               {msg.memory_reconciled.duplicates} re-confirmed
                             </span>
                           )}
+                      </div>
+                    )}
+                  {msg.role === "assistant" && msg.timing && (
+                      <div className="timing-bar">
+                        {msg.timing.stages.map((s) => (
+                          <span
+                            key={s.stage}
+                            className="timing-stage"
+                            title={`${s.stage}: ${s.duration_ms}ms`}
+                          >
+                            {s.stage.replace(/_/g, " ")} {s.duration_ms}ms
+                          </span>
+                        ))}
+                        <span className="timing-total">
+                          Total: {msg.timing.total_ms}ms
+                        </span>
                       </div>
                     )}
                   {expandedContexts.has(i) && msg.context && (

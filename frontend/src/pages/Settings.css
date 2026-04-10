@@ -215,3 +215,28 @@
   display: inline-flex;
   align-items: center;
 }
+
+/* MCP config */
+.mcp-config-block {
+  margin-bottom: 14px;
+}
+
+.mcp-config-pre {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-size: 0.8rem;
+  font-family: monospace;
+  color: var(--color-text);
+  overflow-x: auto;
+  white-space: pre;
+  margin-bottom: 8px;
+}
+
+.mcp-path {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  font-family: monospace;
+  word-break: break-all;
+}

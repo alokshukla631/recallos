@@ -1,0 +1,133 @@
+.scraper-page {
+  max-width: 700px;
+}
+
+.scraper-page h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 4px;
+}
+
+.scraper-page > p {
+  color: var(--color-text-muted);
+  font-size: 0.925rem;
+  margin-bottom: 28px;
+}
+
+.scraper-section {
+  margin-bottom: 32px;
+}
+
+.scraper-section h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--color-text);
+}
+
+.muted {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+/* Source cards */
+.sources-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.source-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 16px 20px;
+}
+
+.source-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.source-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.source-badge {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+.source-badge.available {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.source-badge.unavailable {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.source-path {
+  font-family: monospace;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+
+.source-meta {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+/* Scrape results */
+.scrape-results {
+  margin-top: 20px;
+}
+
+.scrape-results h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.result-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-top: 10px;
+}
+
+.result-header {
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+
+.result-stats {
+  display: flex;
+  gap: 16px;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.result-errors {
+  margin-top: 6px;
+}
+
+.error-text {
+  font-size: 0.8rem;
+  color: #ef4444;
+}

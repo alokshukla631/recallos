@@ -8,6 +8,11 @@ interface Provider {
 
 const ALL_PROVIDERS = ["openai", "anthropic"];
 
+interface McpConfig {
+  config: { command: string; args: string[]; env?: Record<string, string> };
+  claude_desktop_config_path: string | null;
+}
+
 function Settings() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
@@ -17,9 +22,12 @@ function Settings() {
   >({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [loadingProviders, setLoadingProviders] = useState(true);
+  const [mcpConfig, setMcpConfig] = useState<McpConfig | null>(null);
+  const [mcpInstalling, setMcpInstalling] = useState(false);
 
   useEffect(() => {
     fetchProviders();
+    fetchMcpConfig();
   }, []);
 
   async function fetchProviders() {
@@ -131,6 +139,35 @@ function Settings() {
       const msg =
         err instanceof Error ? err.message : "Failed to set default";
       showStatus("default", msg, "error");
+    }
+  }
+
+  async function fetchMcpConfig() {
+    try {
+      const res = await fetch("/api/settings/mcp/config");
+      if (!res.ok) throw new Error("Failed");
+      setMcpConfig(await res.json());
+    } catch {
+      setMcpConfig(null);
+    }
+  }
+
+  async function installMcp() {
+    setMcpInstalling(true);
+    try {
+      const res = await fetch("/api/settings/mcp/install", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Install failed");
+      showStatus("mcp", data.message || "MCP config installed", "success");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Install failed";
+      showStatus("mcp", msg, "error");
+    } finally {
+      setMcpInstalling(false);
     }
   }
 
@@ -308,6 +345,51 @@ function Settings() {
             {statusMessages["passport"] && (
               <p className={`status-msg ${statusMessages["passport"].type}`}>
                 {statusMessages["passport"].text}
+              </p>
+            )}
+          </div>
+
+          <div className="settings-section data-section">
+            <h3>MCP Server</h3>
+            <p>
+              Connect RecallOS to Claude Desktop or any MCP-compatible AI tool.
+            </p>
+            {mcpConfig && (
+              <div className="mcp-config-block">
+                <pre className="mcp-config-pre">
+{`"recallos": ${JSON.stringify(mcpConfig.config, null, 2)}`}
+                </pre>
+                {mcpConfig.claude_desktop_config_path && (
+                  <p className="mcp-path">
+                    Config file: {mcpConfig.claude_desktop_config_path}
+                  </p>
+                )}
+              </div>
+            )}
+            <div className="passport-actions">
+              <button
+                className="btn btn-primary"
+                onClick={installMcp}
+                disabled={mcpInstalling}
+              >
+                {mcpInstalling ? "Installing..." : "Install to Claude Desktop"}
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  if (!mcpConfig) return;
+                  const text = `"recallos": ${JSON.stringify(mcpConfig.config, null, 2)}`;
+                  navigator.clipboard.writeText(text);
+                  showStatus("mcp", "Config copied to clipboard", "success");
+                }}
+                disabled={!mcpConfig}
+              >
+                Copy Config
+              </button>
+            </div>
+            {statusMessages["mcp"] && (
+              <p className={`status-msg ${statusMessages["mcp"].type}`}>
+                {statusMessages["mcp"].text}
               </p>
             )}
           </div>
