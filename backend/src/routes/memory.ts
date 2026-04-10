@@ -4,6 +4,7 @@ import { logAudit, getAuditForItem, getRecentAudit } from "../modules/audit.js";
 import { bm25Rank } from "../modules/ranking.js";
 import { addTag, removeTag, getTagsForItem, getAllTags } from "../modules/tags.js";
 import { createLink, removeLink, getLinksForItem } from "../modules/links.js";
+import { expireSessionMemory, getSessionStats } from "../modules/session-cleanup.js";
 
 const router = Router();
 
@@ -268,6 +269,28 @@ router.delete("/links/:linkId", (req: Request, res: Response) => {
     res.json({ message: "Link removed" });
   } catch (err) {
     console.error("DELETE /api/memory/links/:linkId error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /session/stats - get session memory stats
+router.get("/session/stats", (_req: Request, res: Response) => {
+  try {
+    res.json(getSessionStats());
+  } catch (err) {
+    console.error("GET /api/memory/session/stats error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /session/cleanup - expire old session memory items
+router.post("/session/cleanup", (req: Request, res: Response) => {
+  try {
+    const ttl = parseInt(req.body.ttl_hours as string) || 24;
+    const expired = expireSessionMemory(ttl);
+    res.json({ expired_count: expired, ttl_hours: ttl });
+  } catch (err) {
+    console.error("POST /api/memory/session/cleanup error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

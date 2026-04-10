@@ -245,6 +245,34 @@ scraper
     }
   });
 
+// ── Session ────────────────────────────────────────────────────────────────
+
+const session = program.command("session").description("Manage session-scoped memory");
+
+session
+  .command("stats")
+  .description("Show session memory stats (active, stale, oldest)")
+  .action(async () => {
+    const stats = await get("/api/memory/session/stats");
+    console.log(`\n  Session memory stats:\n`);
+    console.log(`  Active:  ${stats.active}`);
+    console.log(`  Stale:   ${stats.stale}`);
+    if (stats.oldest_active) {
+      console.log(`  Oldest:  ${new Date(stats.oldest_active).toLocaleString()}`);
+    } else {
+      console.log(`  Oldest:  none`);
+    }
+  });
+
+session
+  .command("cleanup")
+  .description("Expire session memory items older than TTL")
+  .option("--ttl <hours>", "Time-to-live in hours (default: 24)", "24")
+  .action(async (opts) => {
+    const result = await post("/api/memory/session/cleanup", { ttl_hours: opts.ttl });
+    console.log(`Expired ${result.expired_count} session items (TTL: ${result.ttl_hours}h)`);
+  });
+
 // ── Chat ────────────────────────────────────────────────────────────────────
 
 program
