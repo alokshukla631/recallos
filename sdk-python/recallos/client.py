@@ -94,6 +94,17 @@ class RecallOS:
         r.raise_for_status()
         return r.json()
 
+    # -- Bulk import ----------------------------------------------------------
+
+    def bulk_import(self, statements: list[str], trip_id: Optional[str] = None) -> dict:
+        """Import memory from a list of natural-language statements."""
+        body: dict[str, Any] = {"statements": statements}
+        if trip_id:
+            body["trip_id"] = trip_id
+        r = self._client.post("/api/memory/bulk", json=body)
+        r.raise_for_status()
+        return r.json()
+
     # -- Context --------------------------------------------------------------
 
     def get_context(self, message: str, trip_id: Optional[str] = None) -> dict:

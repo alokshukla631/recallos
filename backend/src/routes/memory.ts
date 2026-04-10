@@ -5,6 +5,8 @@ import { bm25Rank } from "../modules/ranking.js";
 import { addTag, removeTag, getTagsForItem, getAllTags } from "../modules/tags.js";
 import { createLink, removeLink, getLinksForItem } from "../modules/links.js";
 import { expireSessionMemory, getSessionStats } from "../modules/session-cleanup.js";
+import { extractMemory } from "../modules/memory-extractor.js";
+import { reconcileMemory } from "../modules/memory-reconciler.js";
 
 const router = Router();
 
@@ -291,6 +293,43 @@ router.post("/session/cleanup", (req: Request, res: Response) => {
     res.json({ expired_count: expired, ttl_hours: ttl });
   } catch (err) {
     console.error("POST /api/memory/session/cleanup error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /bulk - import memory from an array of text statements
+router.post("/bulk", async (req: Request, res: Response) => {
+  try {
+    const { statements, trip_id } = req.body;
+    if (!Array.isArray(statements) || statements.length === 0) {
+      res.status(400).json({ error: "statements must be a non-empty array of strings" });
+      return;
+    }
+
+    let totalExtracted = 0;
+    let totalAdded = 0;
+    let totalDuplicates = 0;
+
+    for (const text of statements) {
+      if (typeof text !== "string" || text.trim().length < 5) continue;
+      const eventId = "bulk-" + Date.now().toString(36);
+      const candidates = await extractMemory(text.trim(), eventId, trip_id);
+      if (candidates.length > 0) {
+        const result = await reconcileMemory(candidates, eventId);
+        totalExtracted += candidates.length;
+        totalAdded += result.added.length;
+        totalDuplicates += result.duplicates.length;
+      }
+    }
+
+    res.json({
+      processed: statements.length,
+      extracted: totalExtracted,
+      added: totalAdded,
+      duplicates: totalDuplicates,
+    });
+  } catch (err) {
+    console.error("POST /api/memory/bulk error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

@@ -115,6 +115,24 @@ memory
     }
   });
 
+memory
+  .command("bulk <file>")
+  .description("Bulk import memory from a file (one statement per line)")
+  .option("-t, --trip <id>", "Scope all imported memory to a trip")
+  .action(async (file, opts) => {
+    const content = fs.readFileSync(file, "utf-8");
+    const statements = content.split("\n").map((l) => l.trim()).filter((l) => l.length > 5);
+    if (statements.length === 0) {
+      console.log("No valid statements found in file.");
+      return;
+    }
+    console.log(`Importing ${statements.length} statements...`);
+    const body: any = { statements };
+    if (opts.trip) body.trip_id = opts.trip;
+    const result = await post("/api/memory/bulk", body);
+    console.log(`Done: ${result.extracted} extracted, ${result.added} added, ${result.duplicates} duplicates`);
+  });
+
 // ── Trips ───────────────────────────────────────────────────────────────────
 
 const trips = program.command("trips").description("Manage trips");

@@ -41,6 +41,12 @@ const DOMAIN_COLORS: Record<string, string> = {
   communication: "#14b8a6",
 };
 
+interface SessionStats {
+  active: number;
+  stale: number;
+  oldest_active: string | null;
+}
+
 function Memory() {
   const [items, setItems] = useState<MemoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,6 +64,11 @@ function Memory() {
   // Edit state
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
+
+  // Session stats
+  const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
+  const [cleaningUp, setCleaningUp] = useState(false);
+  const [cleanupResult, setCleanupResult] = useState<string | null>(null);
 
   const fetchMemories = useCallback(async () => {
     setLoading(true);
@@ -85,6 +96,41 @@ function Memory() {
       fetchMemories();
     }
   }, [fetchMemories, searchQuery]);
+
+  useEffect(() => {
+    fetchSessionStats();
+  }, []);
+
+  async function fetchSessionStats() {
+    try {
+      const res = await fetch("/api/memory/session/stats");
+      if (!res.ok) return;
+      setSessionStats(await res.json());
+    } catch {
+      // ignore
+    }
+  }
+
+  async function handleCleanup() {
+    setCleaningUp(true);
+    setCleanupResult(null);
+    try {
+      const res = await fetch("/api/memory/session/cleanup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ttl_hours: 24 }),
+      });
+      if (!res.ok) throw new Error("Cleanup failed");
+      const data = await res.json();
+      setCleanupResult(`Expired ${data.expired_count} session items`);
+      fetchSessionStats();
+      fetchMemories();
+    } catch {
+      setCleanupResult("Cleanup failed");
+    } finally {
+      setCleaningUp(false);
+    }
+  }
 
   const handleSearch = async () => {
     const q = searchQuery.trim();
@@ -402,6 +448,43 @@ function Memory() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Session memory panel */}
+      {sessionStats && (
+        <div className="session-panel">
+          <h3>Session Memory</h3>
+          <div className="session-stats-row">
+            <div className="stat-card">
+              <span className="stat-value" style={{ color: "#ec4899" }}>{sessionStats.active}</span>
+              <span className="stat-label">Active</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-value">{sessionStats.stale}</span>
+              <span className="stat-label">Expired</span>
+            </div>
+            {sessionStats.oldest_active && (
+              <div className="stat-card">
+                <span className="stat-value" style={{ fontSize: "0.85rem" }}>
+                  {new Date(sessionStats.oldest_active).toLocaleString()}
+                </span>
+                <span className="stat-label">Oldest active</span>
+              </div>
+            )}
+          </div>
+          <div className="session-actions">
+            <button
+              className="btn btn-secondary"
+              onClick={handleCleanup}
+              disabled={cleaningUp}
+            >
+              {cleaningUp ? "Cleaning up..." : "Expire old sessions (24h TTL)"}
+            </button>
+            {cleanupResult && (
+              <span className="cleanup-result">{cleanupResult}</span>
+            )}
+          </div>
         </div>
       )}
     </div>
