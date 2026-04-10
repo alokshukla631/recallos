@@ -6,9 +6,11 @@ import {
   Settings as SettingsIcon,
   Plane,
   ScanSearch,
+  Link2,
 } from "lucide-react";
 import Chat from "./pages/Chat";
 import Memory from "./pages/Memory";
+import Links from "./pages/Links";
 import ContextDebug from "./pages/ContextDebug";
 import Settings from "./pages/Settings";
 import Trips from "./pages/Trips";
@@ -18,6 +20,7 @@ const navItems = [
   { to: "/", label: "Chat", icon: MessageSquare },
   { to: "/trips", label: "Trips", icon: Plane },
   { to: "/memory", label: "Memory", icon: Brain },
+  { to: "/links", label: "Links", icon: Link2 },
   { to: "/scraper", label: "Scraper", icon: ScanSearch },
   { to: "/debug", label: "Context Debug", icon: Bug },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
@@ -53,6 +56,7 @@ function App() {
           <Route path="/trips" element={<Trips />} />
           <Route path="/memory" element={<Memory />} />
           <Route path="/debug" element={<ContextDebug />} />
+          <Route path="/links" element={<Links />} />
           <Route path="/scraper" element={<Scraper />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
