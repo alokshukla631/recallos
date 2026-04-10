@@ -12,6 +12,7 @@ import docsRouter from "./routes/docs.js";
 import agentsRouter from "./routes/agents.js";
 import scraperRouter from "./routes/scraper.js";
 import { expireSessionMemory } from "./modules/session-cleanup.js";
+import { applyConfidenceDecay } from "./modules/confidence-decay.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -40,13 +41,21 @@ async function start() {
   await initDatabase(DB_PATH);
   console.log(`Database initialized at ${DB_PATH}`);
 
-  // Run session cleanup on startup and then every hour
+  // Run session cleanup and confidence decay on startup and then every hour
   const expired = expireSessionMemory();
   if (expired > 0) console.log(`Session cleanup: expired ${expired} items on startup`);
+  const decay = applyConfidenceDecay();
+  if (decay.decayed > 0 || decay.staled > 0) {
+    console.log(`Confidence decay: ${decay.decayed} decayed, ${decay.staled} staled on startup`);
+  }
 
   setInterval(() => {
     const count = expireSessionMemory();
     if (count > 0) console.log(`Session cleanup: expired ${count} items`);
+    const d = applyConfidenceDecay();
+    if (d.decayed > 0 || d.staled > 0) {
+      console.log(`Confidence decay: ${d.decayed} decayed, ${d.staled} staled`);
+    }
   }, SESSION_CLEANUP_INTERVAL_MS);
 
   app.listen(PORT, () => {

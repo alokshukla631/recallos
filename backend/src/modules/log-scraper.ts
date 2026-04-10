@@ -200,6 +200,75 @@ async function parseCursorComposerData(): Promise<ScrapedMessage[]> {
 }
 
 // ---------------------------------------------------------------------------
+// ChatGPT export scraper
+// ---------------------------------------------------------------------------
+
+/**
+ * Looks for a ChatGPT conversations.json export in common locations:
+ * - Downloads folder
+ * - A dedicated recallos imports folder
+ */
+function findChatGPTExport(): string | null {
+  const home = getHomePath();
+  const candidates = [
+    path.join(home, "Downloads", "conversations.json"),
+    path.join(home, "Downloads", "chatgpt-export", "conversations.json"),
+    path.join(home, ".recallos", "imports", "conversations.json"),
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+interface ChatGPTConversation {
+  title?: string;
+  mapping?: Record<string, {
+    message?: {
+      author?: { role: string };
+      content?: { parts?: string[] };
+      create_time?: number;
+    };
+  }>;
+}
+
+function parseChatGPTExport(filePath: string): ScrapedMessage[] {
+  const messages: ScrapedMessage[] = [];
+  try {
+    const content = fs.readFileSync(filePath, "utf-8");
+    const conversations: ChatGPTConversation[] = JSON.parse(content);
+
+    for (const conv of conversations) {
+      if (!conv.mapping) continue;
+
+      for (const node of Object.values(conv.mapping)) {
+        if (!node.message) continue;
+        const msg = node.message;
+        const role = msg.author?.role;
+        if (role !== "user" && role !== "assistant") continue;
+
+        const parts = msg.content?.parts || [];
+        const text = parts.filter((p) => typeof p === "string").join("\n");
+        if (text.length < 10) continue;
+
+        messages.push({
+          role: role as "user" | "assistant",
+          content: text.slice(0, 2000),
+          source: "chatgpt",
+          timestamp: msg.create_time
+            ? new Date(msg.create_time * 1000).toISOString()
+            : undefined,
+        });
+      }
+    }
+  } catch {
+    // Parse errors
+  }
+  return messages;
+}
+
+// ---------------------------------------------------------------------------
 // Scraper state persistence
 // ---------------------------------------------------------------------------
 
@@ -339,9 +408,49 @@ export async function scrapeAll(): Promise<ScrapeResult[]> {
 
   results.push(cursorResult);
 
+  // --- ChatGPT export ---
+  const chatgptResult: ScrapeResult = {
+    source: "chatgpt",
+    messagesFound: 0,
+    messagesNew: 0,
+    memoryExtracted: 0,
+    errors: [],
+  };
+
+  try {
+    const chatgptFile = findChatGPTExport();
+    if (chatgptFile) {
+      const messages = parseChatGPTExport(chatgptFile);
+      chatgptResult.messagesFound = messages.length;
+
+      const userMessages = messages.filter((m) => m.role === "user");
+      for (const msg of userMessages) {
+        const contentHash = simpleHash(msg.content);
+        const existing = queryOne(
+          "SELECT id FROM events WHERE content = ? AND role = 'user' LIMIT 1",
+          [contentHash]
+        );
+        if (existing) continue;
+
+        chatgptResult.messagesNew++;
+        const eventId = "scrape-chatgpt-" + uuidv4().slice(0, 8);
+        const candidates = await extractMemory(msg.content, eventId);
+        if (candidates.length > 0) {
+          const result = await reconcileMemory(candidates, eventId);
+          chatgptResult.memoryExtracted += result.added.length;
+        }
+      }
+    }
+  } catch (err: any) {
+    chatgptResult.errors.push(err.message || "Unknown error");
+  }
+
+  results.push(chatgptResult);
+
   // Save state
   state.lastScrapeTime["claude-code"] = new Date().toISOString();
   state.lastScrapeTime["cursor"] = new Date().toISOString();
+  state.lastScrapeTime["chatgpt"] = new Date().toISOString();
   saveState(state);
 
   return results;
@@ -355,6 +464,7 @@ export function getSources(): Array<{ name: string; available: boolean; path: st
 
   const ccTranscripts = findClaudeCodeTranscripts();
   const cursorDb = findCursorDb();
+  const chatgptExport = findChatGPTExport();
 
   return [
     {
@@ -370,6 +480,12 @@ export function getSources(): Array<{ name: string; available: boolean; path: st
       available: cursorDb !== null,
       path: cursorDb,
       lastScraped: state.lastScrapeTime["cursor"] || null,
+    },
+    {
+      name: "chatgpt",
+      available: chatgptExport !== null,
+      path: chatgptExport,
+      lastScraped: state.lastScrapeTime["chatgpt"] || null,
     },
   ];
 }
