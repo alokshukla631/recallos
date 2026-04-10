@@ -57,41 +57,41 @@ This runs 5 end-to-end scenarios that test memory extraction, duplicate detectio
 
 RecallOS sits between you and the AI model. When you send a message:
 
-1. **Extract** - Rule-based extraction pulls structured memory from your message (preferences, constraints, goals, facts, overrides). Entity extraction catches dates, destinations, amounts, and durations.
-2. **Reconcile** - New memory is compared against existing memory. Duplicates are re-confirmed. Conflicts are resolved using a 5-level precedence system. Superseded items are marked stale.
-3. **Compile** - BM25 ranking scores every active memory item against your current message. Only relevant items are included in the context packet. Constraints and overrides are always included.
+1. **Extract** - Multi-domain extraction pulls structured memory from your message (preferences, constraints, goals, facts, overrides) across 8 domains: travel, coding, work, health, finance, learning, writing, and communication. Entity extraction catches dates, destinations, amounts, durations, technologies, and programming languages.
+2. **Reconcile** - New memory is compared against existing memory. Duplicates are re-confirmed. Conflicts are resolved using a scope-aware precedence system (session > project > trip > domain > global). Superseded items are marked stale.
+3. **Compile** - BM25 ranking plus recency decay scores every active memory item. Items linked to high-scoring anchors get a boost. Only relevant items are included. Constraints and overrides are always included.
 4. **Deliver** - The compiled context is injected into the system prompt alongside your conversation history, then sent to whichever AI provider you selected.
 5. **Store** - The full exchange is stored locally with a context snapshot for debugging.
 
 ## What's built
 
-This is the working MVP, focused on travel planning as a proof-of-concept domain.
-
 ### Pages
 
 - **Chat** - Unified chat UI with conversation sidebar, streaming responses (SSE), provider selector, and trip selector. Memory badges show what was extracted and reconciled per message. Context panel shows what memory was injected.
 - **Trips** - Create and manage trips. Each trip scopes its own conversations and memory items.
-- **Memory** - Browse, search, and filter all stored memory items. See type, scope, confidence, and status.
-- **Context Debug** - Inspect context snapshots: which memories were included, which were omitted, and why.
-- **Settings** - Add/remove API keys for OpenAI and Anthropic. Set a default provider.
+- **Memory** - Browse, search, and filter all stored memory items. Domain and scope columns with color-coded badges. Type, scope, domain, and status filters.
+- **Context Debug** - Inspect context snapshots with full trace: BM25 score, recency boost, final score, and inclusion decision for every memory item.
+- **Settings** - Add/remove API keys for OpenAI and Anthropic. Set a default provider. Export/import memory via Memory Passport.
 
-### Backend pipeline
+### Core engine
 
-- **Memory extraction** - Regex-based rules pull preferences, constraints, goals, facts, and overrides from each sentence
-- **Entity extraction** - Extracts dates (ISO, relative, month-day), destinations (300+ cities/countries), amounts (multi-currency), and durations
-- **Memory reconciliation** - 5-level precedence (explicit trip override > explicit trip > explicit global > inferred > stale), duplicate detection with re-confirmation, conflict logging
-- **BM25 ranking** - Full BM25 with IDF, term frequency saturation, length normalization, and lightweight stemming
-- **Context compilation** - Scores all active memory against the current message, includes relevant items plus all constraints/overrides, detects ambiguities. Full trace logged per snapshot.
+- **Multi-domain extraction** - Regex-based rules for 8 domains. Each extracted item is tagged with its detected domain.
+- **Entity extraction** - Dates (ISO, relative, month-day), destinations (300+ cities/countries), amounts (multi-currency), durations, 60+ technologies, programming languages
+- **Hierarchical scoping** - 5 scope levels: global, domain, trip, project, session. Narrower scopes override broader ones.
+- **Memory reconciliation** - Scope-aware precedence, duplicate detection with re-confirmation, conflict logging, audit trail
+- **BM25 + recency + link boost** - Full BM25 with IDF, term frequency saturation, length normalization, lightweight stemming. Recency decay (7-day half-life). Cross-domain link boosting for related items.
+- **Memory relationships** - Link items with typed relations (related_to, depends_on, conflicts_with, refines, derived_from) with configurable strength
+- **Context compilation** - Multi-domain detection, ambiguity flagging, full trace per snapshot
 - **Streaming** - SSE endpoint streams tokens as they arrive from the provider
 - **Provider adapters** - OpenAI (gpt-4o) and Anthropic (Claude Sonnet) with both batch and streaming support
-- **Memory Passport** - Export/import your entire memory as a portable JSON file. Swap the AI, keep the memory.
-- **Audit log** - Every memory create, supersede, reconfirm, and delete is tracked with a timestamp and explanation
-- **Full-text search** - BM25-powered search across all memory items
-- **Tags** - User-defined tags for free-form categorization beyond type/scope
-- **Agent state API** - Plans with steps, progress tracking, failure recording, and checkpoints for resumable agents
+- **Memory Passport** - Export/import your entire memory as a portable JSON file
+- **Audit log** - Every memory operation is tracked
+- **Tags** - User-defined tags for free-form categorization
+- **Agent state API** - Plans with steps, checkpoints for resumable agents
 
 ### Developer tools
 
+- **MCP server** - Connect any MCP-compatible AI tool (Claude Desktop, Cursor, VS Code) to your memory. 9 tools, 6 resources, 3 prompts.
 - **REST API** - Full CRUD for memory, trips, chat, passport, context, agents, and settings
 - **OpenAPI spec** - Served at `/api/docs/openapi.json` with interactive Swagger UI at `/api/docs/`
 - **CLI** - `recallos` command-line tool for memory, trips, passport, chat, and providers
@@ -102,8 +102,27 @@ This is the working MVP, focused on travel planning as a proof-of-concept domain
 - **Backend:** TypeScript, Express, sql.js (pure-JS SQLite, no native deps)
 - **Frontend:** React, Vite, TypeScript
 - **CLI:** TypeScript, Commander
+- **MCP Server:** @modelcontextprotocol/sdk (stdio transport)
 - **Database:** SQLite stored as a single file (`recallos.db`)
 - **No cloud dependencies.** Everything runs locally.
+
+## MCP server
+
+Connect any MCP-compatible tool to RecallOS:
+
+```json
+{
+  "mcpServers": {
+    "recallos": {
+      "command": "npx",
+      "args": ["tsx", "backend/src/mcp-server.ts"],
+      "cwd": "/path/to/recallos"
+    }
+  }
+}
+```
+
+The MCP server exposes your memory as tools (search, add, compile context), resources (preferences, constraints, trips), and prompts (with_my_context, trip_planning, memory_summary).
 
 ## Docker
 
@@ -131,10 +150,11 @@ Start the backend and visit http://localhost:3001/api/docs/ for the interactive 
 recallos/
   backend/
     src/
-      db/           # SQLite schema and helpers
-      modules/      # Core pipeline (extraction, reconciliation, ranking, context, passport, audit, tags)
+      db/           # SQLite schema, migrations, and helpers
+      modules/      # Core pipeline (extraction, reconciliation, ranking, context, passport, audit, tags, links)
       routes/       # REST API endpoints (chat, memory, trips, passport, agents, docs, settings)
       bench/        # Benchmark scenario runner
+      mcp-server.ts # MCP server entry point
   frontend/
     src/
       pages/        # Chat, Trips, Memory, ContextDebug, Settings
@@ -149,14 +169,13 @@ recallos/
 
 ## The bigger picture
 
-Milestone 1 proved the core thesis: the model does reasoning, RecallOS provides the memory/context layer. Milestone 2 made it developer-friendly with an API, CLI, Docker, and agent support.
+Milestone 1 proved the core thesis: the model does reasoning, RecallOS provides the memory/context layer. Milestone 2 made it developer-friendly with an API, CLI, Docker, and agent support. Milestone 3 generalized the engine beyond travel: multi-domain extraction, hierarchical scoping, MCP server for any AI tool, memory relationships, and recency-aware ranking.
 
-Future milestones include:
-- Rust engine for background processing
-- MCP server so any AI tool can query your memory
-- Log scraper for cross-tool continuity
-- Multi-domain generalization beyond travel
-- Local embedding search (vector DB)
+What's next:
+- Local embedding search (vector similarity alongside BM25)
+- Log scraper for cross-tool continuity (watch Claude Desktop, Cursor, etc. chat logs)
+- MCP client connections (pull context from calendars, documents, code repos)
+- Background refiner with a local model for smarter extraction
 
 See the [docs](docs/) folder for the full vision and roadmap.
 
@@ -168,6 +187,7 @@ See the [docs](docs/) folder for the full vision and roadmap.
 - [`docs/03-milestones.md`](docs/03-milestones.md) - Detailed build plan
 - [`docs/04-mvp-spec.md`](docs/04-mvp-spec.md) - MVP specification
 - [`docs/05-m2-sdk-spec.md`](docs/05-m2-sdk-spec.md) - Milestone 2: SDK and developer tools
+- [`docs/06-m3-generalization-spec.md`](docs/06-m3-generalization-spec.md) - Milestone 3: Generalization to a full context runtime
 
 ## License
 
