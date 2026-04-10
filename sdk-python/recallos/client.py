@@ -1,0 +1,341 @@
+"""
+RecallOS Python SDK
+
+Wraps the RecallOS REST API for easy use from Python scripts,
+notebooks, and AI agent frameworks.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Optional
+import httpx
+
+
+class RecallOS:
+    """Synchronous client for the RecallOS API."""
+
+    def __init__(self, base_url: str = "http://localhost:3001"):
+        self.base_url = base_url.rstrip("/")
+        self._client = httpx.Client(base_url=self.base_url, timeout=30.0)
+
+    def close(self) -> None:
+        self._client.close()
+
+    def __enter__(self) -> "RecallOS":
+        return self
+
+    def __exit__(self, *args: Any) -> None:
+        self.close()
+
+    # -- Health ---------------------------------------------------------------
+
+    def health(self) -> dict:
+        """Check if the backend is running."""
+        r = self._client.get("/health")
+        r.raise_for_status()
+        return r.json()
+
+    # -- Memory ---------------------------------------------------------------
+
+    def list_memory(
+        self,
+        status: str = "active",
+        type: Optional[str] = None,
+        scope: Optional[str] = None,
+        trip_id: Optional[str] = None,
+    ) -> list[dict]:
+        """List memory items with optional filters."""
+        params: dict[str, str] = {"status": status}
+        if type:
+            params["type"] = type
+        if scope:
+            params["scope"] = scope
+        if trip_id:
+            params["trip_id"] = trip_id
+        r = self._client.get("/api/memory", params=params)
+        r.raise_for_status()
+        return r.json()
+
+    def get_memory(self, memory_id: str) -> dict:
+        """Get a single memory item by ID."""
+        r = self._client.get(f"/api/memory/{memory_id}")
+        r.raise_for_status()
+        return r.json()
+
+    def search_memory(self, query: str) -> list[dict]:
+        """Search memory using BM25 full-text ranking."""
+        r = self._client.get("/api/memory/search", params={"q": query})
+        r.raise_for_status()
+        return r.json()
+
+    def delete_memory(self, memory_id: str) -> dict:
+        """Soft-delete a memory item (marks as stale)."""
+        r = self._client.delete(f"/api/memory/{memory_id}")
+        r.raise_for_status()
+        return r.json()
+
+    def update_memory(self, memory_id: str, **fields: Any) -> dict:
+        """Update a memory item. Pass value, status, or scope as kwargs."""
+        r = self._client.put(f"/api/memory/{memory_id}", json=fields)
+        r.raise_for_status()
+        return r.json()
+
+    # -- Session cleanup ------------------------------------------------------
+
+    def session_stats(self) -> dict:
+        """Get session memory stats."""
+        r = self._client.get("/api/memory/session/stats")
+        r.raise_for_status()
+        return r.json()
+
+    def session_cleanup(self, ttl_hours: int = 24) -> dict:
+        """Expire old session memory items."""
+        r = self._client.post("/api/memory/session/cleanup", json={"ttl_hours": ttl_hours})
+        r.raise_for_status()
+        return r.json()
+
+    # -- Context --------------------------------------------------------------
+
+    def get_context(self, message: str, trip_id: Optional[str] = None) -> dict:
+        """Compile context for a message (without calling a provider)."""
+        body: dict[str, Any] = {"message": message}
+        if trip_id:
+            body["trip_id"] = trip_id
+        r = self._client.post("/api/context/benchmark", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    # -- Chat -----------------------------------------------------------------
+
+    def chat(
+        self,
+        message: str,
+        provider: str,
+        conversation_id: Optional[str] = None,
+        trip_id: Optional[str] = None,
+    ) -> dict:
+        """Send a chat message through the full pipeline."""
+        body: dict[str, Any] = {"message": message, "provider": provider}
+        if conversation_id:
+            body["conversation_id"] = conversation_id
+        if trip_id:
+            body["trip_id"] = trip_id
+        r = self._client.post("/api/chat", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    # -- Trips ----------------------------------------------------------------
+
+    def list_trips(self) -> list[dict]:
+        """List all trips."""
+        r = self._client.get("/api/trips")
+        r.raise_for_status()
+        return r.json()
+
+    def create_trip(
+        self,
+        name: str,
+        destination: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> dict:
+        """Create a new trip."""
+        body: dict[str, Any] = {"name": name}
+        if destination:
+            body["destination"] = destination
+        if start_date:
+            body["start_date"] = start_date
+        if end_date:
+            body["end_date"] = end_date
+        r = self._client.post("/api/trips", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    def delete_trip(self, trip_id: str) -> dict:
+        """Delete a trip."""
+        r = self._client.delete(f"/api/trips/{trip_id}")
+        r.raise_for_status()
+        return r.json()
+
+    # -- Passport -------------------------------------------------------------
+
+    def export_passport(self) -> dict:
+        """Export all memory and trips as a portable JSON passport."""
+        r = self._client.get("/api/passport/export")
+        r.raise_for_status()
+        return r.json()
+
+    def import_passport(self, passport: dict) -> dict:
+        """Import memory and trips from a passport JSON."""
+        r = self._client.post("/api/passport/import", json=passport)
+        r.raise_for_status()
+        return r.json()
+
+    # -- Scraper --------------------------------------------------------------
+
+    def scraper_sources(self) -> list[dict]:
+        """List available log sources and their status."""
+        r = self._client.get("/api/scraper/sources")
+        r.raise_for_status()
+        return r.json()
+
+    def scraper_run(self) -> dict:
+        """Scrape all available log sources for new conversations."""
+        r = self._client.post("/api/scraper/run", json={})
+        r.raise_for_status()
+        return r.json()
+
+    # -- Audit ----------------------------------------------------------------
+
+    def audit_log(self, limit: int = 20) -> list[dict]:
+        """Get recent audit log entries."""
+        r = self._client.get("/api/memory/audit/recent", params={"limit": str(limit)})
+        r.raise_for_status()
+        return r.json()
+
+    # -- Tags -----------------------------------------------------------------
+
+    def list_tags(self) -> list[dict]:
+        """List all tags in use."""
+        r = self._client.get("/api/memory/tags")
+        r.raise_for_status()
+        return r.json()
+
+    def add_tag(self, memory_id: str, tag: str) -> list[dict]:
+        """Add a tag to a memory item."""
+        r = self._client.post(f"/api/memory/{memory_id}/tags", json={"tag": tag})
+        r.raise_for_status()
+        return r.json()
+
+    # -- Links ----------------------------------------------------------------
+
+    def get_links(self, memory_id: str) -> list[dict]:
+        """Get all links for a memory item."""
+        r = self._client.get(f"/api/memory/{memory_id}/links")
+        r.raise_for_status()
+        return r.json()
+
+    def create_link(
+        self,
+        source_id: str,
+        target_id: str,
+        relation: str,
+        strength: float = 1.0,
+        note: Optional[str] = None,
+    ) -> dict:
+        """Create a link between two memory items."""
+        body: dict[str, Any] = {
+            "target_id": target_id,
+            "relation": relation,
+            "strength": strength,
+        }
+        if note:
+            body["note"] = note
+        r = self._client.post(f"/api/memory/{source_id}/links", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    # -- MCP config -----------------------------------------------------------
+
+    def mcp_config(self) -> dict:
+        """Get the MCP server config for Claude Desktop."""
+        r = self._client.get("/api/settings/mcp/config")
+        r.raise_for_status()
+        return r.json()
+
+    def mcp_install(self) -> dict:
+        """Auto-install MCP config into Claude Desktop."""
+        r = self._client.post("/api/settings/mcp/install", json={})
+        r.raise_for_status()
+        return r.json()
+
+
+class AsyncRecallOS:
+    """Async client for the RecallOS API (uses httpx.AsyncClient)."""
+
+    def __init__(self, base_url: str = "http://localhost:3001"):
+        self.base_url = base_url.rstrip("/")
+        self._client = httpx.AsyncClient(base_url=self.base_url, timeout=30.0)
+
+    async def close(self) -> None:
+        await self._client.aclose()
+
+    async def __aenter__(self) -> "AsyncRecallOS":
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        await self.close()
+
+    async def health(self) -> dict:
+        r = await self._client.get("/health")
+        r.raise_for_status()
+        return r.json()
+
+    async def list_memory(
+        self,
+        status: str = "active",
+        type: Optional[str] = None,
+        scope: Optional[str] = None,
+    ) -> list[dict]:
+        params: dict[str, str] = {"status": status}
+        if type:
+            params["type"] = type
+        if scope:
+            params["scope"] = scope
+        r = await self._client.get("/api/memory", params=params)
+        r.raise_for_status()
+        return r.json()
+
+    async def search_memory(self, query: str) -> list[dict]:
+        r = await self._client.get("/api/memory/search", params={"q": query})
+        r.raise_for_status()
+        return r.json()
+
+    async def get_context(self, message: str, trip_id: Optional[str] = None) -> dict:
+        body: dict[str, Any] = {"message": message}
+        if trip_id:
+            body["trip_id"] = trip_id
+        r = await self._client.post("/api/context/benchmark", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    async def chat(
+        self,
+        message: str,
+        provider: str,
+        conversation_id: Optional[str] = None,
+        trip_id: Optional[str] = None,
+    ) -> dict:
+        body: dict[str, Any] = {"message": message, "provider": provider}
+        if conversation_id:
+            body["conversation_id"] = conversation_id
+        if trip_id:
+            body["trip_id"] = trip_id
+        r = await self._client.post("/api/chat", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    async def list_trips(self) -> list[dict]:
+        r = await self._client.get("/api/trips")
+        r.raise_for_status()
+        return r.json()
+
+    async def export_passport(self) -> dict:
+        r = await self._client.get("/api/passport/export")
+        r.raise_for_status()
+        return r.json()
+
+    async def scraper_run(self) -> dict:
+        r = await self._client.post("/api/scraper/run", json={})
+        r.raise_for_status()
+        return r.json()
+
+    async def session_cleanup(self, ttl_hours: int = 24) -> dict:
+        r = await self._client.post("/api/memory/session/cleanup", json={"ttl_hours": ttl_hours})
+        r.raise_for_status()
+        return r.json()
+
+    async def audit_log(self, limit: int = 20) -> list[dict]:
+        r = await self._client.get("/api/memory/audit/recent", params={"limit": str(limit)})
+        r.raise_for_status()
+        return r.json()
