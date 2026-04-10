@@ -58,8 +58,8 @@ This runs 5 end-to-end scenarios that test memory extraction, duplicate detectio
 RecallOS sits between you and the AI model. When you send a message:
 
 1. **Extract** - Multi-domain extraction pulls structured memory from your message (preferences, constraints, goals, facts, overrides) across 8 domains: travel, coding, work, health, finance, learning, writing, and communication. Entity extraction catches dates, destinations, amounts, durations, technologies, and programming languages.
-2. **Reconcile** - New memory is compared against existing memory. Duplicates are re-confirmed. Conflicts are resolved using a scope-aware precedence system (session > project > trip > domain > global). Superseded items are marked stale.
-3. **Compile** - BM25 ranking plus recency decay scores every active memory item. Items linked to high-scoring anchors get a boost. Only relevant items are included. Constraints and overrides are always included.
+2. **Reconcile** - New memory is compared against existing memory. Duplicates are re-confirmed (boosting confidence). Conflicts are resolved using a scope-aware precedence system (session > project > trip > domain > global). Superseded items are marked stale.
+3. **Compile** - BM25 ranking plus recency decay scores every active memory item. Items linked to high-scoring anchors get a cross-domain boost. Only relevant items are included. Constraints and overrides are always included.
 4. **Deliver** - The compiled context is injected into the system prompt alongside your conversation history, then sent to whichever AI provider you selected.
 5. **Store** - The full exchange is stored locally with a context snapshot for debugging.
 
@@ -67,11 +67,13 @@ RecallOS sits between you and the AI model. When you send a message:
 
 ### Pages
 
-- **Chat** - Unified chat UI with conversation sidebar, streaming responses (SSE), provider selector, and trip selector. Memory badges show what was extracted and reconciled per message. Context panel shows what memory was injected.
+- **Chat** - Unified chat UI with conversation sidebar, streaming responses (SSE), provider selector, and trip selector. Memory badges show what was extracted and reconciled per message. Pipeline timing breakdown per response. Context panel shows what memory was injected.
 - **Trips** - Create and manage trips. Each trip scopes its own conversations and memory items.
-- **Memory** - Browse, search, and filter all stored memory items. Domain and scope columns with color-coded badges. Type, scope, domain, and status filters.
+- **Memory** - Browse, search, and filter all stored memory items. Domain and scope columns with color-coded badges. Type, scope, domain, and status filters. Session stats panel with cleanup button. Inline edit and soft-delete.
+- **Links** - Explore relationships between memory items. Click an item to see all incoming/outgoing links. Create new links with typed relations. Navigate between linked items.
+- **Scraper** - View available log sources (Claude Code, Cursor, ChatGPT) with status indicators. Trigger scrapes to extract memory from external AI tool conversations.
 - **Context Debug** - Inspect context snapshots with full trace: BM25 score, recency boost, final score, and inclusion decision for every memory item.
-- **Settings** - Add/remove API keys for OpenAI and Anthropic. Set a default provider. Export/import memory via Memory Passport.
+- **Settings** - Add/remove API keys for OpenAI and Anthropic. Set a default provider. Export/import memory via Memory Passport. MCP server config display with one-click install for Claude Desktop.
 
 ### Core engine
 
@@ -81,27 +83,42 @@ RecallOS sits between you and the AI model. When you send a message:
 - **Memory reconciliation** - Scope-aware precedence, duplicate detection with re-confirmation, conflict logging, audit trail
 - **BM25 + recency + link boost** - Full BM25 with IDF, term frequency saturation, length normalization, lightweight stemming. Recency decay (7-day half-life). Cross-domain link boosting for related items.
 - **Memory relationships** - Link items with typed relations (related_to, depends_on, conflicts_with, refines, derived_from) with configurable strength
+- **Confidence decay** - Items not reconfirmed gradually lose confidence (30-day half-life). Items below threshold are auto-staled.
+- **Session expiration** - Session-scoped memory items expire after configurable TTL (default 24h). Cleanup runs hourly.
 - **Context compilation** - Multi-domain detection, ambiguity flagging, full trace per snapshot
+- **Performance timing** - Per-stage timing for the full pipeline (extraction, reconciliation, context compilation, provider call, snapshot save)
 - **Streaming** - SSE endpoint streams tokens as they arrive from the provider
 - **Provider adapters** - OpenAI (gpt-4o) and Anthropic (Claude Sonnet) with both batch and streaming support
 - **Memory Passport** - Export/import your entire memory as a portable JSON file
+- **Bulk import** - Seed memory from a list of natural-language statements via API, CLI, or Python SDK
 - **Audit log** - Every memory operation is tracked
 - **Tags** - User-defined tags for free-form categorization
 - **Agent state API** - Plans with steps, checkpoints for resumable agents
 
+### Cross-tool continuity
+
+- **Log scraper** - Scrapes chat logs from local AI tools and extracts memory from conversations that happened outside RecallOS
+  - **Claude Code** - Reads JSONL transcripts from `~/.claude/projects/`
+  - **Cursor** - Reads SQLite state.vscdb composer data
+  - **ChatGPT** - Reads `conversations.json` exports (from Settings > Export data)
+- **MCP server** - Connect any MCP-compatible AI tool (Claude Desktop, Cursor, VS Code) to your memory. 9 tools, 6 resources, 3 prompts.
+- **MCP auto-config** - Generate and auto-install config for Claude Desktop. Supports Windows, macOS, and Linux.
+
 ### Developer tools
 
-- **MCP server** - Connect any MCP-compatible AI tool (Claude Desktop, Cursor, VS Code) to your memory. 9 tools, 6 resources, 3 prompts.
-- **REST API** - Full CRUD for memory, trips, chat, passport, context, agents, and settings
+- **REST API** - Full CRUD for memory, trips, chat, passport, context, agents, scraper, and settings
+- **Python SDK** - Sync and async clients (`RecallOS`, `AsyncRecallOS`) using httpx. Covers all API endpoints. Install with `pip install -e sdk-python/`
+- **CLI** - `recallos` command-line tool for memory, trips, passport, chat, providers, scraper, session management, and MCP config
 - **OpenAPI spec** - Served at `/api/docs/openapi.json` with interactive Swagger UI at `/api/docs/`
-- **CLI** - `recallos` command-line tool for memory, trips, passport, chat, and providers
 - **Docker** - Multi-stage Dockerfile and docker-compose.yml for one-command deployment
+- **Benchmark endpoint** - `POST /api/context/benchmark` runs the pipeline without calling a provider, returns timing data
 
 ### Tech stack
 
 - **Backend:** TypeScript, Express, sql.js (pure-JS SQLite, no native deps)
 - **Frontend:** React, Vite, TypeScript
 - **CLI:** TypeScript, Commander
+- **Python SDK:** httpx
 - **MCP Server:** @modelcontextprotocol/sdk (stdio transport)
 - **Database:** SQLite stored as a single file (`recallos.db`)
 - **No cloud dependencies.** Everything runs locally.
@@ -109,6 +126,16 @@ RecallOS sits between you and the AI model. When you send a message:
 ## MCP server
 
 Connect any MCP-compatible tool to RecallOS:
+
+```bash
+# Auto-install to Claude Desktop:
+recallos mcp install
+
+# Or show the config to paste manually:
+recallos mcp config
+```
+
+Or add this to your Claude Desktop config:
 
 ```json
 {
@@ -124,6 +151,51 @@ Connect any MCP-compatible tool to RecallOS:
 
 The MCP server exposes your memory as tools (search, add, compile context), resources (preferences, constraints, trips), and prompts (with_my_context, trip_planning, memory_summary).
 
+## Python SDK
+
+```bash
+pip install -e sdk-python/
+```
+
+```python
+from recallos import RecallOS
+
+client = RecallOS()
+client.health()
+
+# Search memory
+results = client.search_memory("window seat")
+
+# Seed memory from statements
+client.bulk_import([
+    "I prefer window seats on flights",
+    "My budget is under $2000",
+    "I code in TypeScript and Python",
+])
+
+# Get compiled context
+ctx = client.get_context("Book me a flight to Tokyo")
+```
+
+See [sdk-python/README.md](sdk-python/README.md) for full API coverage.
+
+## Log scraper
+
+Extract memory from conversations in other AI tools:
+
+```bash
+# Check what sources are available
+recallos scraper sources
+
+# Scrape all available sources
+recallos scraper run
+```
+
+Supported sources:
+- **Claude Code** - JSONL transcripts in `~/.claude/projects/`
+- **Cursor** - Composer data in SQLite state database
+- **ChatGPT** - Export your data from ChatGPT settings, place `conversations.json` in Downloads
+
 ## Docker
 
 ```bash
@@ -138,7 +210,7 @@ This builds and starts RecallOS on port 3001 with the database persisted in a Do
 cd cli && npm install && npx tsx src/index.ts --help
 ```
 
-Or after building: `recallos memory list`, `recallos chat "Plan a trip to Tokyo"`, etc.
+Or after building: `recallos memory list`, `recallos chat "Plan a trip to Tokyo"`, `recallos memory bulk seeds.txt`, etc.
 
 ## API docs
 
@@ -151,15 +223,17 @@ recallos/
   backend/
     src/
       db/           # SQLite schema, migrations, and helpers
-      modules/      # Core pipeline (extraction, reconciliation, ranking, context, passport, audit, tags, links)
-      routes/       # REST API endpoints (chat, memory, trips, passport, agents, docs, settings)
+      modules/      # Core pipeline (extraction, reconciliation, ranking, context,
+                    #   passport, audit, tags, links, scraper, session cleanup,
+                    #   confidence decay, perf timing, MCP config)
+      routes/       # REST API endpoints
       bench/        # Benchmark scenario runner
       mcp-server.ts # MCP server entry point
   frontend/
     src/
-      pages/        # Chat, Trips, Memory, ContextDebug, Settings
-      components/   # Shared layout
+      pages/        # Chat, Trips, Memory, Links, Scraper, ContextDebug, Settings
   cli/              # CLI tool
+  sdk-python/       # Python SDK (sync + async)
   docs/             # Vision, proposal, milestones, specs
   Dockerfile        # Multi-stage Docker build
   docker-compose.yml
@@ -169,13 +243,13 @@ recallos/
 
 ## The bigger picture
 
-Milestone 1 proved the core thesis: the model does reasoning, RecallOS provides the memory/context layer. Milestone 2 made it developer-friendly with an API, CLI, Docker, and agent support. Milestone 3 generalized the engine beyond travel: multi-domain extraction, hierarchical scoping, MCP server for any AI tool, memory relationships, and recency-aware ranking.
+Milestone 1 proved the core thesis: the model does reasoning, RecallOS provides the memory/context layer. Milestone 2 made it developer-friendly with an API, CLI, Docker, and agent support. Milestone 3 generalized the engine beyond travel: multi-domain extraction, hierarchical scoping, MCP server for any AI tool, memory relationships, and recency-aware ranking. Post-M3 added cross-tool continuity (log scraping from Claude Code, Cursor, ChatGPT), confidence decay, session expiration, pipeline timing, a Python SDK, bulk import, and a full set of frontend pages.
 
 What's next:
 - Local embedding search (vector similarity alongside BM25)
-- Log scraper for cross-tool continuity (watch Claude Desktop, Cursor, etc. chat logs)
 - MCP client connections (pull context from calendars, documents, code repos)
 - Background refiner with a local model for smarter extraction
+- Windsurf and Copilot scraper support
 
 See the [docs](docs/) folder for the full vision and roadmap.
 
