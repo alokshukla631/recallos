@@ -14,6 +14,7 @@ import {
   updateConversationTitle,
   deleteConversation,
 } from "../modules/conversations.js";
+import { PerfTimer } from "../modules/perf.js";
 
 const router = Router();
 
@@ -29,6 +30,7 @@ router.post("/", async (req: Request, res: Response) => {
       return;
     }
 
+    const timer = new PerfTimer();
     const convId = conversation_id || uuidv4();
 
     // Step 0: Ensure the conversation row exists (creates on first message)
@@ -48,24 +50,30 @@ router.post("/", async (req: Request, res: Response) => {
     }
 
     // Step 2: Store user event
+    timer.begin("store_event");
     const userEvent = await storeEvent(convId, "user", message, provider, trip_id);
 
     // Step 3: Extract memory candidates from the user message
+    timer.begin("extraction");
     const candidates = await extractMemory(message, userEvent.id, trip_id);
 
     // Step 4: Reconcile memory (conflict detection, supersession)
+    timer.begin("reconciliation");
     const reconcileResult = await reconcileMemory(candidates, userEvent.id);
 
     // Step 5: Compile context packet
+    timer.begin("context_compilation");
     const compiled = await compileContext(convId, message, trip_id);
 
     // Step 6: Build message history for the provider
+    timer.begin("history_fetch");
     const recentTurns = await getRecentTurns(convId, 20);
     const chatMessages: ChatMessage[] = recentTurns
       .filter((e) => e.role === "user" || e.role === "assistant")
       .map((e) => ({ role: e.role as "user" | "assistant", content: e.content }));
 
     // Step 7: Call the provider API
+    timer.begin("provider_call");
     const adapter = getAdapter(provider);
     const providerResponse = await adapter.chat(
       providerRow.api_key,
@@ -75,6 +83,7 @@ router.post("/", async (req: Request, res: Response) => {
     );
 
     // Step 8: Store assistant response
+    timer.begin("store_response");
     const assistantEvent = await storeEvent(
       convId,
       "assistant",
@@ -84,6 +93,7 @@ router.post("/", async (req: Request, res: Response) => {
     );
 
     // Step 9: Save context snapshot (include traces in rationale)
+    timer.begin("save_snapshot");
     const snapshot = await saveSnapshot(
       userEvent.id,
       provider,
@@ -93,6 +103,8 @@ router.post("/", async (req: Request, res: Response) => {
       { rationale: compiled.rationale, trace: compiled.trace },
       compiled.contextText
     );
+
+    const timing = timer.finish();
 
     // Step 10: Return response
     res.json({
@@ -116,6 +128,7 @@ router.post("/", async (req: Request, res: Response) => {
         context_text: compiled.contextText,
       },
       usage: providerResponse.usage,
+      timing,
     });
   } catch (err) {
     console.error("POST /api/chat error:", err);
@@ -146,6 +159,7 @@ router.post("/stream", async (req: Request, res: Response) => {
   };
 
   try {
+    const timer = new PerfTimer();
     const convId = conversation_id || uuidv4();
 
     ensureConversation(convId, message, trip_id);
@@ -165,8 +179,13 @@ router.post("/stream", async (req: Request, res: Response) => {
 
     send("conversation", { conversation_id: convId });
 
+    timer.begin("store_event");
     const userEvent = await storeEvent(convId, "user", message, provider, trip_id);
+
+    timer.begin("extraction");
     const candidates = await extractMemory(message, userEvent.id, trip_id);
+
+    timer.begin("reconciliation");
     const reconcileResult = await reconcileMemory(candidates, userEvent.id);
 
     send("memory", {
@@ -177,6 +196,7 @@ router.post("/stream", async (req: Request, res: Response) => {
       duplicates: reconcileResult.duplicates.length,
     });
 
+    timer.begin("context_compilation");
     const compiled = await compileContext(convId, message, trip_id);
 
     send("context", {
@@ -185,11 +205,13 @@ router.post("/stream", async (req: Request, res: Response) => {
       context_text: compiled.contextText,
     });
 
+    timer.begin("history_fetch");
     const recentTurns = await getRecentTurns(convId, 20);
     const chatMessages: ChatMessage[] = recentTurns
       .filter((e) => e.role === "user" || e.role === "assistant")
       .map((e) => ({ role: e.role as "user" | "assistant", content: e.content }));
 
+    timer.begin("provider_call");
     const adapter = getAdapter(provider);
     const stream = adapter.chatStream(
       providerRow.api_key,
@@ -212,6 +234,7 @@ router.post("/stream", async (req: Request, res: Response) => {
       send("delta", { text: delta });
     }
 
+    timer.begin("store_response");
     const assistantContent = finalResult?.content ?? fullContent;
     const assistantEvent = await storeEvent(
       convId,
@@ -221,6 +244,7 @@ router.post("/stream", async (req: Request, res: Response) => {
       trip_id
     );
 
+    timer.begin("save_snapshot");
     const snapshot = await saveSnapshot(
       userEvent.id,
       provider,
@@ -231,6 +255,8 @@ router.post("/stream", async (req: Request, res: Response) => {
       compiled.contextText
     );
 
+    const timing = timer.finish();
+
     send("done", {
       assistant_message: {
         id: assistantEvent.id,
@@ -239,6 +265,7 @@ router.post("/stream", async (req: Request, res: Response) => {
       },
       snapshot_id: snapshot.id,
       usage: finalResult?.usage,
+      timing,
     });
 
     res.end();
