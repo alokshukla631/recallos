@@ -200,6 +200,68 @@ async function parseCursorComposerData(): Promise<ScrapedMessage[]> {
 }
 
 // ---------------------------------------------------------------------------
+// Windsurf scraper
+// ---------------------------------------------------------------------------
+
+function findWindsurfDb(): string | null {
+  const dbPath = path.join(getAppDataPath(), "Windsurf", "User", "globalStorage", "state.vscdb");
+  return fs.existsSync(dbPath) ? dbPath : null;
+}
+
+async function parseWindsurfData(): Promise<ScrapedMessage[]> {
+  const dbPath = findWindsurfDb();
+  if (!dbPath) return [];
+
+  const messages: ScrapedMessage[] = [];
+  try {
+    const initSqlJs = (await import("sql.js")).default;
+    const SQL = await initSqlJs();
+    const buffer = fs.readFileSync(dbPath);
+    const db = new SQL.Database(buffer);
+
+    // Windsurf uses a similar structure to Cursor
+    const stmt = db.prepare(
+      "SELECT key, value FROM cursorDiskKV WHERE key LIKE 'composer.content.%' ORDER BY key"
+    );
+
+    while (stmt.step()) {
+      try {
+        const row = stmt.getAsObject() as { key: string; value: any };
+        const valueStr = typeof row.value === "string"
+          ? row.value
+          : row.value instanceof Uint8Array
+            ? new TextDecoder().decode(row.value)
+            : String(row.value);
+
+        const data = JSON.parse(valueStr);
+        const conversation = data.conversation || data.messages || data.bubbles || [];
+        if (!Array.isArray(conversation)) continue;
+
+        for (const msg of conversation) {
+          const role = msg.role || msg.type || (msg.sender === "user" ? "user" : "assistant");
+          const content = msg.content || msg.text || msg.message || "";
+          if (!content || content.length < 10) continue;
+          if (role !== "user" && role !== "assistant" && role !== "human") continue;
+
+          messages.push({
+            role: role === "human" ? "user" : role as "user" | "assistant",
+            content: String(content).slice(0, 2000),
+            source: "windsurf",
+          });
+        }
+      } catch {
+        // Skip unparseable entries
+      }
+    }
+    stmt.free();
+    db.close();
+  } catch {
+    // DB read errors
+  }
+  return messages;
+}
+
+// ---------------------------------------------------------------------------
 // ChatGPT export scraper
 // ---------------------------------------------------------------------------
 
@@ -447,10 +509,47 @@ export async function scrapeAll(): Promise<ScrapeResult[]> {
 
   results.push(chatgptResult);
 
+  // --- Windsurf ---
+  const windsurfResult: ScrapeResult = {
+    source: "windsurf",
+    messagesFound: 0,
+    messagesNew: 0,
+    memoryExtracted: 0,
+    errors: [],
+  };
+
+  try {
+    const messages = await parseWindsurfData();
+    windsurfResult.messagesFound = messages.length;
+
+    const userMessages = messages.filter((m) => m.role === "user");
+    for (const msg of userMessages) {
+      const contentHash = simpleHash(msg.content);
+      const existing = queryOne(
+        "SELECT id FROM events WHERE content = ? AND role = 'user' LIMIT 1",
+        [contentHash]
+      );
+      if (existing) continue;
+
+      windsurfResult.messagesNew++;
+      const eventId = "scrape-windsurf-" + uuidv4().slice(0, 8);
+      const candidates = await extractMemory(msg.content, eventId);
+      if (candidates.length > 0) {
+        const result = await reconcileMemory(candidates, eventId);
+        windsurfResult.memoryExtracted += result.added.length;
+      }
+    }
+  } catch (err: any) {
+    windsurfResult.errors.push(err.message || "Unknown error");
+  }
+
+  results.push(windsurfResult);
+
   // Save state
   state.lastScrapeTime["claude-code"] = new Date().toISOString();
   state.lastScrapeTime["cursor"] = new Date().toISOString();
   state.lastScrapeTime["chatgpt"] = new Date().toISOString();
+  state.lastScrapeTime["windsurf"] = new Date().toISOString();
   saveState(state);
 
   return results;
@@ -465,6 +564,7 @@ export function getSources(): Array<{ name: string; available: boolean; path: st
   const ccTranscripts = findClaudeCodeTranscripts();
   const cursorDb = findCursorDb();
   const chatgptExport = findChatGPTExport();
+  const windsurfDb = findWindsurfDb();
 
   return [
     {
@@ -486,6 +586,12 @@ export function getSources(): Array<{ name: string; available: boolean; path: st
       available: chatgptExport !== null,
       path: chatgptExport,
       lastScraped: state.lastScrapeTime["chatgpt"] || null,
+    },
+    {
+      name: "windsurf",
+      available: windsurfDb !== null,
+      path: windsurfDb,
+      lastScraped: state.lastScrapeTime["windsurf"] || null,
     },
   ];
 }

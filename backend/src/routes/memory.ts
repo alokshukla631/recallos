@@ -89,6 +89,107 @@ router.put("/:id", (req: Request, res: Response) => {
   }
 });
 
+// GET /stats - memory analytics
+router.get("/stats", (_req: Request, res: Response) => {
+  try {
+    const totalActive = queryOne(
+      "SELECT COUNT(*) as count FROM memory_items WHERE status = 'active'"
+    ) as any;
+    const totalStale = queryOne(
+      "SELECT COUNT(*) as count FROM memory_items WHERE status = 'stale'"
+    ) as any;
+    const totalSuperseded = queryOne(
+      "SELECT COUNT(*) as count FROM memory_items WHERE status = 'superseded'"
+    ) as any;
+
+    const byType = queryAll(
+      "SELECT type, COUNT(*) as count FROM memory_items WHERE status = 'active' GROUP BY type ORDER BY count DESC"
+    );
+    const byScope = queryAll(
+      "SELECT scope, COUNT(*) as count FROM memory_items WHERE status = 'active' GROUP BY scope ORDER BY count DESC"
+    );
+    const byDomain = queryAll(
+      "SELECT domain, COUNT(*) as count FROM memory_items WHERE status = 'active' AND domain IS NOT NULL GROUP BY domain ORDER BY count DESC"
+    );
+
+    // Confidence distribution
+    const highConf = queryOne(
+      "SELECT COUNT(*) as count FROM memory_items WHERE status = 'active' AND confidence >= 0.8"
+    ) as any;
+    const medConf = queryOne(
+      "SELECT COUNT(*) as count FROM memory_items WHERE status = 'active' AND confidence >= 0.5 AND confidence < 0.8"
+    ) as any;
+    const lowConf = queryOne(
+      "SELECT COUNT(*) as count FROM memory_items WHERE status = 'active' AND confidence < 0.5"
+    ) as any;
+
+    // Recent activity (last 7 days)
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const recentCreated = queryOne(
+      "SELECT COUNT(*) as count FROM memory_items WHERE created_at > ?",
+      [weekAgo]
+    ) as any;
+
+    const recentAudit = queryAll(
+      "SELECT action, COUNT(*) as count FROM memory_audit WHERE created_at > ? GROUP BY action ORDER BY count DESC",
+      [weekAgo]
+    );
+
+    // Oldest and newest items
+    const oldest = queryOne(
+      "SELECT created_at FROM memory_items WHERE status = 'active' ORDER BY created_at ASC LIMIT 1"
+    ) as any;
+    const newest = queryOne(
+      "SELECT created_at FROM memory_items WHERE status = 'active' ORDER BY created_at DESC LIMIT 1"
+    ) as any;
+
+    // Links count
+    const linksCount = queryOne(
+      "SELECT COUNT(*) as count FROM memory_links"
+    ) as any;
+
+    // Trips count
+    const tripsCount = queryOne(
+      "SELECT COUNT(*) as count FROM trips"
+    ) as any;
+
+    // Conversations count
+    const convsCount = queryOne(
+      "SELECT COUNT(*) as count FROM conversations"
+    ) as any;
+
+    res.json({
+      totals: {
+        active: totalActive?.count || 0,
+        stale: totalStale?.count || 0,
+        superseded: totalSuperseded?.count || 0,
+      },
+      by_type: byType,
+      by_scope: byScope,
+      by_domain: byDomain,
+      confidence: {
+        high: highConf?.count || 0,
+        medium: medConf?.count || 0,
+        low: lowConf?.count || 0,
+      },
+      recent: {
+        created_last_7d: recentCreated?.count || 0,
+        audit_last_7d: recentAudit,
+      },
+      timeline: {
+        oldest_active: oldest?.created_at || null,
+        newest_active: newest?.created_at || null,
+      },
+      links: linksCount?.count || 0,
+      trips: tripsCount?.count || 0,
+      conversations: convsCount?.count || 0,
+    });
+  } catch (err) {
+    console.error("GET /api/memory/stats error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /search - full-text search across memory items using BM25
 router.get("/search", (req: Request, res: Response) => {
   try {

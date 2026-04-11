@@ -291,6 +291,56 @@ router.get("/conversations", (_req: Request, res: Response) => {
   }
 });
 
+// GET /conversations/search - search across conversation content
+router.get("/conversations/search", (req: Request, res: Response) => {
+  try {
+    const q = (req.query.q as string || "").trim();
+    if (!q) {
+      res.json([]);
+      return;
+    }
+
+    // Search events for matching content, group by conversation
+    const matches = queryAll(
+      `SELECT e.conversation_id, e.content, e.role, e.created_at,
+              c.title as conv_title
+       FROM events e
+       LEFT JOIN conversations c ON c.id = e.conversation_id
+       WHERE e.content LIKE ? AND e.role IN ('user', 'assistant')
+       ORDER BY e.created_at DESC
+       LIMIT 50`,
+      [`%${q}%`]
+    ) as any[];
+
+    // Group by conversation, return snippets
+    const seen = new Set<string>();
+    const results: any[] = [];
+    for (const m of matches) {
+      if (seen.has(m.conversation_id)) continue;
+      seen.add(m.conversation_id);
+
+      // Extract a snippet around the match
+      const idx = m.content.toLowerCase().indexOf(q.toLowerCase());
+      const start = Math.max(0, idx - 40);
+      const end = Math.min(m.content.length, idx + q.length + 60);
+      const snippet = (start > 0 ? "..." : "") + m.content.slice(start, end) + (end < m.content.length ? "..." : "");
+
+      results.push({
+        conversation_id: m.conversation_id,
+        title: m.conv_title || "Untitled",
+        snippet,
+        role: m.role,
+        created_at: m.created_at,
+      });
+    }
+
+    res.json(results);
+  } catch (err) {
+    console.error("GET /api/chat/conversations/search error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // PATCH /conversations/:id - rename a conversation
 router.patch("/conversations/:id", (req: Request, res: Response) => {
   try {

@@ -1,5 +1,6 @@
 import { NavLink, Routes, Route } from "react-router-dom";
 import {
+  LayoutDashboard,
   MessageSquare,
   Brain,
   Bug,
@@ -8,6 +9,7 @@ import {
   ScanSearch,
   Link2,
 } from "lucide-react";
+import Dashboard from "./pages/Dashboard";
 import Chat from "./pages/Chat";
 import Memory from "./pages/Memory";
 import Links from "./pages/Links";
@@ -17,7 +19,8 @@ import Trips from "./pages/Trips";
 import Scraper from "./pages/Scraper";
 
 const navItems = [
-  { to: "/", label: "Chat", icon: MessageSquare },
+  { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/chat", label: "Chat", icon: MessageSquare },
   { to: "/trips", label: "Trips", icon: Plane },
   { to: "/memory", label: "Memory", icon: Brain },
   { to: "/links", label: "Links", icon: Link2 },
@@ -52,7 +55,8 @@ function App() {
 
       <main className="main-content">
         <Routes>
-          <Route path="/" element={<Chat />} />
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/chat" element={<Chat />} />
           <Route path="/trips" element={<Trips />} />
           <Route path="/memory" element={<Memory />} />
           <Route path="/debug" element={<ContextDebug />} />
