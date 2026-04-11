@@ -390,3 +390,90 @@
   color: var(--color-text);
   border: 1px solid var(--color-border);
 }
+
+/* Tags */
+.tags-cloud {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  background: var(--color-surface);
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+
+.tags-label {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  font-size: 0.72rem;
+  color: var(--color-text);
+}
+
+.tag-removable button {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 0 2px;
+}
+
+.tag-removable button:hover {
+  color: #ef4444;
+}
+
+.tags-row td {
+  padding: 0 12px 8px !important;
+  border-top: none !important;
+}
+
+.tags-panel {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 0;
+}
+
+.tag-add {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tag-add input {
+  width: 100px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.75rem;
+}
+
+.tag-add button {
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.btn-tag {
+  color: var(--color-accent) !important;
+}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import "./Memory.css";
 
 interface MemoryItem {
@@ -41,6 +41,11 @@ const DOMAIN_COLORS: Record<string, string> = {
   communication: "#14b8a6",
 };
 
+interface TagInfo {
+  tag: string;
+  count: number;
+}
+
 interface SessionStats {
   active: number;
   stale: number;
@@ -64,6 +69,12 @@ function Memory() {
   // Edit state
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
+
+  // Tags
+  const [allTags, setAllTags] = useState<TagInfo[]>([]);
+  const [itemTags, setItemTags] = useState<Record<string, string[]>>({});
+  const [tagInput, setTagInput] = useState<Record<string, string>>({});
+  const [expandedTags, setExpandedTags] = useState<Set<number>>(new Set());
 
   // Session stats
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
@@ -99,6 +110,7 @@ function Memory() {
 
   useEffect(() => {
     fetchSessionStats();
+    fetchAllTags();
   }, []);
 
   async function fetchSessionStats() {
@@ -109,6 +121,67 @@ function Memory() {
     } catch {
       // ignore
     }
+  }
+
+  async function fetchAllTags() {
+    try {
+      const res = await fetch("/api/memory/tags");
+      if (!res.ok) return;
+      setAllTags(await res.json());
+    } catch {
+      // ignore
+    }
+  }
+
+  async function fetchTagsForItem(id: number) {
+    try {
+      const res = await fetch(`/api/memory/${id}/tags`);
+      if (!res.ok) return;
+      const tags: Array<{ tag: string }> = await res.json();
+      setItemTags((prev) => ({ ...prev, [id]: tags.map((t) => t.tag) }));
+    } catch {
+      // ignore
+    }
+  }
+
+  async function addTagToItem(id: number) {
+    const tag = (tagInput[id] || "").trim().toLowerCase();
+    if (!tag) return;
+    try {
+      await fetch(`/api/memory/${id}/tags`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tag }),
+      });
+      setTagInput((prev) => ({ ...prev, [id]: "" }));
+      fetchTagsForItem(id);
+      fetchAllTags();
+    } catch {
+      // ignore
+    }
+  }
+
+  async function removeTagFromItem(id: number, tag: string) {
+    try {
+      await fetch(`/api/memory/${id}/tags/${encodeURIComponent(tag)}`, { method: "DELETE" });
+      fetchTagsForItem(id);
+      fetchAllTags();
+    } catch {
+      // ignore
+    }
+  }
+
+  function toggleTagsPanel(id: number) {
+    setExpandedTags((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+        if (!itemTags[id]) fetchTagsForItem(id);
+      }
+      return next;
+    });
   }
 
   async function handleCleanup() {
@@ -320,6 +393,16 @@ function Memory() {
         </label>
       </div>
 
+      {/* Tags cloud */}
+      {allTags.length > 0 && (
+        <div className="tags-cloud">
+          <span className="tags-label">Tags:</span>
+          {allTags.map((t) => (
+            <span key={t.tag} className="tag-chip">{t.tag} ({t.count})</span>
+          ))}
+        </div>
+      )}
+
       {/* Error */}
       {error && <div className="memory-error">{error}</div>}
 
@@ -349,7 +432,8 @@ function Memory() {
             </thead>
             <tbody>
               {items.map((item) => (
-                <tr key={item.id}>
+                <React.Fragment key={item.id}>
+                <tr>
                   <td className="memory-key">{item.key}</td>
                   <td>
                     <span
@@ -436,6 +520,12 @@ function Memory() {
                           Edit
                         </button>
                         <button
+                          className="btn-action btn-tag"
+                          onClick={() => toggleTagsPanel(item.id)}
+                        >
+                          Tags
+                        </button>
+                        <button
                           className="btn-action btn-delete"
                           onClick={() => handleDelete(item.id)}
                         >
@@ -445,6 +535,31 @@ function Memory() {
                     )}
                   </td>
                 </tr>
+                {expandedTags.has(item.id) && (
+                  <tr className="tags-row">
+                    <td colSpan={9}>
+                      <div className="tags-panel">
+                        {(itemTags[item.id] || []).map((tag) => (
+                          <span key={tag} className="tag-chip tag-removable">
+                            {tag}
+                            <button onClick={() => removeTagFromItem(item.id, tag)}>x</button>
+                          </span>
+                        ))}
+                        <div className="tag-add">
+                          <input
+                            type="text"
+                            placeholder="Add tag..."
+                            value={tagInput[item.id] || ""}
+                            onChange={(e) => setTagInput((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                            onKeyDown={(e) => { if (e.key === "Enter") addTagToItem(item.id); }}
+                          />
+                          <button onClick={() => addTagToItem(item.id)}>+</button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </React.Fragment>
               ))}
             </tbody>
           </table>
