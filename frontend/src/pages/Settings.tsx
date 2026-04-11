@@ -13,6 +13,14 @@ interface McpConfig {
   claude_desktop_config_path: string | null;
 }
 
+interface Webhook {
+  id: string;
+  url: string;
+  events: string[];
+  active: boolean;
+  created_at: string;
+}
+
 function Settings() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
@@ -24,10 +32,13 @@ function Settings() {
   const [loadingProviders, setLoadingProviders] = useState(true);
   const [mcpConfig, setMcpConfig] = useState<McpConfig | null>(null);
   const [mcpInstalling, setMcpInstalling] = useState(false);
+  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
+  const [newWebhookUrl, setNewWebhookUrl] = useState("");
 
   useEffect(() => {
     fetchProviders();
     fetchMcpConfig();
+    fetchWebhooks();
   }, []);
 
   async function fetchProviders() {
@@ -168,6 +179,58 @@ function Settings() {
       showStatus("mcp", msg, "error");
     } finally {
       setMcpInstalling(false);
+    }
+  }
+
+  async function fetchWebhooks() {
+    try {
+      const res = await fetch("/api/settings/webhooks");
+      if (!res.ok) return;
+      setWebhooks(await res.json());
+    } catch {
+      // ignore
+    }
+  }
+
+  async function addWebhook() {
+    const url = newWebhookUrl.trim();
+    if (!url) return;
+    try {
+      const res = await fetch("/api/settings/webhooks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, events: ["*"] }),
+      });
+      if (!res.ok) throw new Error("Failed to add webhook");
+      setNewWebhookUrl("");
+      showStatus("webhooks", "Webhook added", "success");
+      fetchWebhooks();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed";
+      showStatus("webhooks", msg, "error");
+    }
+  }
+
+  async function toggleWebhookActive(id: string, active: boolean) {
+    try {
+      await fetch(`/api/settings/webhooks/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active }),
+      });
+      fetchWebhooks();
+    } catch {
+      // ignore
+    }
+  }
+
+  async function deleteWebhookById(id: string) {
+    try {
+      await fetch(`/api/settings/webhooks/${id}`, { method: "DELETE" });
+      showStatus("webhooks", "Webhook deleted", "success");
+      fetchWebhooks();
+    } catch {
+      showStatus("webhooks", "Delete failed", "error");
     }
   }
 
@@ -390,6 +453,53 @@ function Settings() {
             {statusMessages["mcp"] && (
               <p className={`status-msg ${statusMessages["mcp"].type}`}>
                 {statusMessages["mcp"].text}
+              </p>
+            )}
+          </div>
+
+          <div className="settings-section data-section">
+            <h3>Webhooks</h3>
+            <p>
+              Get notified when memory events happen (created, superseded, conflicts).
+            </p>
+            <div className="webhook-add-row">
+              <input
+                type="url"
+                placeholder="https://your-server.com/webhook"
+                value={newWebhookUrl}
+                onChange={(e) => setNewWebhookUrl(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") addWebhook(); }}
+              />
+              <button className="btn btn-primary" onClick={addWebhook} disabled={!newWebhookUrl.trim()}>
+                Add Webhook
+              </button>
+            </div>
+            {webhooks.length > 0 && (
+              <div className="webhooks-list">
+                {webhooks.map((wh) => (
+                  <div key={wh.id} className={`webhook-item ${wh.active ? "" : "inactive"}`}>
+                    <div className="webhook-url">{wh.url}</div>
+                    <div className="webhook-meta">
+                      <span className="webhook-events">{wh.events.join(", ")}</span>
+                      <label className="webhook-toggle">
+                        <input
+                          type="checkbox"
+                          checked={wh.active}
+                          onChange={(e) => toggleWebhookActive(wh.id, e.target.checked)}
+                        />
+                        {wh.active ? "Active" : "Paused"}
+                      </label>
+                      <button className="btn-action btn-delete" onClick={() => deleteWebhookById(wh.id)}>
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {statusMessages["webhooks"] && (
+              <p className={`status-msg ${statusMessages["webhooks"].type}`}>
+                {statusMessages["webhooks"].text}
               </p>
             )}
           </div>

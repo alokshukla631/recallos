@@ -240,3 +240,68 @@
   font-family: monospace;
   word-break: break-all;
 }
+
+/* Webhooks */
+.webhook-add-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.webhook-add-row input {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.85rem;
+}
+
+.webhooks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.webhook-item {
+  padding: 10px 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.webhook-item.inactive {
+  opacity: 0.6;
+}
+
+.webhook-url {
+  font-size: 0.82rem;
+  font-family: monospace;
+  word-break: break-all;
+  margin-bottom: 6px;
+}
+
+.webhook-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.75rem;
+}
+
+.webhook-events {
+  color: var(--color-text-muted);
+}
+
+.webhook-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.webhook-toggle input {
+  cursor: pointer;
+}
