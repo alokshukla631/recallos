@@ -124,6 +124,69 @@ export interface ImportResult {
  *    the same normalized value, skip it. Otherwise, create it as new.
  *  - Conflicts are imported as-is.
  */
+/**
+ * Export memory as human-readable Markdown.
+ * Grouped by type, with metadata as inline annotations.
+ */
+export function exportPassportMarkdown(): string {
+  const passport = exportPassport();
+  const lines: string[] = [];
+
+  lines.push("# RecallOS Memory Export");
+  lines.push("");
+  lines.push(`Exported: ${passport.exported_at.slice(0, 10)}`);
+  lines.push(`Items: ${passport.stats.memory_items} | Trips: ${passport.stats.trips} | Conflicts: ${passport.stats.conflicts}`);
+  lines.push("");
+
+  // Group items by type
+  const byType = new Map<string, PassportMemoryItem[]>();
+  for (const item of passport.memory_items) {
+    const group = byType.get(item.type) || [];
+    group.push(item);
+    byType.set(item.type, group);
+  }
+
+  for (const [type, items] of byType) {
+    lines.push(`## ${type.charAt(0).toUpperCase() + type.slice(1)}s`);
+    lines.push("");
+    for (const item of items) {
+      const meta: string[] = [];
+      meta.push(`scope: ${item.scope}`);
+      if (item.trip_name) meta.push(`trip: ${item.trip_name}`);
+      meta.push(`confidence: ${item.confidence}`);
+      if (item.authority !== "explicit") meta.push(`authority: ${item.authority}`);
+
+      lines.push(`- **${item.key}**: ${item.value}`);
+      lines.push(`  _${meta.join(" | ")}_`);
+    }
+    lines.push("");
+  }
+
+  if (passport.trips.length > 0) {
+    lines.push("## Trips");
+    lines.push("");
+    for (const trip of passport.trips) {
+      const dates = [trip.start_date, trip.end_date].filter(Boolean).join(" to ");
+      lines.push(`- **${trip.name}**${trip.destination ? ` - ${trip.destination}` : ""}`);
+      if (dates) lines.push(`  Dates: ${dates}`);
+      lines.push(`  Status: ${trip.status}`);
+      if (trip.notes) lines.push(`  Notes: ${trip.notes}`);
+    }
+    lines.push("");
+  }
+
+  if (passport.conflicts.length > 0) {
+    lines.push("## Unresolved Conflicts");
+    lines.push("");
+    for (const c of passport.conflicts) {
+      lines.push(`- **${c.key}**: ${c.resolution}${c.explanation ? ` - ${c.explanation}` : ""}`);
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
 export function importPassport(passport: Passport): ImportResult {
   if (passport.format !== "recallos-passport-v1") {
     throw new Error(

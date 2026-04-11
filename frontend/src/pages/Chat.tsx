@@ -59,6 +59,14 @@ interface EventRow {
   created_at: string;
 }
 
+interface SearchResult {
+  conversation_id: string;
+  title: string | null;
+  role: string;
+  snippet: string;
+  created_at: string;
+}
+
 function Chat() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [selectedProvider, setSelectedProvider] = useState("");
@@ -71,6 +79,9 @@ function Chat() {
   const [loading, setLoading] = useState(false);
   const [expandedContexts, setExpandedContexts] = useState<Set<number>>(new Set());
   const [providersLoading, setProvidersLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
+  const [searching, setSearching] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -124,6 +135,24 @@ function Chat() {
       setTrips(data);
     } catch {
       setTrips([]);
+    }
+  }
+
+  async function searchConversations(query: string) {
+    if (!query.trim()) {
+      setSearchResults(null);
+      return;
+    }
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/chat/conversations/search?q=${encodeURIComponent(query)}`);
+      if (!res.ok) return;
+      const data: SearchResult[] = await res.json();
+      setSearchResults(data);
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
     }
   }
 
@@ -403,6 +432,44 @@ function Chat() {
         <button className="new-chat-btn" onClick={startNewConversation}>
           + New chat
         </button>
+        <div className="sidebar-search">
+          <input
+            type="text"
+            placeholder="Search conversations..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              searchConversations(e.target.value);
+            }}
+          />
+          {searchQuery && (
+            <button className="search-clear" onClick={() => { setSearchQuery(""); setSearchResults(null); }}>
+              x
+            </button>
+          )}
+        </div>
+        {searchResults !== null ? (
+          <div className="conversation-list">
+            {searching && <div className="conversation-empty">Searching...</div>}
+            {!searching && searchResults.length === 0 && (
+              <div className="conversation-empty">No results found.</div>
+            )}
+            {searchResults.map((r, i) => (
+              <div
+                key={`${r.conversation_id}-${i}`}
+                className={`conversation-item ${conversationId === r.conversation_id ? "active" : ""}`}
+                onClick={() => { openConversation(r.conversation_id); setSearchQuery(""); setSearchResults(null); }}
+              >
+                <div className="conversation-title">{r.title || "Untitled"}</div>
+                <div className="search-snippet">{r.snippet}</div>
+                <div className="conversation-meta">
+                  <span>{formatRelative(r.created_at)}</span>
+                  <span className="provider-badge">{r.role}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
         <div className="conversation-list">
           {conversations.length === 0 && (
             <div className="conversation-empty">No conversations yet.</div>
@@ -428,6 +495,7 @@ function Chat() {
             </div>
           ))}
         </div>
+        )}
       </aside>
 
       <div className="chat-page">

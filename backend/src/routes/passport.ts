@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { exportPassport, importPassport, type Passport } from "../modules/passport.js";
+import { exportPassport, exportPassportMarkdown, importPassport, type Passport } from "../modules/passport.js";
 
 const router = Router();
 
@@ -14,6 +14,22 @@ router.get("/export", (_req: Request, res: Response) => {
     res.json(passport);
   } catch (err) {
     console.error("GET /api/passport/export error:", err);
+    res.status(500).json({ error: "Export failed" });
+  }
+});
+
+// GET /export/markdown - export all memory as readable Markdown
+router.get("/export/markdown", (_req: Request, res: Response) => {
+  try {
+    const md = exportPassportMarkdown();
+    res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="recallos-memory-${new Date().toISOString().slice(0, 10)}.md"`
+    );
+    res.send(md);
+  } catch (err) {
+    console.error("GET /api/passport/export/markdown error:", err);
     res.status(500).json({ error: "Export failed" });
   }
 });
