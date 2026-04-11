@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { queryAll, queryOne, runSql } from "../db/index.js";
 import { generateMcpConfig, generateClaudeDesktopConfig, getClaudeDesktopConfigPath, installClaudeDesktopConfig } from "../modules/mcp-config.js";
+import { registerWebhook, listWebhooks, deleteWebhook, toggleWebhook } from "../modules/webhooks.js";
 
 const router = Router();
 
@@ -132,6 +133,63 @@ router.post("/mcp/install", (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error("POST /api/settings/mcp/install error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /webhooks - list all webhooks
+router.get("/webhooks", (_req: Request, res: Response) => {
+  try {
+    res.json(listWebhooks());
+  } catch (err) {
+    console.error("GET /api/settings/webhooks error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /webhooks - register a new webhook
+router.post("/webhooks", (req: Request, res: Response) => {
+  try {
+    const { url, events } = req.body;
+    if (!url || typeof url !== "string") {
+      res.status(400).json({ error: "url is required" });
+      return;
+    }
+    const hook = registerWebhook(url, events || ["*"]);
+    res.status(201).json(hook);
+  } catch (err) {
+    console.error("POST /api/settings/webhooks error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PUT /webhooks/:id - toggle active/inactive
+router.put("/webhooks/:id", (req: Request, res: Response) => {
+  try {
+    const { active } = req.body;
+    const ok = toggleWebhook(req.params.id as string, !!active);
+    if (!ok) {
+      res.status(404).json({ error: "Webhook not found" });
+      return;
+    }
+    res.json({ message: "Webhook updated" });
+  } catch (err) {
+    console.error("PUT /api/settings/webhooks/:id error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /webhooks/:id - remove a webhook
+router.delete("/webhooks/:id", (req: Request, res: Response) => {
+  try {
+    const ok = deleteWebhook(req.params.id as string);
+    if (!ok) {
+      res.status(404).json({ error: "Webhook not found" });
+      return;
+    }
+    res.json({ message: "Webhook deleted" });
+  } catch (err) {
+    console.error("DELETE /api/settings/webhooks/:id error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

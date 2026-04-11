@@ -13,6 +13,7 @@ import agentsRouter from "./routes/agents.js";
 import scraperRouter from "./routes/scraper.js";
 import { expireSessionMemory } from "./modules/session-cleanup.js";
 import { applyConfidenceDecay } from "./modules/confidence-decay.js";
+import { scrapeAll } from "./modules/log-scraper.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -36,6 +37,7 @@ app.get("/health", (_req, res) => {
 });
 
 const SESSION_CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // Run every hour
+const SCRAPER_INTERVAL_MS = parseInt(process.env.SCRAPER_INTERVAL_MS || "") || 4 * 60 * 60 * 1000; // Default: every 4 hours
 
 async function start() {
   await initDatabase(DB_PATH);
@@ -57,6 +59,23 @@ async function start() {
       console.log(`Confidence decay: ${d.decayed} decayed, ${d.staled} staled`);
     }
   }, SESSION_CLEANUP_INTERVAL_MS);
+
+  // Scheduled scraper (every 4 hours by default, configurable via SCRAPER_INTERVAL_MS env)
+  if (process.env.DISABLE_SCRAPER !== "1") {
+    setInterval(async () => {
+      try {
+        const results = await scrapeAll();
+        const totalNew = results.reduce((sum, r) => sum + r.messagesNew, 0);
+        const totalMemory = results.reduce((sum, r) => sum + r.memoryExtracted, 0);
+        if (totalNew > 0 || totalMemory > 0) {
+          console.log(`Scheduled scrape: ${totalNew} new messages, ${totalMemory} memory extracted`);
+        }
+      } catch (err) {
+        console.error("Scheduled scrape error:", err);
+      }
+    }, SCRAPER_INTERVAL_MS);
+    console.log(`Scheduled scraper: every ${Math.round(SCRAPER_INTERVAL_MS / 60000)}min`);
+  }
 
   app.listen(PORT, () => {
     console.log(`RecallOS backend listening on port ${PORT}`);

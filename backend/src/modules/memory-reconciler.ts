@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import { queryAll, queryOne, runSql } from "../db/index.js";
 import type { MemoryCandidate, MemoryType, MemoryScope } from "./memory-extractor.js";
 import { logAudit } from "./audit.js";
+import { fireWebhook } from "./webhooks.js";
 
 export interface MemoryItem {
   id: string;
@@ -228,6 +229,7 @@ export async function reconcileMemory(
       const item = insertMemoryItem(candidate, eventId);
       logAudit(item.id, "created", `Extracted from user message. Type=${candidate.type}, scope=${candidate.scope}`);
       added.push(item);
+      fireWebhook("created", { id: item.id, key: item.key, type: item.type, value: item.value, scope: item.scope });
       continue;
     }
 
@@ -240,6 +242,7 @@ export async function reconcileMemory(
       logAudit(newItem.id, "created", `Supersedes existing (precedence ${newPrecedence} > ${existingPrecedence})`);
       logAudit(existing.id, "superseded", `Replaced by ${newItem.id} with higher precedence`);
       updated.push(newItem);
+      fireWebhook("superseded", { new_id: newItem.id, old_id: existing.id, key: candidate.key });
 
       const conflict = recordConflict(
         candidate.key,
@@ -255,6 +258,7 @@ export async function reconcileMemory(
       logAudit(newItem.id, "created", `Same precedence (${newPrecedence}), newer wins`);
       logAudit(existing.id, "superseded", `Replaced by newer item ${newItem.id}`);
       updated.push(newItem);
+      fireWebhook("superseded", { new_id: newItem.id, old_id: existing.id, key: candidate.key });
 
       const conflict = recordConflict(
         candidate.key,
@@ -269,6 +273,7 @@ export async function reconcileMemory(
       runSql("UPDATE memory_items SET status = 'stale' WHERE id = ?", [newItem.id]);
       logAudit(newItem.id, "marked_stale", `Lower precedence (${newPrecedence} < ${existingPrecedence}), kept existing`);
       updated.push(newItem);
+      fireWebhook("conflict", { new_id: newItem.id, existing_id: existing.id, key: candidate.key, resolution: "existing_wins" });
 
       const conflict = recordConflict(
         candidate.key,
