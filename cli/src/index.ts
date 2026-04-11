@@ -198,6 +198,18 @@ passport
   });
 
 passport
+  .command("export-md [file]")
+  .description("Export memory as a human-readable Markdown file")
+  .action(async (file) => {
+    const res = await fetchRaw("/api/passport/export/markdown");
+    if (!res.ok) throw new Error("Export failed");
+    const md = await res.text();
+    const outPath = file || `recallos-memory-${new Date().toISOString().slice(0, 10)}.md`;
+    fs.writeFileSync(outPath, md);
+    console.log(`Exported memory to ${outPath}`);
+  });
+
+passport
   .command("import <file>")
   .description("Import memory from a JSON passport file")
   .action(async (file) => {

@@ -18,6 +18,11 @@ interface Stats {
   conversations: number;
 }
 
+interface RetentionData {
+  overall: { total_created: number; total_active: number; retention_pct: number };
+  weekly: Array<{ week: string; created: number; survived: number; retention_pct: number }>;
+}
+
 interface AuditEntry {
   action: string;
   memory_key: string | null;
@@ -49,10 +54,11 @@ const DOMAIN_COLORS: Record<string, string> = {
 function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
+  const [retention, setRetention] = useState<RetentionData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([fetchStats(), fetchAudit()]).finally(() => setLoading(false));
+    Promise.all([fetchStats(), fetchAudit(), fetchRetention()]).finally(() => setLoading(false));
   }, []);
 
   async function fetchStats() {
@@ -70,6 +76,16 @@ function Dashboard() {
       const res = await fetch("/api/memory/audit/recent?limit=10");
       if (!res.ok) return;
       setAudit(await res.json());
+    } catch {
+      // ignore
+    }
+  }
+
+  async function fetchRetention() {
+    try {
+      const res = await fetch("/api/memory/stats/retention");
+      if (!res.ok) return;
+      setRetention(await res.json());
     } catch {
       // ignore
     }
@@ -237,6 +253,32 @@ function Dashboard() {
               ))}
             </div>
           </div>
+
+          {/* Retention */}
+          {retention && retention.weekly.length > 0 && (
+            <div className="dash-section">
+              <h3>Memory Retention</h3>
+              <div className="retention-summary">
+                <span className="retention-pct">{retention.overall.retention_pct}%</span>
+                <span className="retention-label">
+                  overall ({retention.overall.total_active} of {retention.overall.total_created} survived)
+                </span>
+              </div>
+              <div className="retention-chart">
+                {retention.weekly.map((w) => (
+                  <div key={w.week} className="retention-bar-col" title={`Week ${w.week}: ${w.survived}/${w.created} (${w.retention_pct}%)`}>
+                    <div className="retention-bar-bg">
+                      <div
+                        className="retention-bar-fill"
+                        style={{ height: `${w.retention_pct}%` }}
+                      />
+                    </div>
+                    <span className="retention-bar-label">{w.retention_pct}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Recent activity */}
           <div className="dash-section">

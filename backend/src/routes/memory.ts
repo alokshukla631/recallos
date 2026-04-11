@@ -190,6 +190,49 @@ router.get("/stats", (_req: Request, res: Response) => {
   }
 });
 
+// GET /stats/retention - memory retention over time (created vs. still active per week)
+router.get("/stats/retention", (_req: Request, res: Response) => {
+  try {
+    // Get all items with their creation date and current status
+    const rows = queryAll(
+      `SELECT
+         strftime('%Y-%W', created_at) as week,
+         COUNT(*) as created,
+         SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as survived
+       FROM memory_items
+       GROUP BY week
+       ORDER BY week DESC
+       LIMIT 26`
+    ) as any[];
+
+    // Reverse to chronological order
+    const data = rows.reverse().map((r) => ({
+      week: r.week,
+      created: r.created,
+      survived: r.survived,
+      retention_pct: r.created > 0 ? Math.round((r.survived / r.created) * 100) : 0,
+    }));
+
+    // Overall stats
+    const totalCreated = queryOne("SELECT COUNT(*) as count FROM memory_items") as any;
+    const totalActive = queryOne("SELECT COUNT(*) as count FROM memory_items WHERE status = 'active'") as any;
+
+    res.json({
+      overall: {
+        total_created: totalCreated?.count || 0,
+        total_active: totalActive?.count || 0,
+        retention_pct: totalCreated?.count > 0
+          ? Math.round(((totalActive?.count || 0) / totalCreated.count) * 100)
+          : 100,
+      },
+      weekly: data,
+    });
+  } catch (err) {
+    console.error("GET /api/memory/stats/retention error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /search - full-text search across memory items using BM25
 router.get("/search", (req: Request, res: Response) => {
   try {

@@ -248,3 +248,61 @@
   background: var(--color-surface-hover);
   border-color: var(--color-accent);
 }
+
+/* Retention */
+.retention-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.retention-pct {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.retention-label {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.retention-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 80px;
+}
+
+.retention-bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+}
+
+.retention-bar-bg {
+  flex: 1;
+  width: 100%;
+  background: var(--color-border);
+  border-radius: 2px;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+}
+
+.retention-bar-fill {
+  width: 100%;
+  background: var(--color-accent);
+  border-radius: 2px;
+  min-height: 2px;
+  transition: height 0.3s;
+}
+
+.retention-bar-label {
+  font-size: 0.6rem;
+  color: var(--color-text-muted);
+}
