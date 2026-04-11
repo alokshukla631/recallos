@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { NavLink, Routes, Route } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -8,6 +9,8 @@ import {
   Plane,
   ScanSearch,
   Link2,
+  Sun,
+  Moon,
 } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Chat from "./pages/Chat";
@@ -30,6 +33,19 @@ const navItems = [
 ];
 
 function App() {
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    return (localStorage.getItem("recallos-theme") as "dark" | "light") || "dark";
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("recallos-theme", theme);
+  }, [theme]);
+
+  function toggleTheme() {
+    setTheme((t) => (t === "dark" ? "light" : "dark"));
+  }
+
   return (
     <div className="app">
       <aside className="sidebar">
@@ -51,6 +67,12 @@ function App() {
             </NavLink>
           ))}
         </nav>
+        <div className="sidebar-footer">
+          <button className="theme-toggle" onClick={toggleTheme}>
+            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+            <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+          </button>
+        </div>
       </aside>
 
       <main className="main-content">
