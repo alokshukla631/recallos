@@ -26,6 +26,7 @@ import Trips from "./pages/Trips";
 import Scraper from "./pages/Scraper";
 import Health from "./pages/Health";
 import Graph from "./pages/Graph";
+import CommandPalette from "./components/CommandPalette";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -43,6 +44,7 @@ const navItems = [
 
 function App() {
   const navigate = useNavigate();
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     return (localStorage.getItem("recallos-theme") as "dark" | "light") || "dark";
   });
@@ -69,7 +71,7 @@ function App() {
       case "3": e.preventDefault(); navigate("/memory"); break;
       case "4": e.preventDefault(); navigate("/timeline"); break;
       case "5": e.preventDefault(); navigate("/settings"); break;
-      case "k": e.preventDefault(); navigate("/chat"); break; // Quick chat
+      case "k": e.preventDefault(); setPaletteOpen((p) => !p); break;
       case "t": e.preventDefault(); toggleTheme(); break;
     }
   }, [navigate]);
@@ -81,9 +83,13 @@ function App() {
 
   return (
     <div className="app">
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <aside className="sidebar">
         <div className="sidebar-header">
           <h1>RecallOS</h1>
+          <button className="palette-trigger" onClick={() => setPaletteOpen(true)} title="Command palette (Ctrl+K)">
+            <span>Ctrl+K</span>
+          </button>
         </div>
         <nav className="sidebar-nav">
           {navItems.map(({ to, label, icon: Icon }) => (
