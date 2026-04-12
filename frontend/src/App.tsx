@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { NavLink, Routes, Route } from "react-router-dom";
+import { useState, useEffect, useCallback } from "react";
+import { NavLink, Routes, Route, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   MessageSquare,
@@ -36,6 +36,7 @@ const navItems = [
 ];
 
 function App() {
+  const navigate = useNavigate();
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     return (localStorage.getItem("recallos-theme") as "dark" | "light") || "dark";
   });
@@ -48,6 +49,29 @@ function App() {
   function toggleTheme() {
     setTheme((t) => (t === "dark" ? "light" : "dark"));
   }
+
+  // Global keyboard shortcuts (Ctrl/Cmd + key)
+  const handleKeyboard = useCallback((e: KeyboardEvent) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    // Don't fire when typing in inputs
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+    switch (e.key) {
+      case "1": e.preventDefault(); navigate("/"); break;
+      case "2": e.preventDefault(); navigate("/chat"); break;
+      case "3": e.preventDefault(); navigate("/memory"); break;
+      case "4": e.preventDefault(); navigate("/timeline"); break;
+      case "5": e.preventDefault(); navigate("/settings"); break;
+      case "k": e.preventDefault(); navigate("/chat"); break; // Quick chat
+      case "t": e.preventDefault(); toggleTheme(); break;
+    }
+  }, [navigate]);
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyboard);
+    return () => window.removeEventListener("keydown", handleKeyboard);
+  }, [handleKeyboard]);
 
   return (
     <div className="app">

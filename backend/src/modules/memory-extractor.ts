@@ -268,13 +268,15 @@ function splitSentences(text: string): string[] {
 // ---------------------------------------------------------------------------
 
 const DOMAIN_KEYWORDS: Record<string, RegExp> = {
-  travel: /\b(?:trip|travel|flight|hotel|book|destination|airport|airline|seat|vacation|resort|cruise|passport|visa|luggage)\b/i,
-  coding: /\b(?:code|programming|developer|software|api|database|frontend|backend|deploy|git|repo|debug|compile|framework|library|npm|pip)\b/i,
-  work: /\b(?:meeting|project|deadline|client|presentation|report|team|manager|stakeholder|sprint|roadmap|quarterly)\b/i,
-  health: /\b(?:allergy|diet|vegetarian|vegan|exercise|medication|doctor|health|fitness|calories|weight|sleep)\b/i,
-  finance: /\b(?:budget|salary|invest|savings|expense|income|tax|portfolio|stocks|crypto|retirement|loan)\b/i,
-  learning: /\b(?:study|course|exam|tutorial|homework|lecture|certification|skill|lesson|training)\b/i,
-  writing: /\b(?:writing|tone|voice|style|essay|article|blog|draft|edit|proofread|grammar|format)\b/i,
+  travel: /\b(?:trip|travel|flight|hotel|book|destination|airport|airline|seat|vacation|resort|cruise|passport|visa|luggage|itinerary|boarding|layover|check.?in)\b/i,
+  coding: /\b(?:code|programming|developer|software|api|database|frontend|backend|deploy|git|repo|debug|compile|framework|library|npm|pip|typescript|python|react|node|docker|kubernetes|CI\/CD)\b/i,
+  work: /\b(?:meeting|project|deadline|client|presentation|report|team|manager|stakeholder|sprint|roadmap|quarterly|standup|OKR|KPI|performance review)\b/i,
+  health: /\b(?:allergy|diet|vegetarian|vegan|exercise|medication|doctor|health|fitness|calories|weight|sleep|supplements|therapy|clinic)\b/i,
+  finance: /\b(?:budget|salary|invest|savings|expense|income|tax|portfolio|stocks|crypto|retirement|loan|mortgage|insurance|401k)\b/i,
+  learning: /\b(?:study|course|exam|tutorial|homework|lecture|certification|skill|lesson|training|bootcamp|curriculum|syllabus)\b/i,
+  writing: /\b(?:writing|tone|voice|style|essay|article|blog|draft|edit|proofread|grammar|format|markdown|documentation)\b/i,
+  personal: /\b(?:my name|birthday|anniversary|family|spouse|partner|child|kids|pet|hobby|hobbies|favorite|hometown)\b/i,
+  communication: /\b(?:email|slack|discord|timezone|availability|schedule|calendar|notification|call|video chat|meeting time)\b/i,
 };
 
 function detectDomainFromText(text: string): string | undefined {
