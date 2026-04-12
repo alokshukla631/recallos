@@ -53,18 +53,56 @@ export interface Passport {
   conflicts: PassportConflict[];
 }
 
+export interface ExportFilters {
+  type?: string;
+  scope?: string;
+  domain?: string;
+  tag?: string;
+  pinned?: boolean;
+}
+
 /**
- * Export all active memory, trips, and unresolved conflicts into a
- * portable JSON passport.
+ * Export active memory, trips, and unresolved conflicts into a
+ * portable JSON passport. Optional filters narrow the export.
  */
-export function exportPassport(): Passport {
-  const memories = queryAll(
-    `SELECT mi.*, t.name AS trip_name
+export function exportPassport(filters?: ExportFilters): Passport {
+  const conditions: string[] = ["mi.status = 'active'"];
+  const params: unknown[] = [];
+
+  if (filters?.type) {
+    conditions.push("mi.type = ?");
+    params.push(filters.type);
+  }
+  if (filters?.scope) {
+    conditions.push("mi.scope = ?");
+    params.push(filters.scope);
+  }
+  if (filters?.domain) {
+    conditions.push("mi.domain = ?");
+    params.push(filters.domain);
+  }
+  if (filters?.pinned !== undefined) {
+    conditions.push("mi.pinned = ?");
+    params.push(filters.pinned ? 1 : 0);
+  }
+
+  let sql = `SELECT mi.*, t.name AS trip_name
      FROM memory_items mi
      LEFT JOIN trips t ON mi.trip_id = t.id
-     WHERE mi.status = 'active'
-     ORDER BY mi.created_at ASC`
-  ) as unknown as (Record<string, unknown> & { trip_name: string | null })[];
+     WHERE ${conditions.join(" AND ")}`;
+
+  if (filters?.tag) {
+    sql = `SELECT mi.*, t.name AS trip_name
+     FROM memory_items mi
+     LEFT JOIN trips t ON mi.trip_id = t.id
+     INNER JOIN memory_tags mt ON mt.memory_item_id = mi.id AND mt.tag = ?
+     WHERE ${conditions.join(" AND ")}`;
+    params.unshift(filters.tag);
+  }
+
+  sql += " ORDER BY mi.created_at ASC";
+
+  const memories = queryAll(sql, params) as unknown as (Record<string, unknown> & { trip_name: string | null })[];
 
   const trips = queryAll(
     `SELECT name, destination, start_date, end_date, status, notes

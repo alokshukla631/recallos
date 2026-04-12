@@ -1,12 +1,19 @@
 import { Router, Request, Response } from "express";
-import { exportPassport, exportPassportMarkdown, importPassport, type Passport } from "../modules/passport.js";
+import { exportPassport, exportPassportMarkdown, importPassport, type Passport, type ExportFilters } from "../modules/passport.js";
 
 const router = Router();
 
-// GET /export - export all memory as a portable JSON passport
-router.get("/export", (_req: Request, res: Response) => {
+// GET /export - export memory as a portable JSON passport (supports filters)
+router.get("/export", (req: Request, res: Response) => {
   try {
-    const passport = exportPassport();
+    const filters: ExportFilters = {};
+    if (req.query.type) filters.type = req.query.type as string;
+    if (req.query.scope) filters.scope = req.query.scope as string;
+    if (req.query.domain) filters.domain = req.query.domain as string;
+    if (req.query.tag) filters.tag = req.query.tag as string;
+    if (req.query.pinned !== undefined) filters.pinned = req.query.pinned === "true";
+
+    const passport = exportPassport(Object.keys(filters).length > 0 ? filters : undefined);
     res.setHeader(
       "Content-Disposition",
       `attachment; filename="recallos-passport-${new Date().toISOString().slice(0, 10)}.json"`
