@@ -133,6 +133,84 @@ memory
     console.log(`Done: ${result.extracted} extracted, ${result.added} added, ${result.duplicates} duplicates`);
   });
 
+memory
+  .command("pin <id>")
+  .description("Pin a memory item (always included in context)")
+  .action(async (id) => {
+    await post(`/api/memory/${id}/pin`, {});
+    console.log("Memory item pinned. It will always be included in context.");
+  });
+
+memory
+  .command("unpin <id>")
+  .description("Unpin a memory item")
+  .action(async (id) => {
+    await post(`/api/memory/${id}/unpin`, {});
+    console.log("Memory item unpinned.");
+  });
+
+memory
+  .command("reconfirm <id>")
+  .description("Reconfirm a memory item as still valid")
+  .action(async (id) => {
+    const result = await post(`/api/memory/${id}/reconfirm`, {});
+    console.log(`Reconfirmed. Last confirmed: ${result.last_confirmed_at}`);
+  });
+
+memory
+  .command("decay")
+  .description("Preview or apply memory decay (mark stale items)")
+  .option("--apply", "Actually mark items as stale (default: preview only)")
+  .option("--max-age <days>", "Max age in days for unconfirmed items")
+  .option("--max-stale <days>", "Max days since last confirmation")
+  .option("--min-importance <score>", "Minimum importance score to keep")
+  .action(async (opts) => {
+    if (opts.apply) {
+      const body: any = {};
+      if (opts.maxAge) body.max_age_days = parseInt(opts.maxAge);
+      if (opts.maxStale) body.max_stale_days = parseInt(opts.maxStale);
+      if (opts.minImportance) body.min_importance = parseInt(opts.minImportance);
+      const result = await post("/api/memory/decay", body);
+      console.log(`Marked ${result.marked} items as stale.`);
+      for (const item of result.items || []) {
+        console.log(`  [${item.type}] ${item.key} (importance: ${item.importance}) - ${item.reason}`);
+      }
+    } else {
+      const params = new URLSearchParams();
+      if (opts.maxAge) params.set("max_age_days", opts.maxAge);
+      if (opts.maxStale) params.set("max_stale_days", opts.maxStale);
+      if (opts.minImportance) params.set("min_importance", opts.minImportance);
+      const result = await get(`/api/memory/decay?${params}`);
+      if (result.count === 0) {
+        console.log("No stale items found. Memory is healthy.");
+        return;
+      }
+      console.log(`\n  ${result.count} items would be marked stale:\n`);
+      for (const item of result.candidates) {
+        console.log(`  [${item.type}] ${item.key} (importance: ${item.importance})`);
+        console.log(`    Reason: ${item.reason}`);
+        console.log();
+      }
+      console.log("  Run with --apply to mark them stale.");
+    }
+  });
+
+memory
+  .command("importance")
+  .description("Show memory items ranked by importance score")
+  .option("-n, --limit <n>", "Number of items to show", "10")
+  .action(async (opts) => {
+    const items = await get(`/api/memory/importance?limit=${opts.limit}`);
+    if (items.length === 0) {
+      console.log("No active memory items.");
+      return;
+    }
+    console.log(`\n  Top ${items.length} by importance:\n`);
+    for (const item of items) {
+      console.log(`  ${item.importance.toString().padStart(3)} | ${item.key}: ${item.value.slice(0, 60)}`);
+    }
+  });
+
 // ── Trips ───────────────────────────────────────────────────────────────────
 
 const trips = program.command("trips").description("Manage trips");
