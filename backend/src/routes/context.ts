@@ -89,4 +89,73 @@ router.post("/benchmark", async (req: Request, res: Response) => {
   }
 });
 
+// GET /snapshots/compare - compare two snapshots
+router.get("/snapshots/compare", (req: Request, res: Response) => {
+  try {
+    const { a, b } = req.query;
+    if (!a || !b) {
+      res.status(400).json({ error: "Both query params 'a' and 'b' (snapshot IDs) are required" });
+      return;
+    }
+
+    const snapA = queryOne("SELECT * FROM context_snapshots WHERE id = ?", [a]);
+    const snapB = queryOne("SELECT * FROM context_snapshots WHERE id = ?", [b]);
+
+    if (!snapA || !snapB) {
+      res.status(404).json({ error: "One or both snapshots not found" });
+      return;
+    }
+
+    const includedA: string[] = JSON.parse(snapA.included_memory_ids as string || "[]");
+    const includedB: string[] = JSON.parse(snapB.included_memory_ids as string || "[]");
+    const omittedA: string[] = JSON.parse(snapA.omitted_memory_ids as string || "[]");
+    const omittedB: string[] = JSON.parse(snapB.omitted_memory_ids as string || "[]");
+
+    const setA = new Set(includedA);
+    const setB = new Set(includedB);
+
+    const added = includedB.filter((id) => !setA.has(id));
+    const removed = includedA.filter((id) => !setB.has(id));
+    const kept = includedA.filter((id) => setB.has(id));
+
+    // Fetch details for changed items
+    const fetchItems = (ids: string[]) => {
+      if (ids.length === 0) return [];
+      const placeholders = ids.map(() => "?").join(",");
+      return queryAll(
+        `SELECT id, key, type, value, scope, domain FROM memory_items WHERE id IN (${placeholders})`,
+        ids
+      );
+    };
+
+    res.json({
+      snapshot_a: {
+        id: snapA.id,
+        event_id: snapA.event_id,
+        provider: snapA.provider,
+        created_at: snapA.created_at,
+        included_count: includedA.length,
+        omitted_count: omittedA.length,
+      },
+      snapshot_b: {
+        id: snapB.id,
+        event_id: snapB.event_id,
+        provider: snapB.provider,
+        created_at: snapB.created_at,
+        included_count: includedB.length,
+        omitted_count: omittedB.length,
+      },
+      diff: {
+        added: fetchItems(added),
+        removed: fetchItems(removed),
+        kept_count: kept.length,
+        total_changes: added.length + removed.length,
+      },
+    });
+  } catch (err) {
+    console.error("GET /api/context/snapshots/compare error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;

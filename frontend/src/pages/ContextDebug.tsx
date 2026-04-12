@@ -16,6 +16,17 @@ interface SnapshotDetail extends Snapshot {
   rationale_json?: any;
 }
 
+interface CompareResult {
+  snapshot_a: { id: string; event_id: string; provider: string; created_at: string; included_count: number; omitted_count: number };
+  snapshot_b: { id: string; event_id: string; provider: string; created_at: string; included_count: number; omitted_count: number };
+  diff: {
+    added: { id: string; key: string; type: string; value: string; scope: string; domain?: string }[];
+    removed: { id: string; key: string; type: string; value: string; scope: string; domain?: string }[];
+    kept_count: number;
+    total_changes: number;
+  };
+}
+
 function parseJsonField(val: any): any {
   if (typeof val === "string") {
     try {
@@ -35,6 +46,13 @@ function ContextDebug() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<SnapshotDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+
+  // Compare mode state
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareA, setCompareA] = useState<string | null>(null);
+  const [compareB, setCompareB] = useState<string | null>(null);
+  const [compareResult, setCompareResult] = useState<CompareResult | null>(null);
+  const [compareLoading, setCompareLoading] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -70,6 +88,41 @@ function ContextDebug() {
     }
   };
 
+  const handleCompareSelect = (id: string) => {
+    if (!compareA) {
+      setCompareA(id);
+    } else if (!compareB && id !== compareA) {
+      setCompareB(id);
+    } else {
+      // Reset and start fresh
+      setCompareA(id);
+      setCompareB(null);
+      setCompareResult(null);
+    }
+  };
+
+  const runCompare = async () => {
+    if (!compareA || !compareB) return;
+    setCompareLoading(true);
+    setCompareResult(null);
+    try {
+      const res = await fetch(`/api/context/snapshots/compare?a=${compareA}&b=${compareB}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setCompareResult(await res.json());
+    } catch (err: any) {
+      setError(err.message || "Comparison failed");
+    } finally {
+      setCompareLoading(false);
+    }
+  };
+
+  const exitCompareMode = () => {
+    setCompareMode(false);
+    setCompareA(null);
+    setCompareB(null);
+    setCompareResult(null);
+  };
+
   const getIdCount = (val: any): number => {
     const parsed = parseJsonField(val);
     if (Array.isArray(parsed)) return parsed.length;
@@ -79,9 +132,102 @@ function ContextDebug() {
   return (
     <div className="page debug-page">
       <h2>Context Debug</h2>
-      <p>Inspect context compilation snapshots and decisions.</p>
+      <div className="debug-top-bar">
+        <p>Inspect context compilation snapshots and decisions.</p>
+        <button
+          className={`btn ${compareMode ? "btn-danger" : "btn-secondary"}`}
+          onClick={compareMode ? exitCompareMode : () => setCompareMode(true)}
+        >
+          {compareMode ? "Exit Compare" : "Compare Snapshots"}
+        </button>
+      </div>
 
       {error && <div className="debug-error">{error}</div>}
+
+      {/* Compare mode banner */}
+      {compareMode && (
+        <div className="compare-banner">
+          <span className="compare-instructions">
+            {!compareA
+              ? "Select the first snapshot (A)"
+              : !compareB
+              ? "Select the second snapshot (B)"
+              : "Ready to compare"}
+          </span>
+          {compareA && (
+            <span className="compare-selection">A: {compareA.slice(0, 8)}</span>
+          )}
+          {compareB && (
+            <span className="compare-selection">B: {compareB.slice(0, 8)}</span>
+          )}
+          {compareA && compareB && (
+            <button className="btn btn-primary" onClick={runCompare} disabled={compareLoading}>
+              {compareLoading ? "Comparing..." : "Compare"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Compare results */}
+      {compareResult && (
+        <div className="compare-results">
+          <div className="compare-header">
+            <div className="compare-side">
+              <span className="compare-label">A</span>
+              <span className="compare-meta">{compareResult.snapshot_a.provider} - {new Date(compareResult.snapshot_a.created_at).toLocaleString()}</span>
+              <span className="compare-stat">{compareResult.snapshot_a.included_count} included</span>
+            </div>
+            <div className="compare-arrow">vs</div>
+            <div className="compare-side">
+              <span className="compare-label">B</span>
+              <span className="compare-meta">{compareResult.snapshot_b.provider} - {new Date(compareResult.snapshot_b.created_at).toLocaleString()}</span>
+              <span className="compare-stat">{compareResult.snapshot_b.included_count} included</span>
+            </div>
+          </div>
+
+          <div className="compare-summary">
+            <span className="compare-stat-added">+{compareResult.diff.added.length} added</span>
+            <span className="compare-stat-removed">-{compareResult.diff.removed.length} removed</span>
+            <span className="compare-stat-kept">{compareResult.diff.kept_count} unchanged</span>
+          </div>
+
+          {compareResult.diff.added.length > 0 && (
+            <div className="compare-section">
+              <h4>Added in B (not in A)</h4>
+              <div className="compare-items">
+                {compareResult.diff.added.map((item) => (
+                  <div key={item.id} className="compare-item added">
+                    <span className="compare-item-key">{item.key}</span>
+                    <span className="compare-item-type">{item.type}</span>
+                    <span className="compare-item-value">{item.value}</span>
+                    {item.domain && <span className="compare-item-domain">{item.domain}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {compareResult.diff.removed.length > 0 && (
+            <div className="compare-section">
+              <h4>Removed from A (not in B)</h4>
+              <div className="compare-items">
+                {compareResult.diff.removed.map((item) => (
+                  <div key={item.id} className="compare-item removed">
+                    <span className="compare-item-key">{item.key}</span>
+                    <span className="compare-item-type">{item.type}</span>
+                    <span className="compare-item-value">{item.value}</span>
+                    {item.domain && <span className="compare-item-domain">{item.domain}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {compareResult.diff.total_changes === 0 && (
+            <div className="compare-no-changes">No differences found between these snapshots.</div>
+          )}
+        </div>
+      )}
 
       <div className="debug-split">
         {/* Left: snapshot list */}
@@ -97,8 +243,8 @@ function ContextDebug() {
           {snapshots.map((snap) => (
             <button
               key={snap.id}
-              className={`snapshot-item${selectedId === snap.id ? " selected" : ""}`}
-              onClick={() => handleSelect(snap.id)}
+              className={`snapshot-item${selectedId === snap.id ? " selected" : ""}${compareMode && (compareA === String(snap.id) || compareB === String(snap.id)) ? " compare-selected" : ""}`}
+              onClick={() => compareMode ? handleCompareSelect(String(snap.id)) : handleSelect(snap.id)}
             >
               <div className="snapshot-item-top">
                 <span className="snapshot-event">
