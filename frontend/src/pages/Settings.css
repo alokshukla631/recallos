@@ -306,6 +306,57 @@
   cursor: pointer;
 }
 
+/* Decay */
+.decay-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.decay-item {
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.04);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  border-radius: 6px;
+}
+
+.decay-item-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.decay-key {
+  font-family: monospace;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.decay-type {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
+}
+
+.decay-score {
+  font-size: 0.75rem;
+  font-family: monospace;
+  color: #ef4444;
+  margin-left: auto;
+}
+
+.decay-reason {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
 /* System prompt */
 .system-prompt-textarea {
   width: 100%;

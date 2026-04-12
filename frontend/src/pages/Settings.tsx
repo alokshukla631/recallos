@@ -21,6 +21,15 @@ interface Webhook {
   created_at: string;
 }
 
+interface DecayCandidate {
+  id: string;
+  key: string;
+  value: string;
+  type: string;
+  reason: string;
+  importance: number;
+}
+
 function Settings() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
@@ -37,6 +46,11 @@ function Settings() {
   const [systemPrompt, setSystemPrompt] = useState("");
   const [isCustomPrompt, setIsCustomPrompt] = useState(false);
   const [savingPrompt, setSavingPrompt] = useState(false);
+
+  // Decay state
+  const [decayCandidates, setDecayCandidates] = useState<DecayCandidate[] | null>(null);
+  const [decayLoading, setDecayLoading] = useState(false);
+  const [decayApplying, setDecayApplying] = useState(false);
 
   useEffect(() => {
     fetchProviders();
@@ -275,6 +289,41 @@ function Settings() {
       fetchSystemPrompt();
     } catch {
       showStatus("prompt", "Reset failed", "error");
+    }
+  }
+
+  async function previewDecay() {
+    setDecayLoading(true);
+    try {
+      const res = await fetch("/api/memory/decay");
+      if (!res.ok) throw new Error("Failed to fetch decay preview");
+      const data = await res.json();
+      setDecayCandidates(data.candidates);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed";
+      showStatus("decay", msg, "error");
+    } finally {
+      setDecayLoading(false);
+    }
+  }
+
+  async function applyDecayNow() {
+    setDecayApplying(true);
+    try {
+      const res = await fetch("/api/memory/decay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (!res.ok) throw new Error("Failed to apply decay");
+      const data = await res.json();
+      showStatus("decay", `Marked ${data.marked} items as stale`, "success");
+      setDecayCandidates(null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed";
+      showStatus("decay", msg, "error");
+    } finally {
+      setDecayApplying(false);
     }
   }
 
@@ -572,6 +621,46 @@ function Settings() {
             {statusMessages["webhooks"] && (
               <p className={`status-msg ${statusMessages["webhooks"].type}`}>
                 {statusMessages["webhooks"].text}
+              </p>
+            )}
+          </div>
+
+          <div className="settings-section data-section">
+            <h3>Memory Decay</h3>
+            <p>
+              Find and mark stale memory items that have low importance, were never confirmed,
+              or have not been used recently.
+            </p>
+            <div className="passport-actions">
+              <button className="btn btn-secondary" onClick={previewDecay} disabled={decayLoading}>
+                {decayLoading ? "Scanning..." : "Preview Stale Items"}
+              </button>
+              {decayCandidates && decayCandidates.length > 0 && (
+                <button className="btn btn-danger" onClick={applyDecayNow} disabled={decayApplying}>
+                  {decayApplying ? "Applying..." : `Mark ${decayCandidates.length} as Stale`}
+                </button>
+              )}
+            </div>
+            {decayCandidates !== null && decayCandidates.length === 0 && (
+              <p className="status-msg success">No stale items found - memory is healthy.</p>
+            )}
+            {decayCandidates && decayCandidates.length > 0 && (
+              <div className="decay-list">
+                {decayCandidates.map((c) => (
+                  <div key={c.id} className="decay-item">
+                    <div className="decay-item-top">
+                      <span className="decay-key">{c.key}</span>
+                      <span className="decay-type">{c.type}</span>
+                      <span className="decay-score">{c.importance}</span>
+                    </div>
+                    <div className="decay-reason">{c.reason}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {statusMessages["decay"] && (
+              <p className={`status-msg ${statusMessages["decay"].type}`}>
+                {statusMessages["decay"].text}
               </p>
             )}
           </div>

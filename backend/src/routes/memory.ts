@@ -8,6 +8,7 @@ import { expireSessionMemory, getSessionStats } from "../modules/session-cleanup
 import { extractMemory } from "../modules/memory-extractor.js";
 import { reconcileMemory } from "../modules/memory-reconciler.js";
 import { computeImportance, rankByImportance } from "../modules/importance.js";
+import { findDecayCandidates, applyDecay } from "../modules/decay.js";
 
 const router = Router();
 
@@ -515,6 +516,36 @@ router.get("/:id/importance", (req: Request, res: Response) => {
     res.json(factors);
   } catch (err) {
     console.error("GET /api/memory/:id/importance error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /decay - preview which items would be marked stale by decay rules
+router.get("/decay", (req: Request, res: Response) => {
+  try {
+    const maxAgeDays = parseInt(req.query.max_age_days as string) || undefined;
+    const maxStaleDays = parseInt(req.query.max_stale_days as string) || undefined;
+    const minImportance = parseInt(req.query.min_importance as string) || undefined;
+    const candidates = findDecayCandidates({ maxAgeDays, maxStaleDays, minImportance });
+    res.json({ count: candidates.length, candidates });
+  } catch (err) {
+    console.error("GET /api/memory/decay error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /decay - apply decay rules and mark stale items
+router.post("/decay", (req: Request, res: Response) => {
+  try {
+    const { max_age_days, max_stale_days, min_importance } = req.body || {};
+    const result = applyDecay({
+      maxAgeDays: max_age_days,
+      maxStaleDays: max_stale_days,
+      minImportance: min_importance,
+    });
+    res.json({ marked: result.marked, items: result.candidates });
+  } catch (err) {
+    console.error("POST /api/memory/decay error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
