@@ -134,3 +134,69 @@ export function bm25Rank(query: string, docs: Document[]): ScoredDocument[] {
     .map(([id, score]) => ({ id, score }))
     .sort((a, b) => b.score - a.score);
 }
+
+/**
+ * Compute Levenshtein edit distance between two strings.
+ * Used for fuzzy matching when BM25 returns no results.
+ */
+function editDistance(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+
+  // Use single-row optimization
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i++) {
+    const curr = [i];
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+    }
+    prev = curr;
+  }
+  return prev[n];
+}
+
+/**
+ * Fuzzy search: finds documents that contain words similar to query words.
+ * Used as a fallback when BM25 yields zero results.
+ * Returns documents scored by best fuzzy match quality.
+ */
+export function fuzzySearch(query: string, docs: Document[], maxDistance: number = 2): ScoredDocument[] {
+  const queryTerms = tokenize(query);
+  if (queryTerms.length === 0 || docs.length === 0) return [];
+
+  const scores = new Map<string, number>();
+
+  for (const doc of docs) {
+    const docTerms = tokenize(doc.text);
+    let totalScore = 0;
+
+    for (const qt of queryTerms) {
+      let bestMatch = Infinity;
+      for (const dt of docTerms) {
+        // Quick skip if lengths are too different
+        if (Math.abs(qt.length - dt.length) > maxDistance) continue;
+        const dist = editDistance(qt, dt);
+        if (dist < bestMatch) bestMatch = dist;
+        if (dist === 0) break;
+      }
+
+      if (bestMatch <= maxDistance) {
+        // Score: closer match = higher score
+        totalScore += (maxDistance + 1 - bestMatch) / (maxDistance + 1);
+      }
+    }
+
+    if (totalScore > 0) {
+      // Normalize by query term count
+      scores.set(doc.id, totalScore / queryTerms.length);
+    }
+  }
+
+  return [...scores.entries()]
+    .map(([id, score]) => ({ id, score }))
+    .filter((d) => d.score > 0)
+    .sort((a, b) => b.score - a.score);
+}

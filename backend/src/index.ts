@@ -14,6 +14,7 @@ import scraperRouter from "./routes/scraper.js";
 import { expireSessionMemory } from "./modules/session-cleanup.js";
 import { applyConfidenceDecay } from "./modules/confidence-decay.js";
 import { scrapeAll } from "./modules/log-scraper.js";
+import { rateLimits } from "./middleware/rate-limit.js";
 import { queryOne } from "./db/index.js";
 import fs from "fs";
 
@@ -23,6 +24,16 @@ const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), "recallos.db");
 
 app.use(cors());
 app.use(express.json());
+
+// Rate limiting
+app.use("/api/chat", rateLimits.chat);
+app.use("/api/memory/bulk", rateLimits.bulk);
+app.use("/api/memory/batch", rateLimits.bulk);
+app.use("/api/memory/merge", rateLimits.write);
+app.use("/api/memory/decay", rateLimits.write);
+app.use("/api/memory", rateLimits.standard);
+app.use("/api/context", rateLimits.standard);
+app.use("/api/scraper", rateLimits.bulk);
 
 app.use("/api/chat", chatRouter);
 app.use("/api/memory", memoryRouter);

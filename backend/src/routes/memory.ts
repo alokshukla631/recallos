@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { queryAll, queryOne, runSql } from "../db/index.js";
 import { logAudit, getAuditForItem, getRecentAudit } from "../modules/audit.js";
-import { bm25Rank } from "../modules/ranking.js";
+import { bm25Rank, fuzzySearch } from "../modules/ranking.js";
 import { addTag, removeTag, getTagsForItem, getAllTags } from "../modules/tags.js";
 import { createLink, removeLink, getLinksForItem } from "../modules/links.js";
 import { expireSessionMemory, getSessionStats } from "../modules/session-cleanup.js";
@@ -327,14 +327,30 @@ router.get("/search", (req: Request, res: Response) => {
     const scoreMap = new Map(ranked.map((r) => [r.id, r.score]));
 
     // Filter out zero-score results and sort by score
-    const results = allItems
+    let results = allItems
       .map((item) => ({
         ...item,
         search_score: scoreMap.get(item.id as string) ?? 0,
+        search_method: "bm25" as string,
       }))
       .filter((item) => item.search_score > 0)
       .sort((a, b) => b.search_score - a.search_score)
       .slice(0, 50);
+
+    // Fuzzy fallback: if BM25 found nothing, try edit-distance matching
+    if (results.length === 0) {
+      const fuzzyResults = fuzzySearch(q, docs, 2);
+      const fuzzyMap = new Map(fuzzyResults.map((r) => [r.id, r.score]));
+      results = allItems
+        .map((item) => ({
+          ...item,
+          search_score: fuzzyMap.get(item.id as string) ?? 0,
+          search_method: "fuzzy" as string,
+        }))
+        .filter((item) => item.search_score > 0)
+        .sort((a, b) => b.search_score - a.search_score)
+        .slice(0, 30);
+    }
 
     res.json(results);
   } catch (err) {
