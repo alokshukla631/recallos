@@ -246,6 +246,49 @@ class RecallOS:
         r.raise_for_status()
         return r.json()
 
+    # -- Stats ----------------------------------------------------------------
+
+    def memory_stats(self) -> dict:
+        """Get full memory statistics."""
+        r = self._client.get("/api/memory/stats")
+        r.raise_for_status()
+        return r.json()
+
+    def retention_stats(self) -> dict:
+        """Get memory retention analytics (weekly survival rates)."""
+        r = self._client.get("/api/memory/stats/retention")
+        r.raise_for_status()
+        return r.json()
+
+    # -- Webhooks -------------------------------------------------------------
+
+    def list_webhooks(self) -> list[dict]:
+        """List all configured webhooks."""
+        r = self._client.get("/api/settings/webhooks")
+        r.raise_for_status()
+        return r.json()
+
+    def add_webhook(self, url: str, events: Optional[list[str]] = None) -> dict:
+        """Register a new webhook."""
+        body: dict[str, Any] = {"url": url, "events": events or ["*"]}
+        r = self._client.post("/api/settings/webhooks", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    def delete_webhook(self, webhook_id: str) -> dict:
+        """Delete a webhook."""
+        r = self._client.delete(f"/api/settings/webhooks/{webhook_id}")
+        r.raise_for_status()
+        return r.json()
+
+    # -- Passport (Markdown) --------------------------------------------------
+
+    def export_passport_markdown(self) -> str:
+        """Export memory as human-readable Markdown."""
+        r = self._client.get("/api/passport/export/markdown")
+        r.raise_for_status()
+        return r.text
+
     # -- MCP config -----------------------------------------------------------
 
     def mcp_config(self) -> dict:
@@ -348,5 +391,44 @@ class AsyncRecallOS:
 
     async def audit_log(self, limit: int = 20) -> list[dict]:
         r = await self._client.get("/api/memory/audit/recent", params={"limit": str(limit)})
+        r.raise_for_status()
+        return r.json()
+
+    async def memory_stats(self) -> dict:
+        r = await self._client.get("/api/memory/stats")
+        r.raise_for_status()
+        return r.json()
+
+    async def retention_stats(self) -> dict:
+        r = await self._client.get("/api/memory/stats/retention")
+        r.raise_for_status()
+        return r.json()
+
+    async def list_webhooks(self) -> list[dict]:
+        r = await self._client.get("/api/settings/webhooks")
+        r.raise_for_status()
+        return r.json()
+
+    async def add_webhook(self, url: str, events: Optional[list[str]] = None) -> dict:
+        body: dict[str, Any] = {"url": url, "events": events or ["*"]}
+        r = await self._client.post("/api/settings/webhooks", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    async def delete_webhook(self, webhook_id: str) -> dict:
+        r = await self._client.delete(f"/api/settings/webhooks/{webhook_id}")
+        r.raise_for_status()
+        return r.json()
+
+    async def export_passport_markdown(self) -> str:
+        r = await self._client.get("/api/passport/export/markdown")
+        r.raise_for_status()
+        return r.text
+
+    async def bulk_import(self, statements: list[str], trip_id: Optional[str] = None) -> dict:
+        body: dict[str, Any] = {"statements": statements}
+        if trip_id:
+            body["trip_id"] = trip_id
+        r = await self._client.post("/api/memory/bulk", json=body)
         r.raise_for_status()
         return r.json()
