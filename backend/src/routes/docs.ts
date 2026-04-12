@@ -214,6 +214,112 @@ const API_SPEC = {
         responses: { "200": { description: "Import results" } },
       },
     },
+    "/api/memory/stats": {
+      get: {
+        summary: "Get memory statistics (totals, by type/scope/domain, confidence)",
+        tags: ["Memory"],
+        responses: { "200": { description: "Stats object" } },
+      },
+    },
+    "/api/memory/stats/retention": {
+      get: {
+        summary: "Get memory retention analytics (weekly survival rates)",
+        tags: ["Memory"],
+        responses: { "200": { description: "Retention data with overall and weekly breakdown" } },
+      },
+    },
+    "/api/memory/session/stats": {
+      get: {
+        summary: "Get session-scoped memory stats",
+        tags: ["Memory"],
+        responses: { "200": { description: "{ active, stale, oldest_active }" } },
+      },
+    },
+    "/api/memory/session/cleanup": {
+      post: {
+        summary: "Expire session memory items older than TTL",
+        tags: ["Memory"],
+        requestBody: {
+          content: { "application/json": { schema: { type: "object", properties: { ttl_hours: { type: "integer", default: 24 } } } } },
+        },
+        responses: { "200": { description: "{ expired_count, ttl_hours }" } },
+      },
+    },
+    "/api/memory/bulk": {
+      post: {
+        summary: "Bulk import memory from natural-language statements",
+        tags: ["Memory"],
+        requestBody: {
+          content: { "application/json": { schema: { type: "object", required: ["statements"], properties: { statements: { type: "array", items: { type: "string" } }, trip_id: { type: "string" } } } } },
+        },
+        responses: { "200": { description: "Import results" } },
+      },
+    },
+    "/api/passport/export/markdown": {
+      get: {
+        summary: "Export memory as human-readable Markdown",
+        tags: ["Passport"],
+        responses: { "200": { description: "Markdown text" } },
+      },
+    },
+    "/api/scraper/sources": {
+      get: {
+        summary: "List available log sources and their status",
+        tags: ["Scraper"],
+        responses: { "200": { description: "Array of source objects" } },
+      },
+    },
+    "/api/scraper/run": {
+      post: {
+        summary: "Scrape all available sources for new conversations",
+        tags: ["Scraper"],
+        responses: { "200": { description: "Scrape results per source" } },
+      },
+    },
+    "/api/settings/webhooks": {
+      get: {
+        summary: "List all configured webhooks",
+        tags: ["Settings"],
+        responses: { "200": { description: "Array of webhook configs" } },
+      },
+      post: {
+        summary: "Register a new webhook",
+        tags: ["Settings"],
+        requestBody: {
+          content: { "application/json": { schema: { type: "object", required: ["url"], properties: { url: { type: "string" }, events: { type: "array", items: { type: "string" } } } } } },
+        },
+        responses: { "201": { description: "Created webhook" } },
+      },
+    },
+    "/api/settings/webhooks/{id}": {
+      put: {
+        summary: "Toggle webhook active/inactive",
+        tags: ["Settings"],
+        requestBody: {
+          content: { "application/json": { schema: { type: "object", properties: { active: { type: "boolean" } } } } },
+        },
+        responses: { "200": { description: "Confirmation" } },
+      },
+      delete: {
+        summary: "Delete a webhook",
+        tags: ["Settings"],
+        responses: { "200": { description: "Confirmation" } },
+      },
+    },
+    "/api/settings/mcp/config": {
+      get: {
+        summary: "Get MCP server config entry for Claude Desktop",
+        tags: ["Settings"],
+        responses: { "200": { description: "Config object with install instructions" } },
+      },
+    },
+    "/api/settings/mcp/install": {
+      post: {
+        summary: "Auto-install MCP config into Claude Desktop",
+        tags: ["Settings"],
+        responses: { "200": { description: "Install result" } },
+      },
+    },
     "/api/context/snapshots": {
       get: {
         summary: "List context compilation snapshots",

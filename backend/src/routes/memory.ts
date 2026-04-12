@@ -495,4 +495,53 @@ router.delete("/:id", (req: Request, res: Response) => {
   }
 });
 
+// POST /merge - merge two memory items into one
+router.post("/merge", (req: Request, res: Response) => {
+  try {
+    const { source_id, target_id, merged_value } = req.body;
+    if (!source_id || !target_id) {
+      res.status(400).json({ error: "source_id and target_id are required" });
+      return;
+    }
+
+    const source = queryOne("SELECT * FROM memory_items WHERE id = ?", [source_id]) as any;
+    const target = queryOne("SELECT * FROM memory_items WHERE id = ?", [target_id]) as any;
+
+    if (!source || !target) {
+      res.status(404).json({ error: "One or both memory items not found" });
+      return;
+    }
+
+    // Update target with merged value (or keep target value if not provided)
+    const finalValue = merged_value || `${target.value}; ${source.value}`;
+    const finalConfidence = Math.max(source.confidence, target.confidence);
+
+    runSql(
+      "UPDATE memory_items SET value = ?, confidence = ?, last_confirmed_at = datetime('now') WHERE id = ?",
+      [finalValue, finalConfidence, target_id]
+    );
+
+    // Mark source as superseded by target
+    runSql(
+      "UPDATE memory_items SET status = 'superseded', superseded_by = ? WHERE id = ?",
+      [target_id, source_id]
+    );
+
+    // Copy tags from source to target
+    const sourceTags = getTagsForItem(source_id) as any[];
+    for (const t of sourceTags) {
+      try { addTag(target_id, t.tag); } catch { /* ignore duplicates */ }
+    }
+
+    logAudit(target_id, "reconfirmed", `Merged with ${source_id}`);
+    logAudit(source_id, "superseded", `Merged into ${target_id}`);
+
+    const updated = queryOne("SELECT * FROM memory_items WHERE id = ?", [target_id]);
+    res.json(updated);
+  } catch (err) {
+    console.error("POST /api/memory/merge error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;
