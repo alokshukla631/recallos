@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { queryAll, queryOne, runSql } from "../db/index.js";
 import { generateMcpConfig, generateClaudeDesktopConfig, getClaudeDesktopConfigPath, installClaudeDesktopConfig } from "../modules/mcp-config.js";
-import { registerWebhook, listWebhooks, deleteWebhook, toggleWebhook } from "../modules/webhooks.js";
+import { registerWebhook, listWebhooks, deleteWebhook, toggleWebhook, getDeliveryLog } from "../modules/webhooks.js";
 
 const router = Router();
 
@@ -175,6 +175,17 @@ router.put("/webhooks/:id", (req: Request, res: Response) => {
     res.json({ message: "Webhook updated" });
   } catch (err) {
     console.error("PUT /api/settings/webhooks/:id error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /webhooks/log - recent webhook delivery log
+router.get("/webhooks/log", (req: Request, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 50;
+    res.json(getDeliveryLog(limit));
+  } catch (err) {
+    console.error("GET /api/settings/webhooks/log error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

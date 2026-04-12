@@ -23,6 +23,20 @@ export interface WebhookPayload {
   data: Record<string, unknown>;
 }
 
+/** Recent delivery log (in-memory, capped at 100 entries). */
+const deliveryLog: Array<{
+  id: string;
+  webhook_id: string;
+  event: string;
+  url: string;
+  status: "success" | "failed";
+  status_code: number | null;
+  error: string | null;
+  timestamp: string;
+}> = [];
+
+const MAX_LOG_SIZE = 100;
+
 /**
  * Send a webhook notification for a memory event.
  * Non-blocking: fires and forgets. Errors are logged but don't break the pipeline.
@@ -55,16 +69,46 @@ export async function fireWebhook(event: string, data: Record<string, unknown>):
       continue;
     }
 
-    // Fire and forget
+    // Fire and log
+    const logEntry = {
+      id: uuidv4(),
+      webhook_id: hook.id,
+      event,
+      url: hook.url,
+      status: "success" as "success" | "failed",
+      status_code: null as number | null,
+      error: null as string | null,
+      timestamp: payload.timestamp,
+    };
+
     fetch(hook.url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(5000),
-    }).catch(() => {
-      // Silently ignore webhook delivery failures
+    }).then((res) => {
+      logEntry.status_code = res.status;
+      if (!res.ok) {
+        logEntry.status = "failed";
+        logEntry.error = `HTTP ${res.status}`;
+      }
+    }).catch((err) => {
+      logEntry.status = "failed";
+      logEntry.error = err?.message || "Network error";
+    }).finally(() => {
+      deliveryLog.unshift(logEntry);
+      if (deliveryLog.length > MAX_LOG_SIZE) {
+        deliveryLog.length = MAX_LOG_SIZE;
+      }
     });
   }
+}
+
+/**
+ * Get recent webhook delivery log entries.
+ */
+export function getDeliveryLog(limit: number = 50) {
+  return deliveryLog.slice(0, limit);
 }
 
 /**

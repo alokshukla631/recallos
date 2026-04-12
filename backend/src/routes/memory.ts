@@ -11,6 +11,7 @@ import { computeImportance, rankByImportance } from "../modules/importance.js";
 import { findDecayCandidates, applyDecay } from "../modules/decay.js";
 import { findDuplicates } from "../modules/duplicates.js";
 import { generateSuggestions } from "../modules/suggestions.js";
+import { fireWebhook } from "../modules/webhooks.js";
 
 const router = Router();
 
@@ -560,6 +561,7 @@ router.post("/:id/reconfirm", (req: Request, res: Response) => {
     const now = new Date().toISOString();
     runSql("UPDATE memory_items SET last_confirmed_at = ?, status = 'active' WHERE id = ?", [now, id]);
     logAudit(id, "reconfirmed", "Manual reconfirmation by user");
+    fireWebhook("reconfirmed", { id, last_confirmed_at: now });
     res.json({ message: "Memory item reconfirmed", last_confirmed_at: now });
   } catch (err) {
     console.error("POST /api/memory/:id/reconfirm error:", err);
@@ -577,6 +579,7 @@ router.post("/:id/pin", (req: Request, res: Response) => {
       return;
     }
     runSql("UPDATE memory_items SET pinned = 1 WHERE id = ?", [id]);
+    fireWebhook("pinned", { id });
     res.json({ message: "Memory item pinned", pinned: true });
   } catch (err) {
     console.error("POST /api/memory/:id/pin error:", err);
@@ -594,6 +597,7 @@ router.post("/:id/unpin", (req: Request, res: Response) => {
       return;
     }
     runSql("UPDATE memory_items SET pinned = 0 WHERE id = ?", [id]);
+    fireWebhook("unpinned", { id });
     res.json({ message: "Memory item unpinned", pinned: false });
   } catch (err) {
     console.error("POST /api/memory/:id/unpin error:", err);
@@ -716,6 +720,7 @@ router.delete("/:id", (req: Request, res: Response) => {
     }
     runSql("UPDATE memory_items SET status = 'stale' WHERE id = ?", [req.params.id]);
     logAudit(req.params.id as string, "deleted", "Manually deleted by user");
+    fireWebhook("deleted", { id: req.params.id });
     res.json({ message: "Memory item marked as stale" });
   } catch (err) {
     console.error("DELETE /api/memory/:id error:", err);
@@ -769,6 +774,9 @@ router.post("/decay", (req: Request, res: Response) => {
       maxStaleDays: max_stale_days,
       minImportance: min_importance,
     });
+    if (result.marked > 0) {
+      fireWebhook("decay_applied", { marked: result.marked, ids: result.candidates.map((c) => c.id) });
+    }
     res.json({ marked: result.marked, items: result.candidates });
   } catch (err) {
     console.error("POST /api/memory/decay error:", err);
@@ -914,6 +922,7 @@ router.post("/merge", (req: Request, res: Response) => {
 
     logAudit(target_id, "reconfirmed", `Merged with ${source_id}`);
     logAudit(source_id, "superseded", `Merged into ${target_id}`);
+    fireWebhook("merged", { source_id, target_id, kept_id: target_id });
 
     const updated = queryOne("SELECT * FROM memory_items WHERE id = ?", [target_id]);
     res.json(updated);
