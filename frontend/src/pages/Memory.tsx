@@ -76,6 +76,9 @@ function Memory() {
   const [tagInput, setTagInput] = useState<Record<string, string>>({});
   const [expandedTags, setExpandedTags] = useState<Set<number>>(new Set());
 
+  // Importance
+  const [topMemories, setTopMemories] = useState<Array<{ id: string; key: string; value: string; importance: number }>>([]);
+
   // Session stats
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
   const [cleaningUp, setCleaningUp] = useState(false);
@@ -111,6 +114,7 @@ function Memory() {
   useEffect(() => {
     fetchSessionStats();
     fetchAllTags();
+    fetchTopMemories();
   }, []);
 
   async function fetchSessionStats() {
@@ -118,6 +122,16 @@ function Memory() {
       const res = await fetch("/api/memory/session/stats");
       if (!res.ok) return;
       setSessionStats(await res.json());
+    } catch {
+      // ignore
+    }
+  }
+
+  async function fetchTopMemories() {
+    try {
+      const res = await fetch("/api/memory/importance?limit=5");
+      if (!res.ok) return;
+      setTopMemories(await res.json());
     } catch {
       // ignore
     }
@@ -312,6 +326,18 @@ function Memory() {
                 <span className="stat-label">{domain}</span>
               </div>
             ))}
+        </div>
+      )}
+
+      {/* Top memories by importance */}
+      {topMemories.length > 0 && (
+        <div className="top-memories">
+          <span className="top-memories-label">Most important:</span>
+          {topMemories.map((m) => (
+            <span key={m.id} className="top-memory-chip" title={m.value}>
+              {m.key} <span className="importance-score">{m.importance}</span>
+            </span>
+          ))}
         </div>
       )}
 

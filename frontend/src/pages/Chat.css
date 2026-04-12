@@ -126,29 +126,40 @@
   color: var(--color-text-muted);
 }
 
-.conversation-delete {
+.conversation-actions {
   position: absolute;
   top: 6px;
   right: 6px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.conversation-item:hover .conversation-actions {
+  opacity: 1;
+}
+
+.conversation-delete,
+.conversation-export {
   background: none;
   border: none;
   color: var(--color-text-muted);
-  font-size: 1.1rem;
-  line-height: 1;
+  font-size: 0.7rem;
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 2px 5px;
   border-radius: 4px;
-  opacity: 0;
-  transition: opacity 0.15s, color 0.15s, background 0.15s;
-}
-
-.conversation-item:hover .conversation-delete {
-  opacity: 1;
+  transition: color 0.15s, background 0.15s;
 }
 
 .conversation-delete:hover {
   color: #ff6b6b;
   background: rgba(255, 107, 107, 0.1);
+}
+
+.conversation-export:hover {
+  color: var(--color-accent);
+  background: rgba(109, 109, 255, 0.1);
 }
 
 .chat-page {

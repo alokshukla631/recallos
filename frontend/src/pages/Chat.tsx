@@ -206,6 +206,22 @@ function Chat() {
     }
   }
 
+  async function exportConversation(id: string) {
+    try {
+      const res = await fetch(`/api/chat/conversations/${id}/export?format=text`);
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `conversation-${id.slice(0, 8)}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // ignore
+    }
+  }
+
   async function sendMessage() {
     const text = input.trim();
     if (!text || loading || !selectedProvider) return;
@@ -485,13 +501,22 @@ function Chat() {
                 <span>{formatRelative(c.updated_at)}</span>
                 <span>{c.message_count} msgs</span>
               </div>
-              <button
-                className="conversation-delete"
-                onClick={(e) => deleteConversation(c.id, e)}
-                title="Delete conversation"
-              >
-                ×
-              </button>
+              <div className="conversation-actions">
+                <button
+                  className="conversation-export"
+                  onClick={(e) => { e.stopPropagation(); exportConversation(c.id); }}
+                  title="Export conversation"
+                >
+                  dl
+                </button>
+                <button
+                  className="conversation-delete"
+                  onClick={(e) => deleteConversation(c.id, e)}
+                  title="Delete conversation"
+                >
+                  x
+                </button>
+              </div>
             </div>
           ))}
         </div>

@@ -477,3 +477,47 @@
 .btn-tag {
   color: var(--color-accent) !important;
 }
+
+/* Top memories */
+.top-memories {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  background: var(--color-surface);
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+
+.top-memories-label {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.top-memory-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.72rem;
+  color: var(--color-text);
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.importance-score {
+  background: var(--color-accent);
+  color: #fff;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 600;
+}
