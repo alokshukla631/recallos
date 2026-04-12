@@ -7,10 +7,16 @@ interface Provider {
   is_default: boolean;
 }
 
+interface TokenEstimate {
+  estimated_tokens: number;
+  budget_pct: number;
+}
+
 interface ContextInfo {
   context_text: string;
   included_count: number;
   omitted_count: number;
+  token_estimate?: TokenEstimate;
 }
 
 interface StageTiming {
@@ -649,6 +655,11 @@ function Chat() {
                         {msg.context.included_count} memories included
                         {msg.context.omitted_count > 0 &&
                           `, ${msg.context.omitted_count} omitted`}
+                        {msg.context.token_estimate && (
+                          <span className="token-estimate">
+                            ~{msg.context.token_estimate.estimated_tokens} tokens ({msg.context.token_estimate.budget_pct}% budget)
+                          </span>
+                        )}
                       </div>
                       {msg.context.context_text || "(no context)"}
                     </div>

@@ -9,6 +9,7 @@ import { extractMemory } from "../modules/memory-extractor.js";
 import { reconcileMemory } from "../modules/memory-reconciler.js";
 import { computeImportance, rankByImportance } from "../modules/importance.js";
 import { findDecayCandidates, applyDecay } from "../modules/decay.js";
+import { findDuplicates } from "../modules/duplicates.js";
 
 const router = Router();
 
@@ -534,6 +535,52 @@ router.post("/bulk", async (req: Request, res: Response) => {
   }
 });
 
+// POST /batch - batch operations on multiple items (pin, unpin, delete, reconfirm)
+router.post("/batch", (req: Request, res: Response) => {
+  try {
+    const { ids, action } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ error: "ids must be a non-empty array" });
+      return;
+    }
+    if (!["pin", "unpin", "delete", "reconfirm"].includes(action)) {
+      res.status(400).json({ error: "action must be one of: pin, unpin, delete, reconfirm" });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    let affected = 0;
+
+    for (const id of ids) {
+      const item = queryOne("SELECT id FROM memory_items WHERE id = ?", [id]) as any;
+      if (!item) continue;
+
+      switch (action) {
+        case "pin":
+          runSql("UPDATE memory_items SET pinned = 1 WHERE id = ?", [id]);
+          break;
+        case "unpin":
+          runSql("UPDATE memory_items SET pinned = 0 WHERE id = ?", [id]);
+          break;
+        case "delete":
+          runSql("UPDATE memory_items SET status = 'stale' WHERE id = ?", [id]);
+          logAudit(id, "deleted", "Batch delete");
+          break;
+        case "reconfirm":
+          runSql("UPDATE memory_items SET last_confirmed_at = ?, status = 'active' WHERE id = ?", [now, id]);
+          logAudit(id, "reconfirmed", "Batch reconfirmation");
+          break;
+      }
+      affected++;
+    }
+
+    res.json({ action, affected, total_requested: ids.length });
+  } catch (err) {
+    console.error("POST /api/memory/batch error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // DELETE /:id - soft delete
 router.delete("/:id", (req: Request, res: Response) => {
   try {
@@ -600,6 +647,18 @@ router.post("/decay", (req: Request, res: Response) => {
     res.json({ marked: result.marked, items: result.candidates });
   } catch (err) {
     console.error("POST /api/memory/decay error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /duplicates - find groups of likely duplicate memory items
+router.get("/duplicates", (req: Request, res: Response) => {
+  try {
+    const threshold = parseFloat(req.query.threshold as string) || 0.6;
+    const groups = findDuplicates(threshold);
+    res.json({ count: groups.length, groups });
+  } catch (err) {
+    console.error("GET /api/memory/duplicates error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

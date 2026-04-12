@@ -131,6 +131,7 @@ router.post("/", async (req: Request, res: Response) => {
         included_count: compiled.includedIds.length,
         omitted_count: compiled.omittedIds.length,
         context_text: compiled.contextText,
+        token_estimate: compiled.tokenEstimate,
       },
       usage: providerResponse.usage,
       timing,
@@ -208,6 +209,7 @@ router.post("/stream", async (req: Request, res: Response) => {
       included_count: compiled.includedIds.length,
       omitted_count: compiled.omittedIds.length,
       context_text: compiled.contextText,
+      token_estimate: compiled.tokenEstimate,
     });
 
     timer.begin("history_fetch");

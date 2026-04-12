@@ -27,6 +27,13 @@ export interface TraceEntry {
   reason: string;
 }
 
+export interface TokenEstimate {
+  char_count: number;
+  word_count: number;
+  estimated_tokens: number;
+  budget_pct: number; // percentage of a typical 4096-token context window
+}
+
 export interface CompiledContext {
   contextPacket: ContextPacket;
   contextText: string;
@@ -34,6 +41,7 @@ export interface CompiledContext {
   omittedIds: string[];
   rationale: Record<string, string>;
   trace: TraceEntry[];
+  tokenEstimate: TokenEstimate;
 }
 
 /**
@@ -335,6 +343,18 @@ export async function compileContext(
     );
   }
 
+  // Token estimation: rough heuristic (1 token ~= 4 chars for English)
+  const CONTEXT_BUDGET = 4096; // typical system prompt budget in tokens
+  const charCount = contextText.length;
+  const wordCount = contextText.split(/\s+/).filter(Boolean).length;
+  const estimatedTokens = Math.ceil(charCount / 4);
+  const tokenEstimate: TokenEstimate = {
+    char_count: charCount,
+    word_count: wordCount,
+    estimated_tokens: estimatedTokens,
+    budget_pct: Math.round((estimatedTokens / CONTEXT_BUDGET) * 100),
+  };
+
   return {
     contextPacket,
     contextText,
@@ -342,5 +362,6 @@ export async function compileContext(
     omittedIds: omitted.map((i) => i.id),
     rationale,
     trace,
+    tokenEstimate,
   };
 }
