@@ -2,6 +2,14 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import "./Dashboard.css";
 
+interface HealthInfo {
+  status: string;
+  version?: string;
+  uptime_seconds?: number;
+  database?: { size_human: string };
+  counts?: { active_memories: number; pinned_memories: number; providers: number };
+}
+
 interface Stats {
   totals: { active: number; stale: number; superseded: number };
   by_type: Array<{ type: string; count: number }>;
@@ -55,10 +63,11 @@ function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [retention, setRetention] = useState<RetentionData | null>(null);
+  const [health, setHealth] = useState<HealthInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([fetchStats(), fetchAudit(), fetchRetention()]).finally(() => setLoading(false));
+    Promise.all([fetchStats(), fetchAudit(), fetchRetention(), fetchHealth()]).finally(() => setLoading(false));
   }, []);
 
   async function fetchStats() {
@@ -91,6 +100,25 @@ function Dashboard() {
     }
   }
 
+  async function fetchHealth() {
+    try {
+      const res = await fetch("/health");
+      if (!res.ok) return;
+      setHealth(await res.json());
+    } catch {
+      // ignore
+    }
+  }
+
+  function formatUptime(seconds: number): string {
+    if (seconds < 60) return `${seconds}s`;
+    const mins = Math.floor(seconds / 60);
+    if (mins < 60) return `${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    const remainMins = mins % 60;
+    return `${hrs}h ${remainMins}m`;
+  }
+
   if (loading) {
     return (
       <div className="dashboard-page">
@@ -115,6 +143,26 @@ function Dashboard() {
     <div className="dashboard-page">
       <h2>Dashboard</h2>
       <p>Overview of your memory, activity, and system health.</p>
+
+      {/* System status bar */}
+      {health && (
+        <div className="system-status-bar">
+          <span className="status-dot" />
+          <span className="status-item">v{health.version || "?"}</span>
+          {health.uptime_seconds !== undefined && (
+            <span className="status-item">Up {formatUptime(health.uptime_seconds)}</span>
+          )}
+          {health.database?.size_human && (
+            <span className="status-item">DB: {health.database.size_human}</span>
+          )}
+          {health.counts?.pinned_memories !== undefined && health.counts.pinned_memories > 0 && (
+            <span className="status-item">{health.counts.pinned_memories} pinned</span>
+          )}
+          {health.counts?.providers !== undefined && (
+            <span className="status-item">{health.counts.providers} provider{health.counts.providers !== 1 ? "s" : ""}</span>
+          )}
+        </div>
+      )}
 
       {/* Top stats row */}
       <div className="stats-grid">

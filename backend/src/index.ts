@@ -14,6 +14,8 @@ import scraperRouter from "./routes/scraper.js";
 import { expireSessionMemory } from "./modules/session-cleanup.js";
 import { applyConfidenceDecay } from "./modules/confidence-decay.js";
 import { scrapeAll } from "./modules/log-scraper.js";
+import { queryOne } from "./db/index.js";
+import fs from "fs";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -33,7 +35,42 @@ app.use("/api/agents", agentsRouter);
 app.use("/api/scraper", scraperRouter);
 
 app.get("/health", (_req, res) => {
-  res.json({ status: "ok" });
+  try {
+    const memoryCount = queryOne("SELECT COUNT(*) as count FROM memory_items WHERE status = 'active'") as any;
+    const pinnedCount = queryOne("SELECT COUNT(*) as count FROM memory_items WHERE pinned = 1") as any;
+    const convCount = queryOne("SELECT COUNT(*) as count FROM conversations") as any;
+    const providerCount = queryOne("SELECT COUNT(*) as count FROM provider_settings") as any;
+
+    // Database file size
+    let dbSizeBytes = 0;
+    try {
+      const stat = fs.statSync(DB_PATH);
+      dbSizeBytes = stat.size;
+    } catch {
+      // file might not exist yet
+    }
+
+    res.json({
+      status: "ok",
+      version: "0.1.0",
+      uptime_seconds: Math.floor(process.uptime()),
+      database: {
+        path: DB_PATH,
+        size_bytes: dbSizeBytes,
+        size_human: dbSizeBytes > 1024 * 1024
+          ? `${(dbSizeBytes / (1024 * 1024)).toFixed(1)} MB`
+          : `${(dbSizeBytes / 1024).toFixed(1)} KB`,
+      },
+      counts: {
+        active_memories: memoryCount?.count || 0,
+        pinned_memories: pinnedCount?.count || 0,
+        conversations: convCount?.count || 0,
+        providers: providerCount?.count || 0,
+      },
+    });
+  } catch {
+    res.json({ status: "ok" });
+  }
 });
 
 const SESSION_CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // Run every hour
