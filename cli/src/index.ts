@@ -211,6 +211,40 @@ memory
     }
   });
 
+memory
+  .command("duplicates")
+  .description("Find likely duplicate memory items")
+  .option("--threshold <n>", "Similarity threshold 0-1 (default: 0.6)", "0.6")
+  .action(async (opts) => {
+    const result = await get(`/api/memory/duplicates?threshold=${opts.threshold}`);
+    if (result.count === 0) {
+      console.log("No duplicates found.");
+      return;
+    }
+    console.log(`\n  ${result.count} duplicate groups found:\n`);
+    for (const group of result.groups) {
+      console.log(`  [${group.type}] ${group.key} (${Math.round(group.similarity * 100)}% similar)`);
+      console.log(`    ${group.reason}`);
+      for (const item of group.items) {
+        console.log(`    - ${item.value.slice(0, 60)} (${item.scope}, conf: ${Math.round(item.confidence * 100)}%)`);
+      }
+      console.log();
+    }
+  });
+
+memory
+  .command("batch <action>")
+  .description("Batch operations: pin, unpin, delete, reconfirm")
+  .argument("<ids...>", "Memory item IDs")
+  .action(async (action, ids) => {
+    if (!["pin", "unpin", "delete", "reconfirm"].includes(action)) {
+      console.error("Action must be one of: pin, unpin, delete, reconfirm");
+      process.exit(1);
+    }
+    const result = await post("/api/memory/batch", { ids, action });
+    console.log(`${action}: ${result.affected} of ${result.total_requested} items affected.`);
+  });
+
 // ── Trips ───────────────────────────────────────────────────────────────────
 
 const trips = program.command("trips").description("Manage trips");

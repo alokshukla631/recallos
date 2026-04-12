@@ -32,16 +32,24 @@ interface ImportanceItem {
   importance: number;
 }
 
+interface Suggestion {
+  type: string;
+  priority: "high" | "medium" | "low";
+  title: string;
+  description: string;
+}
+
 function Health() {
   const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([]);
   const [decayCandidates, setDecayCandidates] = useState<DecayCandidate[]>([]);
   const [topItems, setTopItems] = useState<ImportanceItem[]>([]);
   const [bottomItems, setBottomItems] = useState<ImportanceItem[]>([]);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([fetchDuplicates(), fetchDecay(), fetchImportance()]).finally(() =>
+    Promise.all([fetchDuplicates(), fetchDecay(), fetchImportance(), fetchSuggestions()]).finally(() =>
       setLoading(false)
     );
   }, []);
@@ -63,6 +71,16 @@ function Health() {
       if (!res.ok) return;
       const data = await res.json();
       setDecayCandidates(data.candidates || []);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function fetchSuggestions() {
+    try {
+      const res = await fetch("/api/memory/suggestions");
+      if (!res.ok) return;
+      setSuggestions(await res.json());
     } catch {
       // ignore
     }
@@ -146,6 +164,18 @@ function Health() {
           </span>
         </div>
       </div>
+
+      {/* Suggestions */}
+      {suggestions.length > 0 && (
+        <div className="suggestions-bar">
+          {suggestions.slice(0, 4).map((s, i) => (
+            <div key={i} className={`suggestion-card priority-${s.priority}`}>
+              <div className="suggestion-title">{s.title}</div>
+              <div className="suggestion-desc">{s.description}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="health-columns">
         {/* Duplicates */}

@@ -10,6 +10,7 @@ import { reconcileMemory } from "../modules/memory-reconciler.js";
 import { computeImportance, rankByImportance } from "../modules/importance.js";
 import { findDecayCandidates, applyDecay } from "../modules/decay.js";
 import { findDuplicates } from "../modules/duplicates.js";
+import { generateSuggestions } from "../modules/suggestions.js";
 
 const router = Router();
 
@@ -659,6 +660,17 @@ router.get("/duplicates", (req: Request, res: Response) => {
     res.json({ count: groups.length, groups });
   } catch (err) {
     console.error("GET /api/memory/duplicates error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /suggestions - smart suggestions for improving memory quality
+router.get("/suggestions", (_req: Request, res: Response) => {
+  try {
+    const suggestions = generateSuggestions();
+    res.json(suggestions);
+  } catch (err) {
+    console.error("GET /api/memory/suggestions error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

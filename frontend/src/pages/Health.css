@@ -50,6 +50,45 @@
   color: var(--color-text-muted);
 }
 
+/* Suggestions */
+.suggestions-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.suggestion-card {
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.suggestion-card.priority-high {
+  border-left: 3px solid #ef4444;
+}
+
+.suggestion-card.priority-medium {
+  border-left: 3px solid #f59e0b;
+}
+
+.suggestion-card.priority-low {
+  border-left: 3px solid var(--color-accent);
+}
+
+.suggestion-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.suggestion-desc {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
 /* Columns layout */
 .health-columns {
   display: grid;
