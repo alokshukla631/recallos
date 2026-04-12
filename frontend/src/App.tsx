@@ -12,6 +12,7 @@ import {
   Sun,
   Moon,
   Clock,
+  HeartPulse,
 } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Chat from "./pages/Chat";
@@ -22,6 +23,7 @@ import ContextDebug from "./pages/ContextDebug";
 import Settings from "./pages/Settings";
 import Trips from "./pages/Trips";
 import Scraper from "./pages/Scraper";
+import Health from "./pages/Health";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -31,6 +33,7 @@ const navItems = [
   { to: "/timeline", label: "Timeline", icon: Clock },
   { to: "/links", label: "Links", icon: Link2 },
   { to: "/scraper", label: "Scraper", icon: ScanSearch },
+  { to: "/health", label: "Health", icon: HeartPulse },
   { to: "/debug", label: "Context Debug", icon: Bug },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ];
@@ -112,6 +115,7 @@ function App() {
           <Route path="/debug" element={<ContextDebug />} />
           <Route path="/links" element={<Links />} />
           <Route path="/scraper" element={<Scraper />} />
+          <Route path="/health" element={<Health />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>

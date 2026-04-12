@@ -1,0 +1,279 @@
+.health-page {
+  max-width: 1100px;
+}
+
+.health-action-msg {
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  margin-bottom: 16px;
+}
+
+/* Health score card */
+.health-score-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+
+.health-score-number {
+  font-size: 2.5rem;
+  font-weight: 800;
+  font-family: monospace;
+  line-height: 1;
+}
+
+.health-score-number[data-level="good"] { color: #22c55e; }
+.health-score-number[data-level="warn"] { color: #f59e0b; }
+.health-score-number[data-level="bad"] { color: #ef4444; }
+
+.health-score-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.health-score-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.health-score-detail {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+/* Columns layout */
+.health-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 768px) {
+  .health-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.health-section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.health-section h3 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+/* Duplicates */
+.duplicate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.duplicate-group {
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.duplicate-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.duplicate-key {
+  font-family: monospace;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.duplicate-sim {
+  font-size: 0.72rem;
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.duplicate-reason {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+}
+
+.duplicate-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.duplicate-item {
+  padding: 6px 8px;
+  background: var(--color-bg);
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.duplicate-value {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.duplicate-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.duplicate-meta {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+.btn-small {
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: none;
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.btn-merge {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.btn-merge:hover {
+  background: rgba(109, 109, 255, 0.1);
+}
+
+/* Decay candidates */
+.decay-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.decay-card {
+  padding: 8px 10px;
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  border-radius: 5px;
+  background: rgba(239, 68, 68, 0.03);
+}
+
+.decay-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.decay-card-key {
+  font-family: monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.decay-card-score {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: #ef4444;
+}
+
+.decay-card-reason {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
+/* Importance section */
+.importance-section {
+  margin-top: 0;
+}
+
+.importance-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .importance-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.importance-col h4 {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.importance-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  overflow: hidden;
+}
+
+.importance-row .importance-bar-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(34, 197, 94, 0.08);
+  border-radius: 4px;
+}
+
+.importance-row.low .importance-bar-fill {
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.importance-key {
+  position: relative;
+  font-family: monospace;
+  font-size: 0.78rem;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.importance-value {
+  position: relative;
+  font-family: monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+.importance-row.low .importance-value {
+  color: #ef4444;
+}
