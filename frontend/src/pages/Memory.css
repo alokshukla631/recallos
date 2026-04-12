@@ -305,6 +305,11 @@
   color: #ef4444;
 }
 
+.btn-confirm:hover {
+  border-color: #22c55e;
+  color: #22c55e;
+}
+
 .btn-save {
   background: var(--color-accent);
   color: #fff;

@@ -269,6 +269,16 @@ function Memory() {
     }
   };
 
+  const handleReconfirm = async (id: number) => {
+    try {
+      const res = await fetch(`/api/memory/${id}/reconfirm`, { method: "POST" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      fetchMemories();
+    } catch (err: any) {
+      setError(err.message || "Failed to reconfirm");
+    }
+  };
+
   // Stats
   const totalActive = items.filter((i) => i.status === "active").length;
   const byType: Record<string, number> = {};
@@ -550,6 +560,13 @@ function Memory() {
                           onClick={() => toggleTagsPanel(item.id)}
                         >
                           Tags
+                        </button>
+                        <button
+                          className="btn-action btn-confirm"
+                          onClick={() => handleReconfirm(item.id)}
+                          title="Mark as still valid"
+                        >
+                          Confirm
                         </button>
                         <button
                           className="btn-action btn-delete"

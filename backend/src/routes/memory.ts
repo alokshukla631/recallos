@@ -421,6 +421,26 @@ router.delete("/links/:linkId", (req: Request, res: Response) => {
   }
 });
 
+// POST /:id/reconfirm - manually mark an item as still valid
+router.post("/:id/reconfirm", (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const item = queryOne("SELECT id, status FROM memory_items WHERE id = ?", [id]) as any;
+    if (!item) {
+      res.status(404).json({ error: "Memory item not found" });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    runSql("UPDATE memory_items SET last_confirmed_at = ?, status = 'active' WHERE id = ?", [now, id]);
+    logAudit(id, "reconfirmed", "Manual reconfirmation by user");
+    res.json({ message: "Memory item reconfirmed", last_confirmed_at: now });
+  } catch (err) {
+    console.error("POST /api/memory/:id/reconfirm error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /session/stats - get session memory stats
 router.get("/session/stats", (_req: Request, res: Response) => {
   try {

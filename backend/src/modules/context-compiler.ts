@@ -1,4 +1,4 @@
-import { queryAll } from "../db/index.js";
+import { queryAll, runSql } from "../db/index.js";
 import { bm25Rank } from "./ranking.js";
 import { findRelated } from "./links.js";
 import type { MemoryItem } from "./memory-reconciler.js";
@@ -321,6 +321,17 @@ export async function compileContext(
   );
 
   const contextText = lines.join("\n");
+
+  // Auto-reconfirm: update last_confirmed_at for all included items.
+  // This feeds back into the decay system - frequently used items stay fresh.
+  if (included.length > 0) {
+    const now = new Date().toISOString();
+    const placeholders = included.map(() => "?").join(",");
+    runSql(
+      `UPDATE memory_items SET last_confirmed_at = ? WHERE id IN (${placeholders})`,
+      [now, ...included.map((i) => i.id)]
+    );
+  }
 
   return {
     contextPacket,
