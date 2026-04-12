@@ -194,4 +194,48 @@ router.delete("/webhooks/:id", (req: Request, res: Response) => {
   }
 });
 
+// GET /system-prompt - get the current system prompt
+router.get("/system-prompt", (_req: Request, res: Response) => {
+  try {
+    const row = queryOne("SELECT value FROM app_settings WHERE key = 'system_prompt'") as any;
+    const defaultPrompt = "You are a helpful assistant with access to the user's stored preferences and context. Use the provided user context to give consistent, personalized responses. If the context includes preferences or constraints, respect them. If context conflicts with the user's latest message, follow the latest message and ask for clarification.";
+    res.json({ prompt: row?.value || defaultPrompt, is_custom: !!row });
+  } catch (err) {
+    console.error("GET /api/settings/system-prompt error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PUT /system-prompt - update the system prompt
+router.put("/system-prompt", (req: Request, res: Response) => {
+  try {
+    const { prompt } = req.body;
+    if (!prompt || typeof prompt !== "string") {
+      res.status(400).json({ error: "prompt is required" });
+      return;
+    }
+    const existing = queryOne("SELECT key FROM app_settings WHERE key = 'system_prompt'");
+    if (existing) {
+      runSql("UPDATE app_settings SET value = ?, updated_at = datetime('now') WHERE key = 'system_prompt'", [prompt]);
+    } else {
+      runSql("INSERT INTO app_settings (key, value) VALUES ('system_prompt', ?)", [prompt]);
+    }
+    res.json({ message: "System prompt updated" });
+  } catch (err) {
+    console.error("PUT /api/settings/system-prompt error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /system-prompt - reset to default
+router.delete("/system-prompt", (_req: Request, res: Response) => {
+  try {
+    runSql("DELETE FROM app_settings WHERE key = 'system_prompt'");
+    res.json({ message: "System prompt reset to default" });
+  } catch (err) {
+    console.error("DELETE /api/settings/system-prompt error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;

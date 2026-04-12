@@ -18,7 +18,12 @@ import { PerfTimer } from "../modules/perf.js";
 
 const router = Router();
 
-const SYSTEM_PROMPT = `You are a helpful travel planning assistant. Use the provided user context to give consistent, personalized responses. If the context includes preferences or constraints, respect them. If context conflicts with the user's latest message, follow the latest message and ask for clarification.`;
+const DEFAULT_SYSTEM_PROMPT = `You are a helpful assistant with access to the user's stored preferences and context. Use the provided user context to give consistent, personalized responses. If the context includes preferences or constraints, respect them. If context conflicts with the user's latest message, follow the latest message and ask for clarification.`;
+
+function getSystemPrompt(): string {
+  const row = queryOne("SELECT value FROM app_settings WHERE key = 'system_prompt'") as any;
+  return row?.value || DEFAULT_SYSTEM_PROMPT;
+}
 
 // POST / - the full chat pipeline
 router.post("/", async (req: Request, res: Response) => {
@@ -77,7 +82,7 @@ router.post("/", async (req: Request, res: Response) => {
     const adapter = getAdapter(provider);
     const providerResponse = await adapter.chat(
       providerRow.api_key,
-      SYSTEM_PROMPT,
+      getSystemPrompt(),
       chatMessages,
       compiled.contextText
     );
@@ -215,7 +220,7 @@ router.post("/stream", async (req: Request, res: Response) => {
     const adapter = getAdapter(provider);
     const stream = adapter.chatStream(
       providerRow.api_key,
-      SYSTEM_PROMPT,
+      getSystemPrompt(),
       chatMessages,
       compiled.contextText
     );

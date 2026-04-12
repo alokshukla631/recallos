@@ -305,3 +305,18 @@
 .webhook-toggle input {
   cursor: pointer;
 }
+
+/* System prompt */
+.system-prompt-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  font-family: monospace;
+  resize: vertical;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}

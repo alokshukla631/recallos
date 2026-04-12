@@ -34,11 +34,15 @@ function Settings() {
   const [mcpInstalling, setMcpInstalling] = useState(false);
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [newWebhookUrl, setNewWebhookUrl] = useState("");
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [isCustomPrompt, setIsCustomPrompt] = useState(false);
+  const [savingPrompt, setSavingPrompt] = useState(false);
 
   useEffect(() => {
     fetchProviders();
     fetchMcpConfig();
     fetchWebhooks();
+    fetchSystemPrompt();
   }, []);
 
   async function fetchProviders() {
@@ -234,6 +238,46 @@ function Settings() {
     }
   }
 
+  async function fetchSystemPrompt() {
+    try {
+      const res = await fetch("/api/settings/system-prompt");
+      if (!res.ok) return;
+      const data = await res.json();
+      setSystemPrompt(data.prompt);
+      setIsCustomPrompt(data.is_custom);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function saveSystemPrompt() {
+    setSavingPrompt(true);
+    try {
+      const res = await fetch("/api/settings/system-prompt", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: systemPrompt }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      showStatus("prompt", "System prompt saved", "success");
+      setIsCustomPrompt(true);
+    } catch {
+      showStatus("prompt", "Failed to save prompt", "error");
+    } finally {
+      setSavingPrompt(false);
+    }
+  }
+
+  async function resetSystemPrompt() {
+    try {
+      await fetch("/api/settings/system-prompt", { method: "DELETE" });
+      showStatus("prompt", "System prompt reset to default", "success");
+      fetchSystemPrompt();
+    } catch {
+      showStatus("prompt", "Reset failed", "error");
+    }
+  }
+
   const configuredProviders = providers.map((p) => p.provider);
 
   return (
@@ -343,6 +387,34 @@ function Settings() {
               )}
             </div>
           )}
+
+          <div className="settings-section data-section">
+            <h3>System Prompt</h3>
+            <p>
+              Customize the system instructions sent to the AI provider with every message.
+            </p>
+            <textarea
+              className="system-prompt-textarea"
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              rows={5}
+            />
+            <div className="passport-actions">
+              <button className="btn btn-primary" onClick={saveSystemPrompt} disabled={savingPrompt}>
+                {savingPrompt ? "Saving..." : "Save Prompt"}
+              </button>
+              {isCustomPrompt && (
+                <button className="btn btn-secondary" onClick={resetSystemPrompt}>
+                  Reset to Default
+                </button>
+              )}
+            </div>
+            {statusMessages["prompt"] && (
+              <p className={`status-msg ${statusMessages["prompt"].type}`}>
+                {statusMessages["prompt"].text}
+              </p>
+            )}
+          </div>
 
           <div className="settings-section data-section">
             <h3>Memory Passport</h3>
