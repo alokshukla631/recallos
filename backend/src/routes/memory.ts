@@ -7,6 +7,7 @@ import { createLink, removeLink, getLinksForItem } from "../modules/links.js";
 import { expireSessionMemory, getSessionStats } from "../modules/session-cleanup.js";
 import { extractMemory } from "../modules/memory-extractor.js";
 import { reconcileMemory } from "../modules/memory-reconciler.js";
+import { computeImportance, rankByImportance } from "../modules/importance.js";
 
 const router = Router();
 
@@ -491,6 +492,29 @@ router.delete("/:id", (req: Request, res: Response) => {
     res.json({ message: "Memory item marked as stale" });
   } catch (err) {
     console.error("DELETE /api/memory/:id error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /importance - rank memory items by computed importance score
+router.get("/importance", (req: Request, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 20;
+    const ranked = rankByImportance(limit);
+    res.json(ranked);
+  } catch (err) {
+    console.error("GET /api/memory/importance error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /:id/importance - get importance breakdown for a single item
+router.get("/:id/importance", (req: Request, res: Response) => {
+  try {
+    const factors = computeImportance(req.params.id as string);
+    res.json(factors);
+  } catch (err) {
+    console.error("GET /api/memory/:id/importance error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

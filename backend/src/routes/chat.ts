@@ -403,4 +403,60 @@ router.get("/conversations/:id", (req: Request, res: Response) => {
   }
 });
 
+// GET /conversations/:id/export - export a conversation as JSON or text
+router.get("/conversations/:id/export", (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const format = (req.query.format as string) || "json";
+
+    const conv = getConversation(id);
+    if (!conv) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+
+    const events = queryAll(
+      `SELECT role, content, provider, created_at
+       FROM events
+       WHERE conversation_id = ? AND role IN ('user', 'assistant')
+       ORDER BY created_at ASC`,
+      [id]
+    ) as any[];
+
+    if (format === "text") {
+      const lines: string[] = [];
+      lines.push(`# ${conv.title || "Untitled Conversation"}`);
+      lines.push(`Exported: ${new Date().toISOString().slice(0, 10)}`);
+      lines.push("");
+      for (const e of events) {
+        const role = e.role === "user" ? "You" : "Assistant";
+        lines.push(`**${role}** (${e.created_at}):`);
+        lines.push(e.content);
+        lines.push("");
+      }
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="conversation-${id.slice(0, 8)}.txt"`);
+      res.send(lines.join("\n"));
+    } else {
+      const exportData = {
+        id: conv.id,
+        title: conv.title,
+        trip_id: conv.trip_id,
+        created_at: conv.created_at,
+        messages: events.map((e) => ({
+          role: e.role,
+          content: e.content,
+          provider: e.provider,
+          created_at: e.created_at,
+        })),
+      };
+      res.setHeader("Content-Disposition", `attachment; filename="conversation-${id.slice(0, 8)}.json"`);
+      res.json(exportData);
+    }
+  } catch (err) {
+    console.error("GET /api/chat/conversations/:id/export error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;
