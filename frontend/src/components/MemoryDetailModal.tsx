@@ -27,6 +27,15 @@ interface LinkEntry {
   created_at: string;
 }
 
+interface VersionEntry {
+  id: string;
+  version_number: number;
+  value: string;
+  confidence: number;
+  changed_by: string;
+  created_at: string;
+}
+
 interface MemoryDetail {
   id: string;
   key: string;
@@ -47,6 +56,7 @@ interface MemoryDetail {
   tags: Array<{ tag: string }>;
   links: LinkEntry[];
   audit: AuditEntry[];
+  versions: VersionEntry[];
   superseded_by_item: { id: string; key: string; value: string } | null;
   supersedes: Array<{ id: string; key: string; value: string }>;
   context_appearances: number;
@@ -125,6 +135,12 @@ function MemoryDetailModal({ itemId, onClose, onAction }: Props) {
     });
     setLinkTarget("");
     fetchDetail();
+  }
+
+  async function handleRevert(versionId: string) {
+    await fetch(`/api/memory/${itemId}/revert/${versionId}`, { method: "POST" });
+    fetchDetail();
+    onAction?.();
   }
 
   async function handleRemoveLink(linkId: string) {
@@ -344,6 +360,26 @@ function MemoryDetailModal({ itemId, onClose, onAction }: Props) {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Version history */}
+            {detail.versions && detail.versions.length > 0 && (
+              <div className="detail-section">
+                <h4>Version History ({detail.versions.length})</h4>
+                <div className="detail-versions">
+                  {detail.versions.map((v) => (
+                    <div key={v.id} className="version-entry">
+                      <div className="version-header">
+                        <span className="version-number">v{v.version_number}</span>
+                        <span className="version-by">{v.changed_by}</span>
+                        <span className="version-time" title={formatDate(v.created_at)}>{timeAgo(v.created_at)}</span>
+                        <button className="version-revert" onClick={() => handleRevert(v.id)}>Revert</button>
+                      </div>
+                      <div className="version-value">{v.value}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

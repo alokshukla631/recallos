@@ -13,6 +13,10 @@ import { findDecayCandidates, applyDecay } from "../modules/decay.js";
 import { findDuplicates } from "../modules/duplicates.js";
 import { generateSuggestions } from "../modules/suggestions.js";
 import { fireWebhook } from "../modules/webhooks.js";
+import { createVersion, getVersions, revertToVersion, ensureVersionTable } from "../modules/versioning.js";
+
+// Ensure version table exists on module load
+ensureVersionTable();
 
 const router = Router();
 
@@ -151,12 +155,16 @@ router.get("/:id/detail", (req: Request, res: Response) => {
       } catch { /* skip malformed */ }
     }
 
+    // Version history
+    const versions = getVersions(id);
+
     res.json({
       ...item,
       importance,
       tags,
       links,
       audit,
+      versions,
       superseded_by_item,
       supersedes,
       context_appearances: contextAppearances,
@@ -187,6 +195,11 @@ router.put("/:id", (req: Request, res: Response) => {
     if (updates.length === 0) {
       res.status(400).json({ error: "No fields to update" });
       return;
+    }
+
+    // Snapshot current value before updating
+    if (value !== undefined) {
+      createVersion(req.params.id as string, "user");
     }
 
     params.push(req.params.id);
@@ -788,6 +801,47 @@ router.get("/:id/importance", (req: Request, res: Response) => {
     res.json(factors);
   } catch (err) {
     console.error("GET /api/memory/:id/importance error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /:id/versions - get version history for a memory item
+router.get("/:id/versions", (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const item = queryOne("SELECT id FROM memory_items WHERE id = ?", [id]) as any;
+    if (!item) {
+      res.status(404).json({ error: "Memory item not found" });
+      return;
+    }
+    const versions = getVersions(id);
+    res.json(versions);
+  } catch (err) {
+    console.error("GET /api/memory/:id/versions error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /:id/revert/:versionId - revert a memory item to a previous version
+router.post("/:id/revert/:versionId", (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const versionId = req.params.versionId as string;
+    const item = queryOne("SELECT id FROM memory_items WHERE id = ?", [id]) as any;
+    if (!item) {
+      res.status(404).json({ error: "Memory item not found" });
+      return;
+    }
+    const ok = revertToVersion(id, versionId);
+    if (!ok) {
+      res.status(404).json({ error: "Version not found or does not belong to this item" });
+      return;
+    }
+    logAudit(id, "reconfirmed", `Reverted to version ${versionId}`);
+    const updated = queryOne("SELECT * FROM memory_items WHERE id = ?", [id]);
+    res.json(updated);
+  } catch (err) {
+    console.error("POST /api/memory/:id/revert/:versionId error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
