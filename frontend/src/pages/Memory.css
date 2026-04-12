@@ -624,3 +624,27 @@
   font-size: 0.65rem;
   font-weight: 600;
 }
+
+/* Checkbox column */
+.th-checkbox,
+.td-checkbox {
+  width: 36px;
+  text-align: center;
+  padding-left: 8px !important;
+  padding-right: 4px !important;
+}
+
+.memory-checkbox {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.row-selected {
+  background: rgba(99, 102, 241, 0.06) !important;
+}
+
+.row-selected:hover {
+  background: rgba(99, 102, 241, 0.1) !important;
+}

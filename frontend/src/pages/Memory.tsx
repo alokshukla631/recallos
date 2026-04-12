@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import MemoryDetailModal from "../components/MemoryDetailModal";
+import BatchBar from "../components/BatchBar";
 import { useToast } from "../components/Toast";
 import "./Memory.css";
 
@@ -85,6 +86,9 @@ function Memory() {
 
   // Detail modal
   const [detailId, setDetailId] = useState<number | null>(null);
+
+  // Batch selection
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Create form
   const [showCreate, setShowCreate] = useState(false);
@@ -348,6 +352,21 @@ function Memory() {
     }
   };
 
+  // Batch selection handlers
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === items.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(items.map((i) => String(i.id)));
+    }
+  };
+
   // Stats
   const totalActive = items.filter((i) => i.status === "active").length;
   const byType: Record<string, number> = {};
@@ -586,6 +605,15 @@ function Memory() {
           <table className="memory-table">
             <thead>
               <tr>
+                <th className="th-checkbox">
+                  <input
+                    type="checkbox"
+                    className="memory-checkbox"
+                    checked={items.length > 0 && selectedIds.length === items.length}
+                    onChange={toggleSelectAll}
+                    title="Select all"
+                  />
+                </th>
                 <th>Key</th>
                 <th>Type</th>
                 <th>Value</th>
@@ -600,7 +628,15 @@ function Memory() {
             <tbody>
               {items.map((item) => (
                 <React.Fragment key={item.id}>
-                <tr>
+                <tr className={selectedIds.includes(String(item.id)) ? "row-selected" : ""}>
+                  <td className="td-checkbox">
+                    <input
+                      type="checkbox"
+                      className="memory-checkbox"
+                      checked={selectedIds.includes(String(item.id))}
+                      onChange={() => toggleSelect(String(item.id))}
+                    />
+                  </td>
                   <td className="memory-key clickable" onClick={() => setDetailId(item.id)}>{item.pinned ? <span className="pin-indicator" title="Pinned">&#128204;</span> : null}{item.key}</td>
                   <td>
                     <span
@@ -718,7 +754,7 @@ function Memory() {
                 </tr>
                 {expandedTags.has(item.id) && (
                   <tr className="tags-row">
-                    <td colSpan={9}>
+                    <td colSpan={10}>
                       <div className="tags-panel">
                         {(itemTags[item.id] || []).map((tag) => (
                           <span key={tag} className="tag-chip tag-removable">
@@ -783,6 +819,13 @@ function Memory() {
           </div>
         </div>
       )}
+
+      {/* Batch action bar */}
+      <BatchBar
+        selectedIds={selectedIds}
+        onClear={() => setSelectedIds([])}
+        onDone={() => { fetchMemories(); setSelectedIds([]); }}
+      />
 
       {/* Detail modal */}
       {detailId !== null && (
