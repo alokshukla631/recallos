@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useToast } from "../components/Toast";
 import "./Dashboard.css";
 
 interface HealthInfo {
@@ -59,15 +60,23 @@ const DOMAIN_COLORS: Record<string, string> = {
   communication: "#14b8a6",
 };
 
+interface SparkDay {
+  date: string;
+  total: number;
+}
+
 function Dashboard() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
   const [stats, setStats] = useState<Stats | null>(null);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [retention, setRetention] = useState<RetentionData | null>(null);
   const [health, setHealth] = useState<HealthInfo | null>(null);
+  const [sparkData, setSparkData] = useState<SparkDay[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([fetchStats(), fetchAudit(), fetchRetention(), fetchHealth()]).finally(() => setLoading(false));
+    Promise.all([fetchStats(), fetchAudit(), fetchRetention(), fetchHealth(), fetchSparkline()]).finally(() => setLoading(false));
   }, []);
 
   async function fetchStats() {
@@ -107,6 +116,35 @@ function Dashboard() {
       setHealth(await res.json());
     } catch {
       // ignore
+    }
+  }
+
+  async function fetchSparkline() {
+    try {
+      const res = await fetch("/api/memory/audit/heatmap?weeks=2");
+      if (!res.ok) return;
+      const data = await res.json();
+      setSparkData(data.days || []);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function handleExportJSON() {
+    try {
+      const res = await fetch("/api/passport/export");
+      if (!res.ok) throw new Error("Export failed");
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `recallos-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast("Memory exported", "success");
+    } catch {
+      toast("Export failed", "error");
     }
   }
 
@@ -355,16 +393,57 @@ function Dashboard() {
             </Link>
           </div>
 
-          {/* Quick links */}
+          {/* Activity sparkline */}
+          {sparkData.length > 0 && (
+            <div className="dash-section">
+              <h3>Activity (14 days)</h3>
+              <div className="sparkline-container">
+                <svg viewBox={`0 0 ${sparkData.length * 8} 40`} className="sparkline-svg">
+                  {(() => {
+                    const max = Math.max(1, ...sparkData.map((d) => d.total));
+                    const points = sparkData.map((d, i) => {
+                      const x = i * 8 + 4;
+                      const y = 38 - (d.total / max) * 34;
+                      return `${x},${y}`;
+                    }).join(" ");
+                    const areaPoints = `0,38 ${points} ${(sparkData.length - 1) * 8 + 4},38`;
+                    return (
+                      <>
+                        <polygon points={areaPoints} fill="rgba(109, 109, 255, 0.1)" />
+                        <polyline points={points} fill="none" stroke="rgba(109, 109, 255, 0.7)" strokeWidth="1.5" />
+                        {sparkData.map((d, i) => (
+                          d.total > 0 && (
+                            <circle
+                              key={i}
+                              cx={i * 8 + 4}
+                              cy={38 - (d.total / max) * 34}
+                              r="2"
+                              fill="rgba(109, 109, 255, 0.9)"
+                            />
+                          )
+                        ))}
+                      </>
+                    );
+                  })()}
+                </svg>
+                <div className="sparkline-labels">
+                  <span>{sparkData[0]?.date.slice(5)}</span>
+                  <span>{sparkData[sparkData.length - 1]?.date.slice(5)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Quick actions */}
           <div className="dash-section">
-            <h3>Quick Links</h3>
-            <div className="quick-links">
-              <Link to="/" className="quick-link">Chat</Link>
-              <Link to="/memory" className="quick-link">Memory</Link>
-              <Link to="/links" className="quick-link">Links</Link>
-              <Link to="/scraper" className="quick-link">Scraper</Link>
-              <Link to="/debug" className="quick-link">Context Debug</Link>
-              <Link to="/settings" className="quick-link">Settings</Link>
+            <h3>Quick Actions</h3>
+            <div className="quick-actions">
+              <button className="quick-action-btn" onClick={() => navigate("/chat")}>Start chat</button>
+              <button className="quick-action-btn" onClick={() => navigate("/memory")}>Browse memory</button>
+              <button className="quick-action-btn" onClick={() => navigate("/graph")}>View graph</button>
+              <button className="quick-action-btn" onClick={() => navigate("/health")}>Health check</button>
+              <button className="quick-action-btn" onClick={handleExportJSON}>Export JSON</button>
+              <button className="quick-action-btn" onClick={() => window.open("/api/docs", "_blank")}>API docs</button>
             </div>
           </div>
         </div>
