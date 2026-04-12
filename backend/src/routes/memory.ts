@@ -441,6 +441,40 @@ router.post("/:id/reconfirm", (req: Request, res: Response) => {
   }
 });
 
+// POST /:id/pin - pin a memory item (always included in context)
+router.post("/:id/pin", (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const item = queryOne("SELECT id FROM memory_items WHERE id = ?", [id]) as any;
+    if (!item) {
+      res.status(404).json({ error: "Memory item not found" });
+      return;
+    }
+    runSql("UPDATE memory_items SET pinned = 1 WHERE id = ?", [id]);
+    res.json({ message: "Memory item pinned", pinned: true });
+  } catch (err) {
+    console.error("POST /api/memory/:id/pin error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /:id/unpin - unpin a memory item
+router.post("/:id/unpin", (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const item = queryOne("SELECT id FROM memory_items WHERE id = ?", [id]) as any;
+    if (!item) {
+      res.status(404).json({ error: "Memory item not found" });
+      return;
+    }
+    runSql("UPDATE memory_items SET pinned = 0 WHERE id = ?", [id]);
+    res.json({ message: "Memory item unpinned", pinned: false });
+  } catch (err) {
+    console.error("POST /api/memory/:id/unpin error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /session/stats - get session memory stats
 router.get("/session/stats", (_req: Request, res: Response) => {
   try {

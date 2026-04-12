@@ -133,6 +133,15 @@ export async function initDatabase(filePath: string): Promise<Database> {
     `);
   }
 
+  // Migration: add pinned column if missing
+  {
+    const cols = db.exec("PRAGMA table_info(memory_items)");
+    const colNames = cols[0]?.values.map((row: unknown[]) => row[1]) || [];
+    if (!colNames.includes("pinned")) {
+      db.run("ALTER TABLE memory_items ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
+    }
+  }
+
   db.run(`
     CREATE TABLE IF NOT EXISTS conflicts (
       id TEXT PRIMARY KEY,

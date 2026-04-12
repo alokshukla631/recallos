@@ -220,11 +220,13 @@ export async function compileContext(
     const recency = recencyBoost(item);
     const linkBoost = linkedToAnchors.has(item.id) && !anchorIds.has(item.id) ? LINK_BOOST : 0;
     const finalScore = bm25Score + recency + linkBoost;
-    const alwaysInclude = item.type === "override" || item.type === "constraint";
+    const alwaysInclude = item.type === "override" || item.type === "constraint" || item.pinned === 1;
 
     if (finalScore >= RELEVANCE_THRESHOLD || alwaysInclude) {
       included.push(item);
-      const reason = alwaysInclude && finalScore < RELEVANCE_THRESHOLD
+      const reason = item.pinned === 1 && finalScore < RELEVANCE_THRESHOLD
+        ? "Pinned by user"
+        : alwaysInclude && finalScore < RELEVANCE_THRESHOLD
         ? `Always included (type=${item.type})`
         : `Score ${finalScore.toFixed(3)} above threshold (bm25=${bm25Score.toFixed(3)}, recency=${recency.toFixed(3)})`;
       rationale[item.id] = `Included: score=${finalScore.toFixed(2)}, type=${item.type}`;

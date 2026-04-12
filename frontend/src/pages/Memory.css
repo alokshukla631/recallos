@@ -310,6 +310,27 @@
   color: #22c55e;
 }
 
+.btn-pin:hover {
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+
+.btn-pinned {
+  border-color: #f59e0b;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.btn-pinned:hover {
+  border-color: #d97706;
+  color: #d97706;
+}
+
+.pin-indicator {
+  margin-right: 4px;
+  font-size: 0.8rem;
+}
+
 .btn-save {
   background: var(--color-accent);
   color: #fff;

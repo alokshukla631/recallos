@@ -44,8 +44,9 @@ export function findDecayCandidates(config: Partial<DecayConfig> = {}): DecayCan
   const cfg = { ...DEFAULT_CONFIG, ...config };
   const now = Date.now();
 
+  // Pinned items are exempt from decay
   const items = queryAll(
-    "SELECT id, key, value, type, created_at, last_confirmed_at, confidence FROM memory_items WHERE status = 'active'"
+    "SELECT id, key, value, type, created_at, last_confirmed_at, confidence, pinned FROM memory_items WHERE status = 'active' AND pinned = 0"
   ) as any[];
 
   const candidates: DecayCandidate[] = [];

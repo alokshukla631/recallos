@@ -20,6 +20,7 @@ export interface MemoryItem {
   valid_from: string | null;
   valid_to: string | null;
   last_confirmed_at: string | null;
+  pinned: number;
   created_at: string;
 }
 

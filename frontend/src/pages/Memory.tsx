@@ -10,6 +10,7 @@ interface MemoryItem {
   domain: string | null;
   confidence: number;
   status: string;
+  pinned: number;
   created_at: string;
 }
 
@@ -279,6 +280,17 @@ function Memory() {
     }
   };
 
+  const handleTogglePin = async (id: number, currentlyPinned: boolean) => {
+    try {
+      const endpoint = currentlyPinned ? "unpin" : "pin";
+      const res = await fetch(`/api/memory/${id}/${endpoint}`, { method: "POST" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      fetchMemories();
+    } catch (err: any) {
+      setError(err.message || "Failed to toggle pin");
+    }
+  };
+
   // Stats
   const totalActive = items.filter((i) => i.status === "active").length;
   const byType: Record<string, number> = {};
@@ -470,7 +482,7 @@ function Memory() {
               {items.map((item) => (
                 <React.Fragment key={item.id}>
                 <tr>
-                  <td className="memory-key">{item.key}</td>
+                  <td className="memory-key">{item.pinned ? <span className="pin-indicator" title="Pinned">&#128204;</span> : null}{item.key}</td>
                   <td>
                     <span
                       className="type-badge"
@@ -549,6 +561,13 @@ function Memory() {
                   <td className="memory-actions">
                     {editingId !== item.id && (
                       <>
+                        <button
+                          className={`btn-action ${item.pinned ? "btn-pinned" : "btn-pin"}`}
+                          onClick={() => handleTogglePin(item.id, !!item.pinned)}
+                          title={item.pinned ? "Unpin from context" : "Pin to always include in context"}
+                        >
+                          {item.pinned ? "Unpin" : "Pin"}
+                        </button>
                         <button
                           className="btn-action btn-edit"
                           onClick={() => handleEdit(item)}
