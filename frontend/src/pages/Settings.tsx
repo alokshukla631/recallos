@@ -6,7 +6,7 @@ interface Provider {
   is_default: boolean;
 }
 
-const ALL_PROVIDERS = ["openai", "anthropic"];
+const ALL_PROVIDERS = ["openai", "anthropic", "gemini", "ollama"];
 
 interface McpConfig {
   config: { command: string; args: string[]; env?: Record<string, string> };
