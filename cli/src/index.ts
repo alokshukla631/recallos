@@ -233,6 +233,57 @@ memory
   });
 
 memory
+  .command("inspect <id>")
+  .description("Show full detail for a memory item (importance, tags, links, audit)")
+  .action(async (id) => {
+    const detail = await get(`/api/memory/${id}/detail`);
+    console.log(`\n  ${detail.key}`);
+    console.log(`  ${"=".repeat(detail.key.length)}`);
+    console.log(`  Type: ${detail.type}  |  Scope: ${detail.scope}  |  Status: ${detail.status}`);
+    if (detail.domain) console.log(`  Domain: ${detail.domain}`);
+    console.log(`  Pinned: ${detail.pinned ? "yes" : "no"}  |  Confidence: ${Math.round(detail.confidence * 100)}%`);
+    console.log(`\n  Value:\n    ${detail.value}`);
+    console.log(`\n  Importance: ${detail.importance.total}/100`);
+    console.log(`    Confidence: ${detail.importance.confidence_score}/30`);
+    console.log(`    Recency: ${detail.importance.recency_score}/25`);
+    console.log(`    Links: ${detail.importance.link_score}/20`);
+    console.log(`    Tags: ${detail.importance.tag_score}/15`);
+    console.log(`    Age bonus: ${detail.importance.age_bonus}/10`);
+    if (detail.tags.length > 0) {
+      console.log(`\n  Tags: ${detail.tags.map((t: any) => t.tag).join(", ")}`);
+    }
+    if (detail.links.length > 0) {
+      console.log(`\n  Links (${detail.links.length}):`);
+      for (const link of detail.links) {
+        const target = link.source_id === id ? link.target_id : link.source_id;
+        console.log(`    ${link.relation} -> ${target.slice(0, 8)}${link.note ? ` (${link.note})` : ""}`);
+      }
+    }
+    console.log(`\n  Context appearances: ${detail.context_appearances}`);
+    console.log(`  Created: ${new Date(detail.created_at).toLocaleString()}`);
+    if (detail.last_confirmed_at) {
+      console.log(`  Last confirmed: ${new Date(detail.last_confirmed_at).toLocaleString()}`);
+    }
+    if (detail.audit.length > 0) {
+      console.log(`\n  Audit history (${detail.audit.length}):`);
+      for (const entry of detail.audit.slice(0, 10)) {
+        const time = new Date(entry.created_at).toLocaleString();
+        console.log(`    ${time}  [${entry.action}]  ${entry.details || ""}`);
+      }
+    }
+    if (detail.superseded_by_item) {
+      console.log(`\n  Superseded by: ${detail.superseded_by_item.key} (${detail.superseded_by_item.id.slice(0, 8)})`);
+    }
+    if (detail.supersedes.length > 0) {
+      console.log(`\n  Supersedes:`);
+      for (const s of detail.supersedes) {
+        console.log(`    ${s.key} (${s.id.slice(0, 8)})`);
+      }
+    }
+    console.log();
+  });
+
+memory
   .command("batch <action>")
   .description("Batch operations: pin, unpin, delete, reconfirm")
   .argument("<ids...>", "Memory item IDs")

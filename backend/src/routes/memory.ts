@@ -62,6 +62,69 @@ router.get("/:id", (req: Request, res: Response) => {
   }
 });
 
+// GET /:id/detail - comprehensive detail view for a single memory item
+router.get("/:id/detail", (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const item = queryOne("SELECT * FROM memory_items WHERE id = ?", [id]) as any;
+    if (!item) {
+      res.status(404).json({ error: "Memory item not found" });
+      return;
+    }
+
+    // Importance breakdown
+    const importance = computeImportance(id);
+
+    // Tags
+    const tags = getTagsForItem(id);
+
+    // Links (both directions)
+    const links = getLinksForItem(id);
+
+    // Audit history
+    const audit = getAuditForItem(id);
+
+    // Superseded by / supersedes info
+    let superseded_by_item = null;
+    if (item.superseded_by) {
+      superseded_by_item = queryOne(
+        "SELECT id, key, value FROM memory_items WHERE id = ?",
+        [item.superseded_by]
+      );
+    }
+    const supersedes = queryAll(
+      "SELECT id, key, value FROM memory_items WHERE superseded_by = ?",
+      [id]
+    );
+
+    // Context usage: how many snapshots include this item
+    const allSnapshots = queryAll(
+      "SELECT included_memory_ids FROM context_snapshots"
+    ) as any[];
+    let contextAppearances = 0;
+    for (const snap of allSnapshots) {
+      try {
+        const ids = JSON.parse(snap.included_memory_ids || "[]");
+        if (ids.includes(id)) contextAppearances++;
+      } catch { /* skip malformed */ }
+    }
+
+    res.json({
+      ...item,
+      importance,
+      tags,
+      links,
+      audit,
+      superseded_by_item,
+      supersedes,
+      context_appearances: contextAppearances,
+    });
+  } catch (err) {
+    console.error("GET /api/memory/:id/detail error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // PUT /:id - update a memory item
 router.put("/:id", (req: Request, res: Response) => {
   try {

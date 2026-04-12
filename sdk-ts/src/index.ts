@@ -224,6 +224,19 @@ export class RecallOS {
     return this.get(`/api/memory/${id}`);
   }
 
+  /** Get comprehensive detail for a memory item (importance, tags, links, audit). */
+  getMemoryDetail(id: string): Promise<MemoryItem & {
+    importance: ImportanceFactors;
+    tags: Array<{ tag: string }>;
+    links: MemoryLink[];
+    audit: AuditEntry[];
+    superseded_by_item: { id: string; key: string; value: string } | null;
+    supersedes: Array<{ id: string; key: string; value: string }>;
+    context_appearances: number;
+  }> {
+    return this.get(`/api/memory/${id}/detail`);
+  }
+
   /** Search memory using BM25 full-text ranking. */
   searchMemory(query: string): Promise<MemoryItem[]> {
     return this.get("/api/memory/search", { q: query });

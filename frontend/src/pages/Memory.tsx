@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import MemoryDetailModal from "../components/MemoryDetailModal";
 import "./Memory.css";
 
 interface MemoryItem {
@@ -79,6 +80,9 @@ function Memory() {
 
   // Importance
   const [topMemories, setTopMemories] = useState<Array<{ id: string; key: string; value: string; importance: number }>>([]);
+
+  // Detail modal
+  const [detailId, setDetailId] = useState<number | null>(null);
 
   // Session stats
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
@@ -482,7 +486,7 @@ function Memory() {
               {items.map((item) => (
                 <React.Fragment key={item.id}>
                 <tr>
-                  <td className="memory-key">{item.pinned ? <span className="pin-indicator" title="Pinned">&#128204;</span> : null}{item.key}</td>
+                  <td className="memory-key clickable" onClick={() => setDetailId(item.id)}>{item.pinned ? <span className="pin-indicator" title="Pinned">&#128204;</span> : null}{item.key}</td>
                   <td>
                     <span
                       className="type-badge"
@@ -663,6 +667,15 @@ function Memory() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Detail modal */}
+      {detailId !== null && (
+        <MemoryDetailModal
+          itemId={detailId}
+          onClose={() => setDetailId(null)}
+          onAction={() => fetchMemories()}
+        />
       )}
     </div>
   );

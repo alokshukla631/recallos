@@ -169,6 +169,15 @@
   white-space: nowrap;
 }
 
+.memory-key.clickable {
+  cursor: pointer;
+  color: var(--color-accent);
+}
+
+.memory-key.clickable:hover {
+  text-decoration: underline;
+}
+
 .memory-value {
   color: var(--color-text-muted);
   max-width: 300px;
