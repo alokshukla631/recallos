@@ -289,6 +289,97 @@ class RecallOS:
         r.raise_for_status()
         return r.text
 
+    # -- Importance -----------------------------------------------------------
+
+    def importance_ranking(self, limit: int = 20) -> list[dict]:
+        """Get memory items ranked by importance score."""
+        r = self._client.get("/api/memory/importance", params={"limit": str(limit)})
+        r.raise_for_status()
+        return r.json()
+
+    def importance_breakdown(self, memory_id: str) -> dict:
+        """Get the importance score breakdown for a single item."""
+        r = self._client.get(f"/api/memory/{memory_id}/importance")
+        r.raise_for_status()
+        return r.json()
+
+    # -- Decay ----------------------------------------------------------------
+
+    def decay_preview(
+        self,
+        max_age_days: Optional[int] = None,
+        max_stale_days: Optional[int] = None,
+        min_importance: Optional[int] = None,
+    ) -> dict:
+        """Preview which items would be marked stale by decay rules."""
+        params: dict[str, str] = {}
+        if max_age_days is not None:
+            params["max_age_days"] = str(max_age_days)
+        if max_stale_days is not None:
+            params["max_stale_days"] = str(max_stale_days)
+        if min_importance is not None:
+            params["min_importance"] = str(min_importance)
+        r = self._client.get("/api/memory/decay", params=params)
+        r.raise_for_status()
+        return r.json()
+
+    def decay_apply(
+        self,
+        max_age_days: Optional[int] = None,
+        max_stale_days: Optional[int] = None,
+        min_importance: Optional[int] = None,
+    ) -> dict:
+        """Apply decay rules and mark stale items."""
+        body: dict[str, Any] = {}
+        if max_age_days is not None:
+            body["max_age_days"] = max_age_days
+        if max_stale_days is not None:
+            body["max_stale_days"] = max_stale_days
+        if min_importance is not None:
+            body["min_importance"] = min_importance
+        r = self._client.post("/api/memory/decay", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    # -- Reconfirmation -------------------------------------------------------
+
+    def reconfirm(self, memory_id: str) -> dict:
+        """Manually reconfirm a memory item as still valid."""
+        r = self._client.post(f"/api/memory/{memory_id}/reconfirm")
+        r.raise_for_status()
+        return r.json()
+
+    # -- Merge ----------------------------------------------------------------
+
+    def merge(self, source_id: str, target_id: str, merged_value: Optional[str] = None) -> dict:
+        """Merge two memory items. Source gets superseded, target keeps the result."""
+        body: dict[str, Any] = {"source_id": source_id, "target_id": target_id}
+        if merged_value:
+            body["merged_value"] = merged_value
+        r = self._client.post("/api/memory/merge", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    # -- Snapshot comparison --------------------------------------------------
+
+    def compare_snapshots(self, snapshot_a: str, snapshot_b: str) -> dict:
+        """Compare two context compilation snapshots."""
+        r = self._client.get(
+            "/api/context/snapshots/compare",
+            params={"a": snapshot_a, "b": snapshot_b},
+        )
+        r.raise_for_status()
+        return r.json()
+
+    def list_snapshots(self, event_id: Optional[str] = None) -> list[dict]:
+        """List context compilation snapshots."""
+        params: dict[str, str] = {}
+        if event_id:
+            params["event_id"] = event_id
+        r = self._client.get("/api/context/snapshots", params=params)
+        r.raise_for_status()
+        return r.json()
+
     # -- MCP config -----------------------------------------------------------
 
     def mcp_config(self) -> dict:
@@ -430,5 +521,78 @@ class AsyncRecallOS:
         if trip_id:
             body["trip_id"] = trip_id
         r = await self._client.post("/api/memory/bulk", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    async def importance_ranking(self, limit: int = 20) -> list[dict]:
+        r = await self._client.get("/api/memory/importance", params={"limit": str(limit)})
+        r.raise_for_status()
+        return r.json()
+
+    async def importance_breakdown(self, memory_id: str) -> dict:
+        r = await self._client.get(f"/api/memory/{memory_id}/importance")
+        r.raise_for_status()
+        return r.json()
+
+    async def decay_preview(
+        self,
+        max_age_days: Optional[int] = None,
+        max_stale_days: Optional[int] = None,
+        min_importance: Optional[int] = None,
+    ) -> dict:
+        params: dict[str, str] = {}
+        if max_age_days is not None:
+            params["max_age_days"] = str(max_age_days)
+        if max_stale_days is not None:
+            params["max_stale_days"] = str(max_stale_days)
+        if min_importance is not None:
+            params["min_importance"] = str(min_importance)
+        r = await self._client.get("/api/memory/decay", params=params)
+        r.raise_for_status()
+        return r.json()
+
+    async def decay_apply(
+        self,
+        max_age_days: Optional[int] = None,
+        max_stale_days: Optional[int] = None,
+        min_importance: Optional[int] = None,
+    ) -> dict:
+        body: dict[str, Any] = {}
+        if max_age_days is not None:
+            body["max_age_days"] = max_age_days
+        if max_stale_days is not None:
+            body["max_stale_days"] = max_stale_days
+        if min_importance is not None:
+            body["min_importance"] = min_importance
+        r = await self._client.post("/api/memory/decay", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    async def reconfirm(self, memory_id: str) -> dict:
+        r = await self._client.post(f"/api/memory/{memory_id}/reconfirm")
+        r.raise_for_status()
+        return r.json()
+
+    async def merge(self, source_id: str, target_id: str, merged_value: Optional[str] = None) -> dict:
+        body: dict[str, Any] = {"source_id": source_id, "target_id": target_id}
+        if merged_value:
+            body["merged_value"] = merged_value
+        r = await self._client.post("/api/memory/merge", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    async def compare_snapshots(self, snapshot_a: str, snapshot_b: str) -> dict:
+        r = await self._client.get(
+            "/api/context/snapshots/compare",
+            params={"a": snapshot_a, "b": snapshot_b},
+        )
+        r.raise_for_status()
+        return r.json()
+
+    async def list_snapshots(self, event_id: Optional[str] = None) -> list[dict]:
+        params: dict[str, str] = {}
+        if event_id:
+            params["event_id"] = event_id
+        r = await self._client.get("/api/context/snapshots", params=params)
         r.raise_for_status()
         return r.json()

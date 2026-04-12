@@ -1,0 +1,33 @@
+{
+  "name": "recallos",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for the RecallOS memory/context API",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "keywords": [
+    "recallos",
+    "memory",
+    "context",
+    "ai",
+    "llm"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

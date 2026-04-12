@@ -334,6 +334,81 @@ const API_SPEC = {
         responses: { "200": { description: "Snapshot detail" } },
       },
     },
+    "/api/context/snapshots/compare": {
+      get: {
+        summary: "Compare two context snapshots side-by-side",
+        tags: ["Context"],
+        parameters: [
+          { name: "a", in: "query", required: true, schema: { type: "string" }, description: "First snapshot ID" },
+          { name: "b", in: "query", required: true, schema: { type: "string" }, description: "Second snapshot ID" },
+        ],
+        responses: { "200": { description: "Diff showing added, removed, and kept memory items" } },
+      },
+    },
+    "/api/memory/decay": {
+      get: {
+        summary: "Preview which items would be marked stale by decay rules",
+        tags: ["Memory"],
+        parameters: [
+          { name: "max_age_days", in: "query", schema: { type: "integer" }, description: "Max age in days for unconfirmed items (default 90)" },
+          { name: "max_stale_days", in: "query", schema: { type: "integer" }, description: "Max days since last confirmation (default 60)" },
+          { name: "min_importance", in: "query", schema: { type: "integer" }, description: "Minimum importance score to keep (default 15)" },
+        ],
+        responses: { "200": { description: "List of decay candidates" } },
+      },
+      post: {
+        summary: "Apply decay rules and mark stale items",
+        tags: ["Memory"],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  max_age_days: { type: "integer" },
+                  max_stale_days: { type: "integer" },
+                  min_importance: { type: "integer" },
+                },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Count of marked items and their details" } },
+      },
+    },
+    "/api/memory/{id}/reconfirm": {
+      post: {
+        summary: "Manually reconfirm a memory item as still valid",
+        tags: ["Memory"],
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: {
+          "200": { description: "Confirmation with updated timestamp" },
+          "404": { description: "Item not found" },
+        },
+      },
+    },
+    "/api/memory/importance": {
+      get: {
+        summary: "Rank memory items by computed importance score",
+        tags: ["Memory"],
+        parameters: [
+          { name: "limit", in: "query", schema: { type: "integer", default: 20 } },
+        ],
+        responses: { "200": { description: "Array of items with importance scores" } },
+      },
+    },
+    "/api/memory/{id}/importance": {
+      get: {
+        summary: "Get importance score breakdown for a single item",
+        tags: ["Memory"],
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: { "200": { description: "Factor breakdown (confidence, recency, links, tags, age)" } },
+      },
+    },
     "/api/settings/providers": {
       get: {
         summary: "List configured providers",
