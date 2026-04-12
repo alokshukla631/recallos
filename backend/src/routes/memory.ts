@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import { v4 as uuidv4 } from "uuid";
 import { queryAll, queryOne, runSql } from "../db/index.js";
 import { logAudit, getAuditForItem, getRecentAudit } from "../modules/audit.js";
 import { bm25Rank, fuzzySearch } from "../modules/ranking.js";
@@ -44,6 +45,46 @@ router.get("/", (req: Request, res: Response) => {
     res.json(queryAll(sql, params));
   } catch (err) {
     console.error("GET /api/memory error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST / - create a memory item directly
+router.post("/", (req: Request, res: Response) => {
+  try {
+    const { key, type, value, scope, domain, confidence, trip_id } = req.body;
+
+    if (!key || typeof key !== "string" || !key.trim()) {
+      res.status(400).json({ error: "key is required" });
+      return;
+    }
+    if (!value || typeof value !== "string" || !value.trim()) {
+      res.status(400).json({ error: "value is required" });
+      return;
+    }
+
+    const validTypes = ["preference", "constraint", "fact", "goal", "override"];
+    const itemType = validTypes.includes(type) ? type : "fact";
+    const validScopes = ["global", "trip", "domain", "project", "session"];
+    const itemScope = validScopes.includes(scope) ? scope : "global";
+    const itemConfidence = typeof confidence === "number" ? Math.max(0, Math.min(1, confidence)) : 0.8;
+
+    const id = uuidv4();
+    const now = new Date().toISOString();
+
+    runSql(
+      `INSERT INTO memory_items (id, key, type, value, scope, domain, trip_id, confidence, authority, status, last_confirmed_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'explicit', 'active', ?, ?)`,
+      [id, key.trim(), itemType, value.trim(), itemScope, domain || null, trip_id || null, itemConfidence, now, now]
+    );
+
+    logAudit(id, "created", "Manually created by user");
+    fireWebhook("created", { id, key: key.trim(), type: itemType, value: value.trim(), scope: itemScope });
+
+    const created = queryOne("SELECT * FROM memory_items WHERE id = ?", [id]);
+    res.status(201).json(created);
+  } catch (err) {
+    console.error("POST /api/memory error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

@@ -56,6 +56,21 @@ memory
   });
 
 memory
+  .command("create <key> <value>")
+  .description("Create a memory item directly")
+  .option("-t, --type <type>", "Type: fact, preference, constraint, goal, override", "fact")
+  .option("-s, --scope <scope>", "Scope: global, domain, project, trip, session", "global")
+  .option("-d, --domain <domain>", "Domain (e.g. travel, coding, health)")
+  .action(async (key, value, opts) => {
+    const body: any = { key, value, type: opts.type, scope: opts.scope };
+    if (opts.domain) body.domain = opts.domain;
+    const item = await post("/api/memory", body);
+    console.log(`Created: [${item.type}] ${item.key}`);
+    console.log(`  ${item.value}`);
+    console.log(`  id=${item.id}  scope=${item.scope}  confidence=${Math.round(item.confidence * 100)}%`);
+  });
+
+memory
   .command("search <query>")
   .description("Search memory items using BM25 full-text search")
   .action(async (query) => {

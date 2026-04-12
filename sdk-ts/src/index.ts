@@ -242,6 +242,19 @@ export class RecallOS {
     return this.get("/api/memory/search", { q: query });
   }
 
+  /** Create a memory item directly. */
+  createMemory(item: {
+    key: string;
+    value: string;
+    type?: string;
+    scope?: string;
+    domain?: string;
+    confidence?: number;
+    trip_id?: string;
+  }): Promise<MemoryItem> {
+    return this.post("/api/memory", item);
+  }
+
   /** Update a memory item (value, status, scope, etc). */
   updateMemory(id: string, fields: Partial<Pick<MemoryItem, "value" | "status" | "scope" | "confidence">>): Promise<MemoryItem> {
     return this.put(`/api/memory/${id}`, fields);

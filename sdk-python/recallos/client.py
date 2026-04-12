@@ -62,6 +62,25 @@ class RecallOS:
         r.raise_for_status()
         return r.json()
 
+    def create_memory(
+        self,
+        key: str,
+        value: str,
+        type: str = "fact",
+        scope: str = "global",
+        domain: Optional[str] = None,
+        confidence: Optional[float] = None,
+    ) -> dict:
+        """Create a memory item directly."""
+        body: dict[str, Any] = {"key": key, "value": value, "type": type, "scope": scope}
+        if domain:
+            body["domain"] = domain
+        if confidence is not None:
+            body["confidence"] = confidence
+        r = self._client.post("/api/memory", json=body)
+        r.raise_for_status()
+        return r.json()
+
     def search_memory(self, query: str) -> list[dict]:
         """Search memory using BM25 full-text ranking."""
         r = self._client.get("/api/memory/search", params={"q": query})
@@ -440,6 +459,25 @@ class AsyncRecallOS:
         if scope:
             params["scope"] = scope
         r = await self._client.get("/api/memory", params=params)
+        r.raise_for_status()
+        return r.json()
+
+    async def create_memory(
+        self,
+        key: str,
+        value: str,
+        type: str = "fact",
+        scope: str = "global",
+        domain: Optional[str] = None,
+        confidence: Optional[float] = None,
+    ) -> dict:
+        """Create a memory item directly."""
+        body: dict[str, Any] = {"key": key, "value": value, "type": type, "scope": scope}
+        if domain:
+            body["domain"] = domain
+        if confidence is not None:
+            body["confidence"] = confidence
+        r = await self._client.post("/api/memory", json=body)
         r.raise_for_status()
         return r.json()
 

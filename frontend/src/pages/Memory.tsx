@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import MemoryDetailModal from "../components/MemoryDetailModal";
+import { useToast } from "../components/Toast";
 import "./Memory.css";
 
 interface MemoryItem {
@@ -55,6 +56,7 @@ interface SessionStats {
 }
 
 function Memory() {
+  const { toast } = useToast();
   const [items, setItems] = useState<MemoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +85,15 @@ function Memory() {
 
   // Detail modal
   const [detailId, setDetailId] = useState<number | null>(null);
+
+  // Create form
+  const [showCreate, setShowCreate] = useState(false);
+  const [newKey, setNewKey] = useState("");
+  const [newValue, setNewValue] = useState("");
+  const [newType, setNewType] = useState("fact");
+  const [newScope, setNewScope] = useState("global");
+  const [newDomain, setNewDomain] = useState("");
+  const [creating, setCreating] = useState(false);
 
   // Session stats
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
@@ -258,9 +269,10 @@ function Memory() {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setEditingId(null);
+      toast("Memory updated", "success");
       fetchMemories();
     } catch (err: any) {
-      setError(err.message || "Failed to update memory");
+      toast(err.message || "Failed to update", "error");
     }
   };
 
@@ -268,9 +280,10 @@ function Memory() {
     try {
       const res = await fetch(`/api/memory/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      toast("Memory deleted", "success");
       fetchMemories();
     } catch (err: any) {
-      setError(err.message || "Failed to delete memory");
+      toast(err.message || "Failed to delete", "error");
     }
   };
 
@@ -278,9 +291,48 @@ function Memory() {
     try {
       const res = await fetch(`/api/memory/${id}/reconfirm`, { method: "POST" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      toast("Memory reconfirmed", "success");
       fetchMemories();
     } catch (err: any) {
-      setError(err.message || "Failed to reconfirm");
+      toast(err.message || "Failed to reconfirm", "error");
+    }
+  };
+
+  const handleCreate = async () => {
+    if (!newKey.trim() || !newValue.trim()) {
+      toast("Key and value are required", "warning");
+      return;
+    }
+    setCreating(true);
+    try {
+      const body: Record<string, string> = {
+        key: newKey.trim(),
+        value: newValue.trim(),
+        type: newType,
+        scope: newScope,
+      };
+      if (newDomain.trim()) body.domain = newDomain.trim();
+      const res = await fetch("/api/memory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      toast(`Created "${newKey.trim()}"`, "success");
+      setNewKey("");
+      setNewValue("");
+      setNewType("fact");
+      setNewScope("global");
+      setNewDomain("");
+      setShowCreate(false);
+      fetchMemories();
+    } catch (err: any) {
+      toast(err.message || "Failed to create", "error");
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -289,9 +341,10 @@ function Memory() {
       const endpoint = currentlyPinned ? "unpin" : "pin";
       const res = await fetch(`/api/memory/${id}/${endpoint}`, { method: "POST" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      toast(currentlyPinned ? "Memory unpinned" : "Memory pinned", "success");
       fetchMemories();
     } catch (err: any) {
-      setError(err.message || "Failed to toggle pin");
+      toast(err.message || "Failed to toggle pin", "error");
     }
   };
 
@@ -354,6 +407,68 @@ function Memory() {
             ))}
         </div>
       )}
+
+      {/* Create button + form */}
+      <div className="create-section">
+        <button className="btn btn-primary create-toggle" onClick={() => setShowCreate(!showCreate)}>
+          {showCreate ? "Cancel" : "+ New Memory"}
+        </button>
+        {showCreate && (
+          <div className="create-form">
+            <div className="create-form-row">
+              <label>
+                Key
+                <input
+                  type="text"
+                  placeholder="e.g. hotel_preference"
+                  value={newKey}
+                  onChange={(e) => setNewKey(e.target.value)}
+                />
+              </label>
+              <label>
+                Type
+                <select value={newType} onChange={(e) => setNewType(e.target.value)}>
+                  <option value="fact">Fact</option>
+                  <option value="preference">Preference</option>
+                  <option value="constraint">Constraint</option>
+                  <option value="goal">Goal</option>
+                  <option value="override">Override</option>
+                </select>
+              </label>
+              <label>
+                Scope
+                <select value={newScope} onChange={(e) => setNewScope(e.target.value)}>
+                  <option value="global">Global</option>
+                  <option value="domain">Domain</option>
+                  <option value="project">Project</option>
+                  <option value="trip">Trip</option>
+                  <option value="session">Session</option>
+                </select>
+              </label>
+              <label>
+                Domain
+                <input
+                  type="text"
+                  placeholder="optional"
+                  value={newDomain}
+                  onChange={(e) => setNewDomain(e.target.value)}
+                />
+              </label>
+            </div>
+            <div className="create-form-value">
+              <textarea
+                placeholder="What should be remembered?"
+                value={newValue}
+                onChange={(e) => setNewValue(e.target.value)}
+                rows={2}
+              />
+            </div>
+            <button className="btn btn-primary" onClick={handleCreate} disabled={creating}>
+              {creating ? "Creating..." : "Create Memory"}
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Top memories by importance */}
       {topMemories.length > 0 && (

@@ -2,6 +2,74 @@
   max-width: 1200px;
 }
 
+/* Create form */
+.create-section {
+  margin: 16px 0 0;
+}
+
+.create-toggle {
+  font-size: 0.82rem;
+  padding: 7px 16px;
+}
+
+.create-form {
+  margin-top: 10px;
+  padding: 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.create-form-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.create-form-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  flex: 1;
+  min-width: 120px;
+}
+
+.create-form-row input,
+.create-form-row select {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.85rem;
+}
+
+.create-form-value {
+  margin-bottom: 10px;
+}
+
+.create-form-value textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.create-form-value textarea:focus,
+.create-form-row input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
 /* Search */
 .memory-search {
   display: flex;
