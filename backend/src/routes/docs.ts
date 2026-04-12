@@ -409,6 +409,30 @@ const API_SPEC = {
         responses: { "200": { description: "Factor breakdown (confidence, recency, links, tags, age)" } },
       },
     },
+    "/api/memory/{id}/detail": {
+      get: {
+        summary: "Get comprehensive detail for a memory item",
+        description: "Returns the full item with importance breakdown, tags, links, audit history, supersession info, and context appearance count.",
+        tags: ["Memory"],
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: {
+          "200": { description: "Full detail object with importance, tags, links, audit, supersession" },
+          "404": { description: "Item not found" },
+        },
+      },
+    },
+    "/api/memory/graph": {
+      get: {
+        summary: "Get graph data for memory visualization",
+        description: "Returns nodes (active memory items with importance) and edges (links + implicit same-key connections) for rendering a force-directed graph.",
+        tags: ["Memory"],
+        responses: {
+          "200": { description: "Object with nodes array, edges array, and stats" },
+        },
+      },
+    },
     "/api/settings/providers": {
       get: {
         summary: "List configured providers",

@@ -360,6 +360,18 @@ class RecallOS:
         r.raise_for_status()
         return r.json()
 
+    def get_detail(self, memory_id: str) -> dict:
+        """Get comprehensive detail for a memory item (importance, tags, links, audit)."""
+        r = self._client.get(f"/api/memory/{memory_id}/detail")
+        r.raise_for_status()
+        return r.json()
+
+    def graph(self) -> dict:
+        """Get graph data (nodes + edges) for memory visualization."""
+        r = self._client.get("/api/memory/graph")
+        r.raise_for_status()
+        return r.json()
+
     # -- Snapshot comparison --------------------------------------------------
 
     def compare_snapshots(self, snapshot_a: str, snapshot_b: str) -> dict:
@@ -578,6 +590,18 @@ class AsyncRecallOS:
         if merged_value:
             body["merged_value"] = merged_value
         r = await self._client.post("/api/memory/merge", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    async def get_detail(self, memory_id: str) -> dict:
+        """Get comprehensive detail for a memory item."""
+        r = await self._client.get(f"/api/memory/{memory_id}/detail")
+        r.raise_for_status()
+        return r.json()
+
+    async def graph(self) -> dict:
+        """Get graph data (nodes + edges) for memory visualization."""
+        r = await self._client.get("/api/memory/graph")
         r.raise_for_status()
         return r.json()
 

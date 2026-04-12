@@ -346,6 +346,32 @@ export class RecallOS {
     return this.del(`/api/memory/links/${linkId}`);
   }
 
+  // -- Graph ----------------------------------------------------------------
+
+  /** Get graph data (nodes + edges) for memory visualization. */
+  graph(): Promise<{
+    nodes: Array<{
+      id: string;
+      key: string;
+      type: string;
+      value: string;
+      scope: string;
+      domain: string | null;
+      pinned: boolean;
+      importance: number;
+    }>;
+    edges: Array<{
+      id: string;
+      source: string;
+      target: string;
+      relation: string;
+      strength: number;
+    }>;
+    stats: { node_count: number; edge_count: number; implicit_edge_count: number };
+  }> {
+    return this.get("/api/memory/graph");
+  }
+
   // -- Stats ----------------------------------------------------------------
 
   /** Get full memory statistics. */

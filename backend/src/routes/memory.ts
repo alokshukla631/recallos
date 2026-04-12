@@ -715,6 +715,81 @@ router.post("/decay", (req: Request, res: Response) => {
   }
 });
 
+// GET /graph - return nodes and edges for memory graph visualization
+router.get("/graph", (_req: Request, res: Response) => {
+  try {
+    // Get all active memory items as nodes
+    const items = queryAll(
+      "SELECT id, key, type, value, scope, domain, confidence, pinned FROM memory_items WHERE status = 'active' ORDER BY created_at DESC LIMIT 200"
+    ) as any[];
+
+    // Get all links as edges
+    const links = queryAll(
+      "SELECT id, source_id, target_id, relation, strength FROM memory_links"
+    ) as any[];
+
+    // Compute importance for sizing nodes
+    const nodes = items.map((item) => {
+      const importance = computeImportance(item.id);
+      return {
+        id: item.id,
+        key: item.key,
+        type: item.type,
+        value: item.value.slice(0, 80),
+        scope: item.scope,
+        domain: item.domain,
+        pinned: !!item.pinned,
+        importance: importance.total,
+      };
+    });
+
+    // Only include edges where both nodes exist in the active set
+    const nodeIds = new Set(nodes.map((n) => n.id));
+    const edges = links
+      .filter((l) => nodeIds.has(l.source_id) && nodeIds.has(l.target_id))
+      .map((l) => ({
+        id: l.id,
+        source: l.source_id,
+        target: l.target_id,
+        relation: l.relation,
+        strength: l.strength,
+      }));
+
+    // Also add implicit edges for items sharing the same key (potential duplicates)
+    const byKey: Record<string, string[]> = {};
+    for (const n of nodes) {
+      if (!byKey[n.key]) byKey[n.key] = [];
+      byKey[n.key].push(n.id);
+    }
+    const implicitEdges: any[] = [];
+    for (const ids of Object.values(byKey)) {
+      if (ids.length < 2) continue;
+      for (let i = 0; i < ids.length - 1; i++) {
+        implicitEdges.push({
+          id: `implicit-${ids[i]}-${ids[i + 1]}`,
+          source: ids[i],
+          target: ids[i + 1],
+          relation: "same_key",
+          strength: 0.5,
+        });
+      }
+    }
+
+    res.json({
+      nodes,
+      edges: [...edges, ...implicitEdges],
+      stats: {
+        node_count: nodes.length,
+        edge_count: edges.length,
+        implicit_edge_count: implicitEdges.length,
+      },
+    });
+  } catch (err) {
+    console.error("GET /api/memory/graph error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /duplicates - find groups of likely duplicate memory items
 router.get("/duplicates", (req: Request, res: Response) => {
   try {
