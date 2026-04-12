@@ -132,7 +132,7 @@ router.get("/stats", (_req: Request, res: Response) => {
     ) as any;
 
     const recentAudit = queryAll(
-      "SELECT action, COUNT(*) as count FROM memory_audit WHERE created_at > ? GROUP BY action ORDER BY count DESC",
+      "SELECT action, COUNT(*) as count FROM memory_audit_log WHERE created_at > ? GROUP BY action ORDER BY count DESC",
       [weekAgo]
     );
 
