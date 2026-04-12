@@ -359,6 +359,51 @@ router.get("/search", (req: Request, res: Response) => {
   }
 });
 
+// GET /audit/heatmap - daily activity counts for the last N weeks
+router.get("/audit/heatmap", (req: Request, res: Response) => {
+  try {
+    const weeks = Math.min(52, parseInt(req.query.weeks as string) || 12);
+    const daysBack = weeks * 7;
+    const cutoff = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    const rows = queryAll(
+      `SELECT date(created_at) as day, action, COUNT(*) as count
+       FROM memory_audit_log
+       WHERE date(created_at) >= ?
+       GROUP BY day, action
+       ORDER BY day ASC`,
+      [cutoff]
+    ) as any[];
+
+    // Aggregate by day
+    const byDay: Record<string, { total: number; actions: Record<string, number> }> = {};
+    for (const row of rows) {
+      if (!byDay[row.day]) byDay[row.day] = { total: 0, actions: {} };
+      byDay[row.day].total += row.count;
+      byDay[row.day].actions[row.action] = (byDay[row.day].actions[row.action] || 0) + row.count;
+    }
+
+    // Build a complete array of days
+    const days: Array<{ date: string; total: number; actions: Record<string, number> }> = [];
+    const now = new Date();
+    for (let i = daysBack - 1; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      const key = d.toISOString().slice(0, 10);
+      days.push({
+        date: key,
+        total: byDay[key]?.total || 0,
+        actions: byDay[key]?.actions || {},
+      });
+    }
+
+    const maxActivity = Math.max(1, ...days.map((d) => d.total));
+    res.json({ days, max_activity: maxActivity, weeks });
+  } catch (err) {
+    console.error("GET /api/memory/audit/heatmap error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /audit/recent - get recent audit log entries
 router.get("/audit/recent", (req: Request, res: Response) => {
   try {
