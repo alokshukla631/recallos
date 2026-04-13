@@ -397,6 +397,12 @@ class RecallOS:
         r.raise_for_status()
         return r.json()
 
+    def trends(self, days: int = 30) -> list:
+        """Get daily activity trends over time."""
+        r = self._client.get("/api/memory/stats/trends", params={"days": days})
+        r.raise_for_status()
+        return r.json()
+
     def graph(self) -> dict:
         """Get graph data (nodes + edges) for memory visualization."""
         r = self._client.get("/api/memory/graph")
@@ -687,6 +693,12 @@ class AsyncRecallOS:
     async def recently_deleted(self, limit: int = 20) -> list:
         """List recently deleted memory items."""
         r = await self._client.get("/api/memory/recently-deleted", params={"limit": limit})
+        r.raise_for_status()
+        return r.json()
+
+    async def trends(self, days: int = 30) -> list:
+        """Get daily activity trends over time."""
+        r = await self._client.get("/api/memory/stats/trends", params={"days": days})
         r.raise_for_status()
         return r.json()
 

@@ -574,6 +574,16 @@ const API_SPEC = {
         },
       },
     },
+    "/api/memory/stats/trends": {
+      get: {
+        summary: "Get daily activity counts over time",
+        tags: ["Memory"],
+        parameters: [
+          { name: "days", in: "query", schema: { type: "integer", default: 30 }, description: "Number of days to look back" },
+        ],
+        responses: { "200": { description: "Array of { day, total, created, deleted, ... } objects" } },
+      },
+    },
     "/api/memory/{id}/restore": {
       post: {
         summary: "Restore a deleted or superseded item back to active",

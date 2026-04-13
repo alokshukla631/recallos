@@ -287,6 +287,11 @@ export class RecallOS {
     return this.get("/api/memory/recently-deleted", { limit: String(limit) });
   }
 
+  /** Get daily activity trends over time. */
+  trends(days = 30): Promise<Array<{ day: string; total: number; [action: string]: unknown }>> {
+    return this.get("/api/memory/stats/trends", { days: String(days) });
+  }
+
   // -- Importance -----------------------------------------------------------
 
   /** Get memory items ranked by importance score. */
