@@ -67,9 +67,10 @@ RecallOS sits between you and the AI model. When you send a message:
 
 ### Pages
 
+- **Dashboard** - Overview stats grid with active memories, conversations, trips, links, and 7-day activity. System status bar with version, uptime, and DB size. GitHub-style activity heatmap (12-week contribution grid). Charts for memory type, domain, scope, and confidence distribution. Retention chart. Activity sparkline. Insights panel with duplicate groups and suggestions. Quick actions. Notification bell in sidebar with alerts for conflicts, decay candidates, and duplicates.
 - **Chat** - Unified chat UI with conversation sidebar, streaming responses (SSE), provider selector, and trip selector. Memory badges show what was extracted and reconciled per message. Pipeline timing breakdown per response. Context panel shows what memory was injected.
 - **Trips** - Create and manage trips. Each trip scopes its own conversations and memory items.
-- **Memory** - Browse, search, and filter all stored memory items. Domain and scope columns with color-coded badges. Type, scope, domain, and status filters. Session stats panel with cleanup button. Inline edit and soft-delete. Multi-select with shift-click range selection, batch operations (pin, unpin, reconfirm, tag, export, delete). Client-side sorting with clickable column headers and pagination. Search history dropdown. Tag-based filtering with clickable chips. Conflict detection panel with inline resolution.
+- **Memory** - Browse, search, and filter all stored memory items. Type, scope, domain, and status filter dropdowns. Domain filter for all 9 detected domains. Tag-based filtering with clickable chips. Session stats panel with cleanup. Inline edit and soft-delete. Multi-select with shift-click range selection, batch operations (pin, unpin, reconfirm, tag, export, delete). Client-side sorting and pagination. Search history dropdown. Conflict detection panel. Markdown export button. Import JSON.
 - **Links** - Explore relationships between memory items. Click an item to see all incoming/outgoing links. Create new links with typed relations. Navigate between linked items.
 - **Scraper** - View available log sources (Claude Code, Cursor, ChatGPT) with status indicators. Trigger scrapes to extract memory from external AI tool conversations.
 - **Context Debug** - Inspect context snapshots with full trace: BM25 score, recency boost, final score, and inclusion decision for every memory item.
@@ -83,7 +84,8 @@ RecallOS sits between you and the AI model. When you send a message:
 - **Entity extraction** - Dates (ISO, relative, month-day), destinations (300+ cities/countries), amounts (multi-currency), durations, 60+ technologies, programming languages
 - **Hierarchical scoping** - 5 scope levels: global, domain, trip, project, session. Narrower scopes override broader ones.
 - **Memory reconciliation** - Scope-aware precedence, duplicate detection with re-confirmation, conflict detection and resolution (keep new, keep old, or merge), audit trail
-- **Merge** - Combine two memory items: source gets superseded, tags are copied to target, confidence takes the max. Accessible from the detail modal or API.
+- **Merge** - Combine two memory items: source gets superseded, tags are copied to target, confidence takes the max. Accessible from the detail modal or API
+- **Version diff** - Word-level comparison between version history entries. Added words highlighted green, removed words shown in red with strikethrough
 - **Trash and restore** - Soft-deleted items can be listed and restored back to active status from the Trash page, CLI, or API
 - **BM25 + recency + link boost** - Full BM25 with IDF, term frequency saturation, length normalization, lightweight stemming. Recency decay (7-day half-life). Cross-domain link boosting for related items.
 - **Memory relationships** - Link items with typed relations (related_to, depends_on, conflicts_with, refines, derived_from) with configurable strength
@@ -256,11 +258,11 @@ Milestone 1 proved the core thesis: the model does reasoning, RecallOS provides 
 
 What's next:
 - Local embedding search (vector similarity alongside BM25)
-- Memory analytics dashboard with trend charts and activity heatmaps
+- Memory sharing and collaboration (multi-user support)
 - MCP client connections (pull context from calendars, documents, code repos)
 - Background refiner with a local model for smarter extraction
 - Windsurf and Copilot scraper support
-- Notifications system for conflict alerts and memory health warnings
+- Scheduled health checks and automated decay runs
 
 See the [docs](docs/) folder for the full vision and roadmap.
 
