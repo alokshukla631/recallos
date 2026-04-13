@@ -248,6 +248,40 @@ memory
   });
 
 memory
+  .command("conflicts")
+  .description("List pending memory conflicts")
+  .option("-s, --status <status>", "Filter: pending, all", "pending")
+  .action(async (opts) => {
+    const result = await get(`/api/memory/conflicts?status=${opts.status}`);
+    if (result.conflicts.length === 0) {
+      console.log("No conflicts found.");
+      return;
+    }
+    console.log(`\n  ${result.pending_count} pending conflict${result.pending_count !== 1 ? "s" : ""}:\n`);
+    for (const c of result.conflicts) {
+      console.log(`  [${c.status}] ${c.key}`);
+      console.log(`    Old: ${c.existing_value.slice(0, 80)}`);
+      console.log(`    New: ${c.new_value.slice(0, 80)}`);
+      console.log(`    ID: ${c.id}\n`);
+    }
+  });
+
+memory
+  .command("resolve <conflictId> <resolution>")
+  .description("Resolve a conflict: keep_new, keep_old, or merged")
+  .option("-v, --value <value>", "Merged value (required for 'merged' resolution)")
+  .action(async (conflictId, resolution, opts) => {
+    if (!["keep_new", "keep_old", "merged"].includes(resolution)) {
+      console.error("Resolution must be: keep_new, keep_old, or merged");
+      process.exit(1);
+    }
+    const body: Record<string, string> = { resolution };
+    if (opts.value) body.merged_value = opts.value;
+    const result = await post(`/api/memory/conflicts/${conflictId}/resolve`, body);
+    console.log(`Conflict resolved: ${result.resolution}`);
+  });
+
+memory
   .command("inspect <id>")
   .description("Show full detail for a memory item (importance, tags, links, audit)")
   .action(async (id) => {

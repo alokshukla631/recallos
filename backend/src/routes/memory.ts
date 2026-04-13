@@ -14,9 +14,18 @@ import { findDuplicates } from "../modules/duplicates.js";
 import { generateSuggestions } from "../modules/suggestions.js";
 import { fireWebhook } from "../modules/webhooks.js";
 import { createVersion, getVersions, revertToVersion, ensureVersionTable } from "../modules/versioning.js";
+import {
+  ensureConflictsTable,
+  detectConflicts,
+  getConflicts,
+  getPendingConflicts,
+  resolveConflict,
+  getPendingConflictCount,
+} from "../modules/conflicts.js";
 
-// Ensure version table exists on module load
+// Ensure tables exist on module load
 ensureVersionTable();
+ensureConflictsTable();
 
 const router = Router();
 
@@ -85,8 +94,14 @@ router.post("/", (req: Request, res: Response) => {
     logAudit(id, "created", "Manually created by user");
     fireWebhook("created", { id, key: key.trim(), type: itemType, value: value.trim(), scope: itemScope });
 
+    // Detect conflicts with existing items
+    const conflicts = detectConflicts(id, key.trim(), value.trim());
+    if (conflicts.length > 0) {
+      fireWebhook("conflict", { id, key: key.trim(), conflicts: conflicts.length });
+    }
+
     const created = queryOne("SELECT * FROM memory_items WHERE id = ?", [id]);
-    res.status(201).json(created);
+    res.status(201).json({ ...created as object, conflicts });
   } catch (err) {
     console.error("POST /api/memory error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -811,6 +826,39 @@ router.post("/import", (req: Request, res: Response) => {
   } catch (err) {
     console.error("POST /api/memory/import error:", err);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /conflicts - list conflicts
+router.get("/conflicts", (req: Request, res: Response) => {
+  try {
+    const status = req.query.status as string || "pending";
+    const conflicts = getConflicts(status);
+    const pendingCount = getPendingConflictCount();
+    res.json({ pending_count: pendingCount, conflicts });
+  } catch (err) {
+    console.error("GET /api/memory/conflicts error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /conflicts/:id/resolve - resolve a conflict
+router.post("/conflicts/:id/resolve", (req: Request, res: Response) => {
+  try {
+    const conflictId = req.params.id as string;
+    const { resolution, merged_value } = req.body;
+    if (!["keep_new", "keep_old", "merged"].includes(resolution)) {
+      res.status(400).json({ error: "resolution must be keep_new, keep_old, or merged" });
+      return;
+    }
+    resolveConflict(conflictId, resolution, merged_value);
+    fireWebhook("conflict_resolved", { conflict_id: conflictId, resolution });
+    res.json({ message: "Conflict resolved", conflict_id: conflictId, resolution });
+  } catch (err: any) {
+    console.error("POST /api/memory/conflicts/:id/resolve error:", err);
+    res.status(err.message === "Conflict not found" ? 404 : 500).json({
+      error: err.message || "Internal server error",
+    });
   }
 });
 

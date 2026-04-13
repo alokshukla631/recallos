@@ -391,6 +391,35 @@ class RecallOS:
         r.raise_for_status()
         return r.json()
 
+    # -- Conflicts ------------------------------------------------------------
+
+    def get_conflicts(self, status: str = "pending") -> dict:
+        """Get memory conflicts."""
+        r = self._client.get("/api/memory/conflicts", params={"status": status})
+        r.raise_for_status()
+        return r.json()
+
+    def resolve_conflict(
+        self, conflict_id: str, resolution: str, merged_value: Optional[str] = None
+    ) -> dict:
+        """Resolve a memory conflict (keep_new, keep_old, or merged)."""
+        body: dict[str, str] = {"resolution": resolution}
+        if merged_value:
+            body["merged_value"] = merged_value
+        r = self._client.post(
+            f"/api/memory/conflicts/{conflict_id}/resolve", json=body
+        )
+        r.raise_for_status()
+        return r.json()
+
+    # -- Import ---------------------------------------------------------------
+
+    def import_memories(self, items: list[dict]) -> dict:
+        """Bulk import structured memory items."""
+        r = self._client.post("/api/memory/import", json={"items": items})
+        r.raise_for_status()
+        return r.json()
+
     # -- Snapshot comparison --------------------------------------------------
 
     def compare_snapshots(self, snapshot_a: str, snapshot_b: str) -> dict:
@@ -640,6 +669,31 @@ class AsyncRecallOS:
     async def graph(self) -> dict:
         """Get graph data (nodes + edges) for memory visualization."""
         r = await self._client.get("/api/memory/graph")
+        r.raise_for_status()
+        return r.json()
+
+    async def get_conflicts(self, status: str = "pending") -> dict:
+        """Get memory conflicts."""
+        r = await self._client.get("/api/memory/conflicts", params={"status": status})
+        r.raise_for_status()
+        return r.json()
+
+    async def resolve_conflict(
+        self, conflict_id: str, resolution: str, merged_value: Optional[str] = None
+    ) -> dict:
+        """Resolve a memory conflict."""
+        body: dict[str, str] = {"resolution": resolution}
+        if merged_value:
+            body["merged_value"] = merged_value
+        r = await self._client.post(
+            f"/api/memory/conflicts/{conflict_id}/resolve", json=body
+        )
+        r.raise_for_status()
+        return r.json()
+
+    async def import_memories(self, items: list[dict]) -> dict:
+        """Bulk import structured memory items."""
+        r = await self._client.post("/api/memory/import", json={"items": items})
         r.raise_for_status()
         return r.json()
 

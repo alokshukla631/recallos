@@ -385,6 +385,50 @@ export class RecallOS {
     return this.get("/api/memory/graph");
   }
 
+  // -- Conflicts ------------------------------------------------------------
+
+  /** Get memory conflicts. */
+  getConflicts(status = "pending"): Promise<{
+    pending_count: number;
+    conflicts: Array<{
+      id: string;
+      existing_id: string;
+      new_id: string;
+      key: string;
+      existing_value: string;
+      new_value: string;
+      status: string;
+      created_at: string;
+    }>;
+  }> {
+    return this.get("/api/memory/conflicts", { status });
+  }
+
+  /** Resolve a memory conflict. */
+  resolveConflict(
+    conflictId: string,
+    resolution: "keep_new" | "keep_old" | "merged",
+    mergedValue?: string
+  ): Promise<{ message: string; conflict_id: string; resolution: string }> {
+    const body: Record<string, string> = { resolution };
+    if (mergedValue) body.merged_value = mergedValue;
+    return this.post(`/api/memory/conflicts/${conflictId}/resolve`, body);
+  }
+
+  // -- Import ---------------------------------------------------------------
+
+  /** Bulk import structured memory items. */
+  importMemories(items: Array<{
+    key: string;
+    value: string;
+    type?: string;
+    scope?: string;
+    domain?: string;
+    confidence?: number;
+  }>): Promise<{ imported: number; skipped: number; errors: string[] }> {
+    return this.post("/api/memory/import", { items });
+  }
+
   // -- Stats ----------------------------------------------------------------
 
   /** Get full memory statistics. */

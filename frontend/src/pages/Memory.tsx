@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import MemoryDetailModal from "../components/MemoryDetailModal";
 import BatchBar from "../components/BatchBar";
+import ConflictPanel from "../components/ConflictPanel";
 import { useToast } from "../components/Toast";
 import "./Memory.css";
 
@@ -591,6 +592,9 @@ function Memory() {
           </div>
         )}
       </div>
+
+      {/* Conflict panel */}
+      <ConflictPanel onResolved={() => fetchMemories()} />
 
       {/* Top memories by importance */}
       {topMemories.length > 0 && (

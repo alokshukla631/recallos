@@ -537,6 +537,43 @@ const API_SPEC = {
         responses: { "200": { description: "{ days: [{ date, total }], max }" } },
       },
     },
+    "/api/memory/conflicts": {
+      get: {
+        summary: "List memory conflicts",
+        tags: ["Memory"],
+        parameters: [
+          { name: "status", in: "query", schema: { type: "string", enum: ["pending", "resolved_keep_new", "resolved_keep_old", "resolved_merged", "all"], default: "pending" } },
+        ],
+        responses: { "200": { description: "{ pending_count, conflicts }" } },
+      },
+    },
+    "/api/memory/conflicts/{id}/resolve": {
+      post: {
+        summary: "Resolve a memory conflict",
+        tags: ["Memory"],
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "string" } },
+        ],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["resolution"],
+                properties: {
+                  resolution: { type: "string", enum: ["keep_new", "keep_old", "merged"] },
+                  merged_value: { type: "string", description: "Required when resolution is 'merged'" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Conflict resolved" },
+          "404": { description: "Conflict not found" },
+        },
+      },
+    },
     "/api/settings/webhooks/log": {
       get: {
         summary: "Get recent webhook delivery log",
