@@ -764,6 +764,56 @@ router.post("/batch", (req: Request, res: Response) => {
   }
 });
 
+// POST /import - bulk import memories from JSON array
+router.post("/import", (req: Request, res: Response) => {
+  try {
+    const { items: importItems } = req.body;
+    if (!Array.isArray(importItems) || importItems.length === 0) {
+      res.status(400).json({ error: "items must be a non-empty array" });
+      return;
+    }
+    if (importItems.length > 200) {
+      res.status(400).json({ error: "Maximum 200 items per import" });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    let imported = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    for (const entry of importItems) {
+      const { key, value, type, scope, domain, confidence } = entry;
+      if (!key || !value) {
+        skipped++;
+        errors.push(`Missing key or value for entry: ${key || "(no key)"}`);
+        continue;
+      }
+
+      const validTypes = ["preference", "constraint", "fact", "goal", "override"];
+      const validScopes = ["global", "domain", "trip", "project", "session"];
+      const itemType = validTypes.includes(type) ? type : "fact";
+      const itemScope = validScopes.includes(scope) ? scope : "global";
+      const itemConfidence = typeof confidence === "number" ? Math.min(1, Math.max(0, confidence)) : 0.8;
+
+      const id = uuidv4();
+      runSql(
+        `INSERT INTO memory_items (id, key, value, type, scope, domain, confidence, status, pinned, created_at, last_confirmed_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 0, ?, ?)`,
+        [id, key, value, itemType, itemScope, domain || null, itemConfidence, now, now]
+      );
+      logAudit(id, "imported", `Bulk import`);
+      imported++;
+    }
+
+    fireWebhook("imported", { imported, skipped });
+    res.json({ imported, skipped, errors: errors.slice(0, 10) });
+  } catch (err) {
+    console.error("POST /api/memory/import error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // DELETE /:id - soft delete
 router.delete("/:id", (req: Request, res: Response) => {
   try {

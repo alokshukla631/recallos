@@ -45,6 +45,7 @@
 .batch-pin:hover { border-color: #f59e0b; color: #f59e0b; }
 .batch-unpin:hover { border-color: #6b7280; color: #6b7280; }
 .batch-reconfirm:hover { border-color: #22c55e; color: #22c55e; }
+.batch-export:hover { border-color: #3b82f6; color: #3b82f6; }
 .batch-delete:hover { border-color: #ef4444; color: #ef4444; }
 
 .batch-clear {

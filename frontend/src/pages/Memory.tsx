@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import MemoryDetailModal from "../components/MemoryDetailModal";
 import BatchBar from "../components/BatchBar";
 import { useToast } from "../components/Toast";
@@ -90,6 +90,17 @@ function Memory() {
   // Batch selection
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
+  // Sorting
+  const [sortField, setSortField] = useState<string>("created_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
+
+  // Import
+  const importRef = useRef<HTMLInputElement>(null);
+
   // Create form
   const [showCreate, setShowCreate] = useState(false);
   const [newKey, setNewKey] = useState("");
@@ -117,6 +128,7 @@ function Memory() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setItems(Array.isArray(data) ? data : []);
+      setPage(1);
     } catch (err: any) {
       setError(err.message || "Failed to fetch memories");
       setItems([]);
@@ -340,6 +352,32 @@ function Memory() {
     }
   };
 
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      const items = Array.isArray(data) ? data : data.items || [data];
+      const res = await fetch("/api/memory/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const result = await res.json();
+      toast(`Imported ${result.imported} items (${result.skipped} skipped)`, "success");
+      fetchMemories();
+    } catch (err: any) {
+      toast(err.message || "Import failed", "error");
+    }
+    // Reset input so the same file can be re-imported
+    if (importRef.current) importRef.current.value = "";
+  };
+
   const handleTogglePin = async (id: number, currentlyPinned: boolean) => {
     try {
       const endpoint = currentlyPinned ? "unpin" : "pin";
@@ -353,10 +391,25 @@ function Memory() {
   };
 
   // Batch selection handlers
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
+  const lastClickedIndex = useRef<number | null>(null);
+
+  const toggleSelect = (id: string, index: number, shiftKey: boolean) => {
+    if (shiftKey && lastClickedIndex.current !== null) {
+      // Range select: select everything between last clicked and current
+      const start = Math.min(lastClickedIndex.current, index);
+      const end = Math.max(lastClickedIndex.current, index);
+      const rangeIds = items.slice(start, end + 1).map((i) => String(i.id));
+      setSelectedIds((prev) => {
+        const set = new Set(prev);
+        for (const rid of rangeIds) set.add(rid);
+        return Array.from(set);
+      });
+    } else {
+      setSelectedIds((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      );
+    }
+    lastClickedIndex.current = index;
   };
 
   const toggleSelectAll = () => {
@@ -366,6 +419,46 @@ function Memory() {
       setSelectedIds(items.map((i) => String(i.id)));
     }
   };
+
+  // Escape key clears selection
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectedIds.length > 0 && !detailId) {
+        setSelectedIds([]);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedIds.length, detailId]);
+
+  // Sort handler
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
+  };
+
+  // Sort items
+  const sortedItems = [...items].sort((a, b) => {
+    let aVal: any = (a as any)[sortField];
+    let bVal: any = (b as any)[sortField];
+    if (sortField === "confidence") {
+      aVal = aVal ?? 0;
+      bVal = bVal ?? 0;
+    }
+    if (typeof aVal === "string") aVal = aVal.toLowerCase();
+    if (typeof bVal === "string") bVal = bVal.toLowerCase();
+    if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
+    if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  // Paginate
+  const totalPages = Math.max(1, Math.ceil(sortedItems.length / pageSize));
+  const pagedItems = sortedItems.slice((page - 1) * pageSize, page * pageSize);
 
   // Stats
   const totalActive = items.filter((i) => i.status === "active").length;
@@ -432,6 +525,16 @@ function Memory() {
         <button className="btn btn-primary create-toggle" onClick={() => setShowCreate(!showCreate)}>
           {showCreate ? "Cancel" : "+ New Memory"}
         </button>
+        <button className="btn btn-secondary create-toggle" onClick={() => importRef.current?.click()}>
+          Import JSON
+        </button>
+        <input
+          ref={importRef}
+          type="file"
+          accept=".json"
+          style={{ display: "none" }}
+          onChange={handleImport}
+        />
         {showCreate && (
           <div className="create-form">
             <div className="create-form-row">
@@ -614,19 +717,19 @@ function Memory() {
                     title="Select all"
                   />
                 </th>
-                <th>Key</th>
-                <th>Type</th>
+                <th className="sortable" onClick={() => handleSort("key")}>Key {sortField === "key" ? (sortDir === "asc" ? "\u2191" : "\u2193") : ""}</th>
+                <th className="sortable" onClick={() => handleSort("type")}>Type {sortField === "type" ? (sortDir === "asc" ? "\u2191" : "\u2193") : ""}</th>
                 <th>Value</th>
-                <th>Scope</th>
-                <th>Domain</th>
-                <th>Confidence</th>
-                <th>Status</th>
-                <th>Created</th>
+                <th className="sortable" onClick={() => handleSort("scope")}>Scope {sortField === "scope" ? (sortDir === "asc" ? "\u2191" : "\u2193") : ""}</th>
+                <th className="sortable" onClick={() => handleSort("domain")}>Domain {sortField === "domain" ? (sortDir === "asc" ? "\u2191" : "\u2193") : ""}</th>
+                <th className="sortable" onClick={() => handleSort("confidence")}>Confidence {sortField === "confidence" ? (sortDir === "asc" ? "\u2191" : "\u2193") : ""}</th>
+                <th className="sortable" onClick={() => handleSort("status")}>Status {sortField === "status" ? (sortDir === "asc" ? "\u2191" : "\u2193") : ""}</th>
+                <th className="sortable" onClick={() => handleSort("created_at")}>Created {sortField === "created_at" ? (sortDir === "asc" ? "\u2191" : "\u2193") : ""}</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
+              {pagedItems.map((item, idx) => (
                 <React.Fragment key={item.id}>
                 <tr className={selectedIds.includes(String(item.id)) ? "row-selected" : ""}>
                   <td className="td-checkbox">
@@ -634,7 +737,7 @@ function Memory() {
                       type="checkbox"
                       className="memory-checkbox"
                       checked={selectedIds.includes(String(item.id))}
-                      onChange={() => toggleSelect(String(item.id))}
+                      onChange={(e) => toggleSelect(String(item.id), idx, e.nativeEvent instanceof MouseEvent && (e.nativeEvent as MouseEvent).shiftKey)}
                     />
                   </td>
                   <td className="memory-key clickable" onClick={() => setDetailId(item.id)}>{item.pinned ? <span className="pin-indicator" title="Pinned">&#128204;</span> : null}{item.key}</td>
@@ -780,6 +883,28 @@ function Memory() {
               ))}
             </tbody>
           </table>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="pagination">
+              <button
+                className="btn btn-secondary btn-sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                Prev
+              </button>
+              <span className="pagination-info">
+                Page {page} of {totalPages} ({sortedItems.length} items)
+              </span>
+              <button
+                className="btn btn-secondary btn-sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
       )}
 
