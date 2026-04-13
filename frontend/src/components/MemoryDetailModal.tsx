@@ -80,6 +80,7 @@ function MemoryDetailModal({ itemId, onClose, onAction }: Props) {
   const [mergeValue, setMergeValue] = useState("");
   const [merging, setMerging] = useState(false);
   const [mergeError, setMergeError] = useState<string | null>(null);
+  const [compareVersions, setCompareVersions] = useState<[string, string] | null>(null);
 
   useEffect(() => {
     fetchDetail();
@@ -182,6 +183,55 @@ function MemoryDetailModal({ itemId, onClose, onAction }: Props) {
     } finally {
       setMerging(false);
     }
+  }
+
+  function computeDiff(oldText: string, newText: string): Array<{ type: "same" | "add" | "remove"; text: string }> {
+    const oldWords = oldText.split(/\s+/);
+    const newWords = newText.split(/\s+/);
+    const result: Array<{ type: "same" | "add" | "remove"; text: string }> = [];
+
+    let oi = 0;
+    let ni = 0;
+    while (oi < oldWords.length || ni < newWords.length) {
+      if (oi < oldWords.length && ni < newWords.length && oldWords[oi] === newWords[ni]) {
+        result.push({ type: "same", text: oldWords[oi] });
+        oi++;
+        ni++;
+      } else {
+        // Look ahead to find next common word
+        let foundOld = -1;
+        let foundNew = -1;
+        for (let look = 1; look <= 5; look++) {
+          if (foundNew === -1 && ni + look < newWords.length && oldWords[oi] === newWords[ni + look]) {
+            foundNew = ni + look;
+          }
+          if (foundOld === -1 && oi + look < oldWords.length && oldWords[oi + look] === newWords[ni]) {
+            foundOld = oi + look;
+          }
+        }
+        if (foundNew !== -1 && (foundOld === -1 || foundNew - ni <= foundOld - oi)) {
+          while (ni < foundNew) {
+            result.push({ type: "add", text: newWords[ni] });
+            ni++;
+          }
+        } else if (foundOld !== -1) {
+          while (oi < foundOld) {
+            result.push({ type: "remove", text: oldWords[oi] });
+            oi++;
+          }
+        } else {
+          if (oi < oldWords.length) {
+            result.push({ type: "remove", text: oldWords[oi] });
+            oi++;
+          }
+          if (ni < newWords.length) {
+            result.push({ type: "add", text: newWords[ni] });
+            ni++;
+          }
+        }
+      }
+    }
+    return result;
   }
 
   function formatDate(d: string | null) {
@@ -467,18 +517,49 @@ function MemoryDetailModal({ itemId, onClose, onAction }: Props) {
               <div className="detail-section">
                 <h4>Version History ({detail.versions.length})</h4>
                 <div className="detail-versions">
-                  {detail.versions.map((v) => (
+                  {detail.versions.map((v, idx) => (
                     <div key={v.id} className="version-entry">
                       <div className="version-header">
                         <span className="version-number">v{v.version_number}</span>
                         <span className="version-by">{v.changed_by}</span>
                         <span className="version-time" title={formatDate(v.created_at)}>{timeAgo(v.created_at)}</span>
+                        {idx < detail.versions.length - 1 && (
+                          <button
+                            className="version-compare"
+                            onClick={() => {
+                              const older = detail.versions[idx + 1].value;
+                              const newer = v.value;
+                              setCompareVersions(
+                                compareVersions && compareVersions[0] === older && compareVersions[1] === newer
+                                  ? null
+                                  : [older, newer]
+                              );
+                            }}
+                          >
+                            Diff
+                          </button>
+                        )}
                         <button className="version-revert" onClick={() => handleRevert(v.id)}>Revert</button>
                       </div>
                       <div className="version-value">{v.value}</div>
                     </div>
                   ))}
                 </div>
+                {compareVersions && (
+                  <div className="version-diff">
+                    <div className="version-diff-header">
+                      <span>Changes</span>
+                      <button className="version-diff-close" onClick={() => setCompareVersions(null)}>x</button>
+                    </div>
+                    <div className="version-diff-content">
+                      {computeDiff(compareVersions[0], compareVersions[1]).map((part, i) => (
+                        <span key={i} className={`diff-${part.type}`}>
+                          {part.text}{" "}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
