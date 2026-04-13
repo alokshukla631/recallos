@@ -112,6 +112,26 @@ router.post("/", (req: Request, res: Response) => {
   }
 });
 
+// GET /recently-deleted - list recently deleted items
+router.get("/recently-deleted", (req: Request, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 20;
+    const items = queryAll(
+      `SELECT mi.*, al.created_at AS deleted_at
+       FROM memory_items mi
+       INNER JOIN memory_audit_log al ON al.memory_item_id = mi.id AND al.action = 'deleted'
+       WHERE mi.status IN ('stale', 'superseded')
+       ORDER BY al.created_at DESC
+       LIMIT ?`,
+      [limit]
+    );
+    res.json(items);
+  } catch (err) {
+    console.error("GET /api/memory/recently-deleted error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /:id - get single memory item
 router.get("/:id", (req: Request, res: Response) => {
   try {
@@ -900,6 +920,28 @@ router.delete("/:id", (req: Request, res: Response) => {
     res.json({ message: "Memory item marked as stale" });
   } catch (err) {
     console.error("DELETE /api/memory/:id error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /:id/restore - restore a deleted/stale item back to active
+router.post("/:id/restore", (req: Request, res: Response) => {
+  try {
+    const existing = queryOne("SELECT * FROM memory_items WHERE id = ?", [req.params.id]);
+    if (!existing) {
+      res.status(404).json({ error: "Memory item not found" });
+      return;
+    }
+    if ((existing as any).status === "active") {
+      res.json({ message: "Item is already active" });
+      return;
+    }
+    runSql("UPDATE memory_items SET status = 'active', superseded_by = NULL WHERE id = ?", [req.params.id]);
+    logAudit(req.params.id as string, "restored", "Restored to active status");
+    fireWebhook("restored", { id: req.params.id });
+    res.json({ message: "Memory item restored" });
+  } catch (err) {
+    console.error("POST /api/memory/:id/restore error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

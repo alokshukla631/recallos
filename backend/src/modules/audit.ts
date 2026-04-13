@@ -15,7 +15,8 @@ export type AuditAction =
   | "imported"
   | "deleted"
   | "pinned"
-  | "unpinned";
+  | "unpinned"
+  | "restored";
 
 export interface AuditEntry {
   id: string;
