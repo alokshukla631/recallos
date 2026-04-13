@@ -385,6 +385,18 @@ class RecallOS:
         r.raise_for_status()
         return r.json()
 
+    def restore_memory(self, memory_id: str) -> dict:
+        """Restore a deleted or superseded item back to active status."""
+        r = self._client.post(f"/api/memory/{memory_id}/restore")
+        r.raise_for_status()
+        return r.json()
+
+    def recently_deleted(self, limit: int = 20) -> list:
+        """List recently deleted memory items."""
+        r = self._client.get("/api/memory/recently-deleted", params={"limit": limit})
+        r.raise_for_status()
+        return r.json()
+
     def graph(self) -> dict:
         """Get graph data (nodes + edges) for memory visualization."""
         r = self._client.get("/api/memory/graph")
@@ -663,6 +675,18 @@ class AsyncRecallOS:
     async def get_detail(self, memory_id: str) -> dict:
         """Get comprehensive detail for a memory item."""
         r = await self._client.get(f"/api/memory/{memory_id}/detail")
+        r.raise_for_status()
+        return r.json()
+
+    async def restore_memory(self, memory_id: str) -> dict:
+        """Restore a deleted or superseded item back to active status."""
+        r = await self._client.post(f"/api/memory/{memory_id}/restore")
+        r.raise_for_status()
+        return r.json()
+
+    async def recently_deleted(self, limit: int = 20) -> list:
+        """List recently deleted memory items."""
+        r = await self._client.get("/api/memory/recently-deleted", params={"limit": limit})
         r.raise_for_status()
         return r.json()
 

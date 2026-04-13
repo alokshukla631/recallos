@@ -383,6 +383,35 @@ memory
     }
   });
 
+memory
+  .command("restore <id>")
+  .description("Restore a deleted or superseded item back to active")
+  .action(async (id) => {
+    const data = await post(`/api/memory/${id}/restore`);
+    console.log(data.message);
+  });
+
+memory
+  .command("trash")
+  .description("List recently deleted items")
+  .option("-l, --limit <n>", "Max items to show", "20")
+  .action(async (opts) => {
+    const items = await get(`/api/memory/recently-deleted?limit=${opts.limit}`);
+    if (items.length === 0) {
+      console.log("Trash is empty.");
+      return;
+    }
+    console.log(`\n${"ID".padEnd(10)} ${"Key".padEnd(30)} ${"Deleted At".padEnd(22)} Status`);
+    console.log("-".repeat(80));
+    for (const item of items) {
+      const id = String(item.id).slice(0, 8);
+      const key = (item.key || "").slice(0, 28).padEnd(30);
+      const deleted = item.deleted_at ? new Date(item.deleted_at).toLocaleString().padEnd(22) : "Unknown".padEnd(22);
+      console.log(`${id.padEnd(10)} ${key} ${deleted} ${item.status}`);
+    }
+    console.log(`\n${items.length} item(s) in trash. Use "recallos memory restore <id>" to recover.`);
+  });
+
 // ── Trips ───────────────────────────────────────────────────────────────────
 
 const trips = program.command("trips").description("Manage trips");

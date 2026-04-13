@@ -277,6 +277,16 @@ export class RecallOS {
     return this.post("/api/memory/merge", body);
   }
 
+  /** Restore a deleted or superseded item back to active status. */
+  restoreMemory(id: string): Promise<{ message: string }> {
+    return this.post(`/api/memory/${id}/restore`);
+  }
+
+  /** List recently deleted items. */
+  recentlyDeleted(limit = 20): Promise<Array<MemoryItem & { deleted_at: string }>> {
+    return this.get("/api/memory/recently-deleted", { limit: String(limit) });
+  }
+
   // -- Importance -----------------------------------------------------------
 
   /** Get memory items ranked by importance score. */

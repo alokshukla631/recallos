@@ -574,6 +574,29 @@ const API_SPEC = {
         },
       },
     },
+    "/api/memory/{id}/restore": {
+      post: {
+        summary: "Restore a deleted or superseded item back to active",
+        tags: ["Memory"],
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: {
+          "200": { description: "Item restored to active status" },
+          "404": { description: "Item not found" },
+        },
+      },
+    },
+    "/api/memory/recently-deleted": {
+      get: {
+        summary: "List recently deleted memory items",
+        tags: ["Memory"],
+        parameters: [
+          { name: "limit", in: "query", schema: { type: "integer", default: 20 } },
+        ],
+        responses: { "200": { description: "Array of deleted items with deleted_at timestamp" } },
+      },
+    },
     "/api/settings/webhooks/log": {
       get: {
         summary: "Get recent webhook delivery log",
