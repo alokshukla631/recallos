@@ -69,18 +69,22 @@ RecallOS sits between you and the AI model. When you send a message:
 
 - **Chat** - Unified chat UI with conversation sidebar, streaming responses (SSE), provider selector, and trip selector. Memory badges show what was extracted and reconciled per message. Pipeline timing breakdown per response. Context panel shows what memory was injected.
 - **Trips** - Create and manage trips. Each trip scopes its own conversations and memory items.
-- **Memory** - Browse, search, and filter all stored memory items. Domain and scope columns with color-coded badges. Type, scope, domain, and status filters. Session stats panel with cleanup button. Inline edit and soft-delete.
+- **Memory** - Browse, search, and filter all stored memory items. Domain and scope columns with color-coded badges. Type, scope, domain, and status filters. Session stats panel with cleanup button. Inline edit and soft-delete. Multi-select with shift-click range selection, batch operations (pin, unpin, reconfirm, tag, export, delete). Client-side sorting with clickable column headers and pagination. Search history dropdown. Tag-based filtering with clickable chips. Conflict detection panel with inline resolution.
 - **Links** - Explore relationships between memory items. Click an item to see all incoming/outgoing links. Create new links with typed relations. Navigate between linked items.
 - **Scraper** - View available log sources (Claude Code, Cursor, ChatGPT) with status indicators. Trigger scrapes to extract memory from external AI tool conversations.
 - **Context Debug** - Inspect context snapshots with full trace: BM25 score, recency boost, final score, and inclusion decision for every memory item.
-- **Settings** - Add/remove API keys for OpenAI and Anthropic. Set a default provider. Export/import memory via Memory Passport. MCP server config display with one-click install for Claude Desktop.
+- **Health** - Memory health score with breakdown. Duplicate detection with one-click merge. Stale candidate detection with bulk cleanup. Importance distribution (top and bottom items). Conflict count warning. Memory age distribution bar chart.
+- **Trash** - View recently deleted memory items and restore them individually or all at once.
+- **Settings** - Add/remove API keys for OpenAI and Anthropic. Set a default provider. Export/import memory via Memory Passport. MCP server config display with one-click install for Claude Desktop. Webhook delivery log viewer.
 
 ### Core engine
 
 - **Multi-domain extraction** - Regex-based rules for 8 domains. Each extracted item is tagged with its detected domain.
 - **Entity extraction** - Dates (ISO, relative, month-day), destinations (300+ cities/countries), amounts (multi-currency), durations, 60+ technologies, programming languages
 - **Hierarchical scoping** - 5 scope levels: global, domain, trip, project, session. Narrower scopes override broader ones.
-- **Memory reconciliation** - Scope-aware precedence, duplicate detection with re-confirmation, conflict logging, audit trail
+- **Memory reconciliation** - Scope-aware precedence, duplicate detection with re-confirmation, conflict detection and resolution (keep new, keep old, or merge), audit trail
+- **Merge** - Combine two memory items: source gets superseded, tags are copied to target, confidence takes the max. Accessible from the detail modal or API.
+- **Trash and restore** - Soft-deleted items can be listed and restored back to active status from the Trash page, CLI, or API
 - **BM25 + recency + link boost** - Full BM25 with IDF, term frequency saturation, length normalization, lightweight stemming. Recency decay (7-day half-life). Cross-domain link boosting for related items.
 - **Memory relationships** - Link items with typed relations (related_to, depends_on, conflicts_with, refines, derived_from) with configurable strength
 - **Confidence decay** - Items not reconfirmed gradually lose confidence (30-day half-life). Items below threshold are auto-staled.
@@ -91,8 +95,10 @@ RecallOS sits between you and the AI model. When you send a message:
 - **Provider adapters** - OpenAI (gpt-4o) and Anthropic (Claude Sonnet) with both batch and streaming support
 - **Memory Passport** - Export/import your entire memory as a portable JSON file
 - **Bulk import** - Seed memory from a list of natural-language statements via API, CLI, or Python SDK
-- **Audit log** - Every memory operation is tracked
-- **Tags** - User-defined tags for free-form categorization
+- **Domain auto-detection** - Keyword-based domain inference from memory key and value text (travel, coding, work, health, finance, learning, writing, personal, communication)
+- **Audit log** - Every memory operation is tracked (created, superseded, reconfirmed, pinned, unpinned, deleted, restored, imported)
+- **Tags** - User-defined tags for free-form categorization with batch tagging
+- **Keyboard shortcuts** - ? for help, Ctrl+K for command palette, Ctrl+1-5 for page navigation, Ctrl+T for theme toggle, Escape to clear selection
 - **Agent state API** - Plans with steps, checkpoints for resumable agents
 
 ### Cross-tool continuity
@@ -108,7 +114,8 @@ RecallOS sits between you and the AI model. When you send a message:
 
 - **REST API** - Full CRUD for memory, trips, chat, passport, context, agents, scraper, and settings
 - **Python SDK** - Sync and async clients (`RecallOS`, `AsyncRecallOS`) using httpx. Covers all API endpoints. Install with `pip install -e sdk-python/`
-- **CLI** - `recallos` command-line tool for memory, trips, passport, chat, providers, scraper, session management, and MCP config
+- **TypeScript SDK** - Zero-dependency client for Node 18+, Deno, Bun, and browsers. Covers all API endpoints including memory, trips, chat, context, tags, links, conflicts, decay, merge, restore, and import.
+- **CLI** - `recallos` command-line tool for memory, trips, passport, chat, providers, scraper, session management, MCP config, trash, and restore
 - **OpenAPI spec** - Served at `/api/docs/openapi.json` with interactive Swagger UI at `/api/docs/`
 - **Docker** - Multi-stage Dockerfile and docker-compose.yml for one-command deployment
 - **Benchmark endpoint** - `POST /api/context/benchmark` runs the pipeline without calling a provider, returns timing data
@@ -231,8 +238,10 @@ recallos/
       mcp-server.ts # MCP server entry point
   frontend/
     src/
-      pages/        # Chat, Trips, Memory, Links, Scraper, ContextDebug, Settings
+      pages/        # Dashboard, Chat, Trips, Memory, Timeline, Links, Graph,
+                    #   Health, Trash, Scraper, ContextDebug, Settings
   cli/              # CLI tool
+  sdk-ts/           # TypeScript SDK (zero-dependency)
   sdk-python/       # Python SDK (sync + async)
   docs/             # Vision, proposal, milestones, specs
   Dockerfile        # Multi-stage Docker build
@@ -247,9 +256,11 @@ Milestone 1 proved the core thesis: the model does reasoning, RecallOS provides 
 
 What's next:
 - Local embedding search (vector similarity alongside BM25)
+- Memory analytics dashboard with trend charts and activity heatmaps
 - MCP client connections (pull context from calendars, documents, code repos)
 - Background refiner with a local model for smarter extraction
 - Windsurf and Copilot scraper support
+- Notifications system for conflict alerts and memory health warnings
 
 See the [docs](docs/) folder for the full vision and roadmap.
 
