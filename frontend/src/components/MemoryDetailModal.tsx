@@ -75,6 +75,11 @@ function MemoryDetailModal({ itemId, onClose, onAction }: Props) {
   const [tagInput, setTagInput] = useState("");
   const [linkTarget, setLinkTarget] = useState("");
   const [linkRelation, setLinkRelation] = useState("related_to");
+  const [showMerge, setShowMerge] = useState(false);
+  const [mergeTarget, setMergeTarget] = useState("");
+  const [mergeValue, setMergeValue] = useState("");
+  const [merging, setMerging] = useState(false);
+  const [mergeError, setMergeError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDetail();
@@ -148,6 +153,37 @@ function MemoryDetailModal({ itemId, onClose, onAction }: Props) {
     fetchDetail();
   }
 
+  async function handleMerge() {
+    const target = mergeTarget.trim();
+    if (!target) return;
+    setMerging(true);
+    setMergeError(null);
+    try {
+      const res = await fetch("/api/memory/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source_id: String(itemId),
+          target_id: target,
+          ...(mergeValue.trim() ? { merged_value: mergeValue.trim() } : {}),
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      setShowMerge(false);
+      setMergeTarget("");
+      setMergeValue("");
+      fetchDetail();
+      onAction?.();
+    } catch (err: any) {
+      setMergeError(err.message || "Merge failed");
+    } finally {
+      setMerging(false);
+    }
+  }
+
   function formatDate(d: string | null) {
     if (!d) return "Never";
     return new Date(d).toLocaleString();
@@ -210,7 +246,59 @@ function MemoryDetailModal({ itemId, onClose, onAction }: Props) {
               <button className="btn-detail btn-detail-confirm" onClick={handleReconfirm}>
                 Reconfirm
               </button>
+              <button
+                className="btn-detail btn-detail-merge"
+                onClick={() => setShowMerge(!showMerge)}
+              >
+                Merge
+              </button>
             </div>
+
+            {showMerge && (
+              <div className="merge-panel">
+                <div className="merge-panel-header">
+                  Merge this item into another
+                </div>
+                <p className="merge-panel-desc">
+                  This item will be marked as superseded. Its tags will be copied to the target.
+                </p>
+                {mergeError && <div className="merge-error">{mergeError}</div>}
+                <div className="merge-form">
+                  <input
+                    type="text"
+                    className="merge-input"
+                    placeholder="Target item ID..."
+                    value={mergeTarget}
+                    onChange={(e) => setMergeTarget(e.target.value)}
+                  />
+                  <input
+                    type="text"
+                    className="merge-input merge-value-input"
+                    placeholder="Custom merged value (optional)..."
+                    value={mergeValue}
+                    onChange={(e) => setMergeValue(e.target.value)}
+                  />
+                  <div className="merge-actions">
+                    <button
+                      className="btn-detail btn-detail-merge-go"
+                      onClick={handleMerge}
+                      disabled={!mergeTarget.trim() || merging}
+                    >
+                      {merging ? "Merging..." : "Merge Into Target"}
+                    </button>
+                    <button
+                      className="btn-detail"
+                      onClick={() => {
+                        setShowMerge(false);
+                        setMergeError(null);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Importance breakdown */}
             <div className="detail-section">

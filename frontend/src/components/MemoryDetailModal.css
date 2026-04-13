@@ -205,6 +205,93 @@
   background: rgba(34, 197, 94, 0.08);
 }
 
+/* Merge button */
+.btn-detail-merge {
+  border-color: #a855f7;
+  color: #a855f7;
+}
+
+.btn-detail-merge:hover {
+  background: rgba(168, 85, 247, 0.08);
+}
+
+/* Merge panel */
+.merge-panel {
+  margin-bottom: 20px;
+  padding: 14px;
+  background: rgba(168, 85, 247, 0.04);
+  border: 1px solid rgba(168, 85, 247, 0.2);
+  border-radius: 8px;
+}
+
+.merge-panel-header {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #a855f7;
+  margin-bottom: 4px;
+}
+
+.merge-panel-desc {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin: 0 0 10px;
+  line-height: 1.4;
+}
+
+.merge-error {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  margin-bottom: 8px;
+}
+
+.merge-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.merge-input {
+  padding: 6px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.82rem;
+}
+
+.merge-input:focus {
+  outline: none;
+  border-color: #a855f7;
+}
+
+.merge-value-input {
+  font-size: 0.78rem;
+}
+
+.merge-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.btn-detail-merge-go {
+  background: #a855f7;
+  color: #fff;
+  border-color: #a855f7;
+}
+
+.btn-detail-merge-go:hover {
+  background: #9333ea;
+}
+
+.btn-detail-merge-go:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Sections */
 .detail-section {
   margin-bottom: 18px;
