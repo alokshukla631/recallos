@@ -311,6 +311,44 @@ memory
     console.log(`${action}: ${result.affected} of ${result.total_requested} items affected.`);
   });
 
+memory
+  .command("import <file>")
+  .description("Import memory items from a JSON file")
+  .action(async (file) => {
+    try {
+      const text = fs.readFileSync(file, "utf-8");
+      const data = JSON.parse(text);
+      const items = Array.isArray(data) ? data : data.items || [data];
+      const result = await post("/api/memory/import", { items });
+      console.log(`Imported: ${result.imported} items`);
+      if (result.skipped > 0) console.log(`Skipped: ${result.skipped}`);
+      if (result.errors && result.errors.length > 0) {
+        console.log("Errors:");
+        for (const err of result.errors) console.log(`  - ${err}`);
+      }
+    } catch (err: any) {
+      console.error("Import failed:", err.message || err);
+      process.exit(1);
+    }
+  });
+
+memory
+  .command("export [file]")
+  .description("Export all active memory items to JSON")
+  .option("-s, --status <status>", "Filter by status", "active")
+  .action(async (file, opts) => {
+    const params = new URLSearchParams();
+    if (opts.status) params.set("status", opts.status);
+    const items = await get(`/api/memory?${params}`);
+    const json = JSON.stringify(items, null, 2);
+    if (file) {
+      fs.writeFileSync(file, json, "utf-8");
+      console.log(`Exported ${items.length} items to ${file}`);
+    } else {
+      console.log(json);
+    }
+  });
+
 // ── Trips ───────────────────────────────────────────────────────────────────
 
 const trips = program.command("trips").description("Manage trips");

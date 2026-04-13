@@ -433,6 +433,120 @@ const API_SPEC = {
         },
       },
     },
+    "/api/memory/batch": {
+      post: {
+        summary: "Batch operations on multiple memory items",
+        tags: ["Memory"],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["ids", "action"],
+                properties: {
+                  ids: { type: "array", items: { type: "string" }, description: "Array of memory item IDs" },
+                  action: { type: "string", enum: ["pin", "unpin", "delete", "reconfirm"] },
+                },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "{ action, affected, total_requested }" } },
+      },
+    },
+    "/api/memory/import": {
+      post: {
+        summary: "Bulk import memory items from structured JSON",
+        tags: ["Memory"],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["items"],
+                properties: {
+                  items: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      required: ["key", "value"],
+                      properties: {
+                        key: { type: "string" },
+                        value: { type: "string" },
+                        type: { type: "string", enum: ["preference", "constraint", "fact", "goal", "override"] },
+                        scope: { type: "string", enum: ["global", "domain", "trip", "project", "session"] },
+                        domain: { type: "string" },
+                        confidence: { type: "number", minimum: 0, maximum: 1 },
+                      },
+                    },
+                    maxItems: 200,
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "{ imported, skipped, errors }" } },
+      },
+    },
+    "/api/memory/duplicates": {
+      get: {
+        summary: "Find potential duplicate memory items",
+        tags: ["Memory"],
+        parameters: [
+          { name: "threshold", in: "query", schema: { type: "number", default: 0.6 }, description: "Similarity threshold (0-1)" },
+        ],
+        responses: { "200": { description: "{ count, groups }" } },
+      },
+    },
+    "/api/memory/suggestions": {
+      get: {
+        summary: "Get smart suggestions for improving memory quality",
+        tags: ["Memory"],
+        responses: { "200": { description: "Array of suggestion objects" } },
+      },
+    },
+    "/api/memory/{id}/versions": {
+      get: {
+        summary: "Get version history for a memory item",
+        tags: ["Memory"],
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: { "200": { description: "Array of version snapshots" } },
+      },
+    },
+    "/api/memory/{id}/revert/{versionId}": {
+      post: {
+        summary: "Revert a memory item to a previous version",
+        tags: ["Memory"],
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "string" } },
+          { name: "versionId", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: { "200": { description: "Reverted item" } },
+      },
+    },
+    "/api/memory/audit/heatmap": {
+      get: {
+        summary: "Get daily activity counts for a contribution heatmap",
+        tags: ["Memory"],
+        parameters: [
+          { name: "weeks", in: "query", schema: { type: "integer", default: 12 }, description: "Number of weeks to return" },
+        ],
+        responses: { "200": { description: "{ days: [{ date, total }], max }" } },
+      },
+    },
+    "/api/settings/webhooks/log": {
+      get: {
+        summary: "Get recent webhook delivery log",
+        tags: ["Settings"],
+        parameters: [
+          { name: "limit", in: "query", schema: { type: "integer", default: 50 } },
+        ],
+        responses: { "200": { description: "Array of delivery log entries" } },
+      },
+    },
     "/api/settings/providers": {
       get: {
         summary: "List configured providers",
