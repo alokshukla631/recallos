@@ -39,19 +39,32 @@ interface Suggestion {
   description: string;
 }
 
+interface AgeBucket {
+  label: string;
+  count: number;
+  color: string;
+}
+
 function Health() {
   const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([]);
   const [decayCandidates, setDecayCandidates] = useState<DecayCandidate[]>([]);
   const [topItems, setTopItems] = useState<ImportanceItem[]>([]);
   const [bottomItems, setBottomItems] = useState<ImportanceItem[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [conflictCount, setConflictCount] = useState(0);
+  const [ageBuckets, setAgeBuckets] = useState<AgeBucket[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([fetchDuplicates(), fetchDecay(), fetchImportance(), fetchSuggestions()]).finally(() =>
-      setLoading(false)
-    );
+    Promise.all([
+      fetchDuplicates(),
+      fetchDecay(),
+      fetchImportance(),
+      fetchSuggestions(),
+      fetchConflictCount(),
+      fetchAgeDistribution(),
+    ]).finally(() => setLoading(false));
   }, []);
 
   async function fetchDuplicates() {
@@ -81,6 +94,62 @@ function Health() {
       const res = await fetch("/api/memory/suggestions");
       if (!res.ok) return;
       setSuggestions(await res.json());
+    } catch {
+      // ignore
+    }
+  }
+
+  async function fetchConflictCount() {
+    try {
+      const res = await fetch("/api/memory/conflicts?status=pending");
+      if (!res.ok) return;
+      const data = await res.json();
+      setConflictCount(Array.isArray(data) ? data.length : 0);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function fetchAgeDistribution() {
+    try {
+      const res = await fetch("/api/memory?limit=500&status=active");
+      if (!res.ok) return;
+      const data = await res.json();
+      const items: Array<{ created_at: string }> = data.items || [];
+      const now = Date.now();
+      const buckets = {
+        "< 1 hour": 0,
+        "1-24 hours": 0,
+        "1-7 days": 0,
+        "1-4 weeks": 0,
+        "1-3 months": 0,
+        "3+ months": 0,
+      };
+      const colors: Record<string, string> = {
+        "< 1 hour": "#22c55e",
+        "1-24 hours": "#3b82f6",
+        "1-7 days": "#a855f7",
+        "1-4 weeks": "#f59e0b",
+        "1-3 months": "#f97316",
+        "3+ months": "#ef4444",
+      };
+      for (const item of items) {
+        const ageMs = now - new Date(item.created_at).getTime();
+        const ageHours = ageMs / (1000 * 60 * 60);
+        if (ageHours < 1) buckets["< 1 hour"]++;
+        else if (ageHours < 24) buckets["1-24 hours"]++;
+        else if (ageHours < 24 * 7) buckets["1-7 days"]++;
+        else if (ageHours < 24 * 28) buckets["1-4 weeks"]++;
+        else if (ageHours < 24 * 90) buckets["1-3 months"]++;
+        else buckets["3+ months"]++;
+      }
+      setAgeBuckets(
+        Object.entries(buckets).map(([label, count]) => ({
+          label,
+          count,
+          color: colors[label],
+        }))
+      );
     } catch {
       // ignore
     }
@@ -142,7 +211,7 @@ function Health() {
 
   const healthScore = Math.max(
     0,
-    100 - duplicates.length * 10 - decayCandidates.length * 5
+    100 - duplicates.length * 10 - decayCandidates.length * 5 - conflictCount * 8
   );
 
   return (
@@ -161,6 +230,7 @@ function Health() {
           <span className="health-score-title">Health Score</span>
           <span className="health-score-detail">
             {duplicates.length} duplicate groups, {decayCandidates.length} stale candidates
+            {conflictCount > 0 ? `, ${conflictCount} pending conflicts` : ""}
           </span>
         </div>
       </div>
@@ -241,6 +311,54 @@ function Health() {
           )}
         </div>
       </div>
+
+      {/* Conflict warning */}
+      {conflictCount > 0 && (
+        <div className="health-section conflict-warning-section">
+          <h3>Pending Conflicts ({conflictCount})</h3>
+          <p className="conflict-warning-text">
+            There {conflictCount === 1 ? "is" : "are"} {conflictCount} unresolved
+            conflict{conflictCount !== 1 ? "s" : ""} between memory items with the same key
+            but different values. Resolve them on the Memory page.
+          </p>
+          <div className="conflict-warning-bar">
+            <div
+              className="conflict-warning-fill"
+              style={{ width: `${Math.min(conflictCount * 20, 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Memory age distribution */}
+      {ageBuckets.length > 0 && (
+        <div className="health-section age-section">
+          <h3>Memory Age Distribution</h3>
+          <div className="age-chart">
+            {(() => {
+              const maxCount = Math.max(...ageBuckets.map((b) => b.count), 1);
+              return ageBuckets.map((bucket) => (
+                <div key={bucket.label} className="age-bar-group">
+                  <div className="age-bar-container">
+                    <div
+                      className="age-bar-fill"
+                      style={{
+                        height: `${(bucket.count / maxCount) * 100}%`,
+                        background: bucket.color,
+                      }}
+                    />
+                  </div>
+                  <span className="age-bar-count">{bucket.count}</span>
+                  <span className="age-bar-label">{bucket.label}</span>
+                </div>
+              ));
+            })()}
+          </div>
+          <div className="age-total">
+            {ageBuckets.reduce((sum, b) => sum + b.count, 0)} total active items
+          </div>
+        </div>
+      )}
 
       {/* Importance distribution */}
       <div className="health-section importance-section">
