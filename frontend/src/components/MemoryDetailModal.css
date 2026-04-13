@@ -139,6 +139,32 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 8px;
+  position: relative;
+}
+
+.detail-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.detail-value-section:hover .detail-copy-btn {
+  opacity: 1;
+}
+
+.detail-copy-btn:hover {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
 }
 
 .detail-value {

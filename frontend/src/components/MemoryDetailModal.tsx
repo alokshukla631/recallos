@@ -191,6 +191,15 @@ function MemoryDetailModal({ itemId, onClose, onAction }: Props) {
             {/* Value */}
             <div className="detail-value-section">
               <div className="detail-value">{detail.value}</div>
+              <button
+                className="detail-copy-btn"
+                onClick={() => {
+                  navigator.clipboard.writeText(detail.value);
+                }}
+                title="Copy value"
+              >
+                Copy
+              </button>
             </div>
 
             {/* Quick actions */}
@@ -259,11 +268,13 @@ function MemoryDetailModal({ itemId, onClose, onAction }: Props) {
                 </div>
                 <div className="meta-item">
                   <span className="meta-label">Created</span>
-                  <span className="meta-value">{formatDate(detail.created_at)}</span>
+                  <span className="meta-value" title={formatDate(detail.created_at)}>{timeAgo(detail.created_at)}</span>
                 </div>
                 <div className="meta-item">
                   <span className="meta-label">Last confirmed</span>
-                  <span className="meta-value">{formatDate(detail.last_confirmed_at)}</span>
+                  <span className="meta-value" title={formatDate(detail.last_confirmed_at)}>
+                    {detail.last_confirmed_at ? timeAgo(detail.last_confirmed_at) : "Never"}
+                  </span>
                 </div>
                 <div className="meta-item">
                   <span className="meta-label">Context appearances</span>
