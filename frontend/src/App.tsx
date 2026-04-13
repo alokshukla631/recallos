@@ -47,6 +47,7 @@ function App() {
   const navigate = useNavigate();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
+  const [conflictCount, setConflictCount] = useState(0);
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     return (localStorage.getItem("recallos-theme") as "dark" | "light") || "dark";
   });
@@ -55,6 +56,22 @@ function App() {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("recallos-theme", theme);
   }, [theme]);
+
+  // Poll for pending conflicts every 30s
+  useEffect(() => {
+    async function checkConflicts() {
+      try {
+        const res = await fetch("/api/memory/conflicts?status=pending");
+        if (res.ok) {
+          const data = await res.json();
+          setConflictCount(data.pending_count || 0);
+        }
+      } catch { /* ignore */ }
+    }
+    checkConflicts();
+    const interval = setInterval(checkConflicts, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   function toggleTheme() {
     setTheme((t) => (t === "dark" ? "light" : "dark"));
@@ -114,6 +131,9 @@ function App() {
             >
               <Icon size={18} />
               <span>{label}</span>
+              {to === "/memory" && conflictCount > 0 && (
+                <span className="nav-badge">{conflictCount}</span>
+              )}
             </NavLink>
           ))}
         </nav>

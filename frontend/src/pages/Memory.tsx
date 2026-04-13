@@ -66,6 +66,13 @@ function Memory() {
   // Search
   const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("recallos-search-history");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const [showHistory, setShowHistory] = useState(false);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState("active");
@@ -260,11 +267,18 @@ function Memory() {
     }
     setSearching(true);
     setError(null);
+    setShowHistory(false);
     try {
       const res = await fetch(`/api/memory/search?q=${encodeURIComponent(q)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setItems(Array.isArray(data) ? data : []);
+      // Save to search history (max 10, no duplicates)
+      setSearchHistory((prev) => {
+        const next = [q, ...prev.filter((h) => h !== q)].slice(0, 10);
+        localStorage.setItem("recallos-search-history", JSON.stringify(next));
+        return next;
+      });
     } catch (err: any) {
       setError(err.message || "Search failed");
     } finally {
@@ -610,18 +624,40 @@ function Memory() {
 
       {/* Search bar */}
       <div className="memory-search">
-        <input
-          type="text"
-          placeholder="Search memory (e.g. 'hotel preference', 'React framework')..."
-          value={searchQuery}
-          onChange={(e) => {
-            setSearchQuery(e.target.value);
-            if (!e.target.value.trim()) fetchMemories();
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleSearch();
-          }}
-        />
+        <div className="search-input-wrapper">
+          <input
+            type="text"
+            placeholder="Search memory (e.g. 'hotel preference', 'React framework')..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              if (!e.target.value.trim()) fetchMemories();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSearch();
+            }}
+            onFocus={() => { if (searchHistory.length > 0 && !searchQuery.trim()) setShowHistory(true); }}
+            onBlur={() => { setTimeout(() => setShowHistory(false), 150); }}
+          />
+          {showHistory && searchHistory.length > 0 && (
+            <div className="search-history">
+              {searchHistory.map((h, i) => (
+                <button
+                  key={i}
+                  className="search-history-item"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setSearchQuery(h);
+                    setShowHistory(false);
+                    setTimeout(() => handleSearch(), 0);
+                  }}
+                >
+                  {h}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button
           className="btn btn-primary"
           onClick={handleSearch}
