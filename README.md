@@ -67,7 +67,7 @@ RecallOS sits between you and the AI model. When you send a message:
 
 ### Pages
 
-- **Dashboard** - Overview stats grid with active memories, conversations, trips, links, and 7-day activity. System status bar with version, uptime, and DB size. GitHub-style activity heatmap (12-week contribution grid). Charts for memory type, domain, scope, and confidence distribution. Retention chart. Activity sparkline. Insights panel with duplicate groups and suggestions. Quick actions. Notification bell in sidebar with alerts for conflicts, decay candidates, and duplicates.
+- **Dashboard** - Overview stats grid with active memories, conversations, trips, links, and 7-day activity. System status bar with version, uptime, and DB size. GitHub-style activity heatmap (12-week contribution grid). 30-day activity trend chart. Charts for memory type, domain, scope, and confidence distribution. Retention chart. Activity sparkline. Insights panel with duplicate groups and suggestions. Quick actions. Notification bell in sidebar with alerts for conflicts, decay candidates, and duplicates.
 - **Chat** - Unified chat UI with conversation sidebar, streaming responses (SSE), provider selector, and trip selector. Memory badges show what was extracted and reconciled per message. Pipeline timing breakdown per response. Context panel shows what memory was injected.
 - **Trips** - Create and manage trips. Each trip scopes its own conversations and memory items.
 - **Memory** - Browse, search, and filter all stored memory items. Type, scope, domain, and status filter dropdowns. Domain filter for all 9 detected domains. Tag-based filtering with clickable chips. Session stats panel with cleanup. Inline edit and soft-delete. Multi-select with shift-click range selection, batch operations (pin, unpin, reconfirm, tag, export, delete). Client-side sorting and pagination. Search history dropdown. Conflict detection panel. Markdown export button. Import JSON.
@@ -92,6 +92,7 @@ RecallOS sits between you and the AI model. When you send a message:
 - **Confidence decay** - Items not reconfirmed gradually lose confidence (30-day half-life). Items below threshold are auto-staled.
 - **Session expiration** - Session-scoped memory items expire after configurable TTL (default 24h). Cleanup runs hourly.
 - **Context compilation** - Multi-domain detection, ambiguity flagging, full trace per snapshot
+- **Activity trends** - Daily activity counts over time via /api/memory/stats/trends, with trend chart on Dashboard
 - **Performance timing** - Per-stage timing for the full pipeline (extraction, reconciliation, context compilation, provider call, snapshot save)
 - **Streaming** - SSE endpoint streams tokens as they arrive from the provider
 - **Provider adapters** - OpenAI (gpt-4o) and Anthropic (Claude Sonnet) with both batch and streaming support
