@@ -14,6 +14,7 @@ import {
   Clock,
   HeartPulse,
   Network,
+  Trash2,
 } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Chat from "./pages/Chat";
@@ -26,6 +27,7 @@ import Trips from "./pages/Trips";
 import Scraper from "./pages/Scraper";
 import Health from "./pages/Health";
 import Graph from "./pages/Graph";
+import Trash from "./pages/Trash";
 import CommandPalette from "./components/CommandPalette";
 import ShortcutHelp from "./components/ShortcutHelp";
 
@@ -39,6 +41,7 @@ const navItems = [
   { to: "/scraper", label: "Scraper", icon: ScanSearch },
   { to: "/graph", label: "Graph", icon: Network },
   { to: "/health", label: "Health", icon: HeartPulse },
+  { to: "/trash", label: "Trash", icon: Trash2 },
   { to: "/debug", label: "Context Debug", icon: Bug },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ];
@@ -157,6 +160,7 @@ function App() {
           <Route path="/scraper" element={<Scraper />} />
           <Route path="/graph" element={<Graph />} />
           <Route path="/health" element={<Health />} />
+          <Route path="/trash" element={<Trash />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
