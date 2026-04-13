@@ -135,8 +135,60 @@
   border: 1px solid var(--color-border);
 }
 
+/* Action breakdown */
+.action-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.action-chip {
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.action-chip:hover {
+  background: var(--color-surface-hover);
+}
+
+.action-chip-active {
+  background: var(--color-surface-hover);
+  font-weight: 600;
+}
+
 .timeline-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
   margin-bottom: 20px;
+}
+
+.timeline-search {
+  flex: 1;
+  max-width: 280px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.82rem;
+}
+
+.timeline-search:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.timeline-filter-info {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
 }
 
 .timeline-controls select {

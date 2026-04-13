@@ -25,7 +25,15 @@ const ACTION_COLORS: Record<string, string> = {
   marked_stale: "#ef4444",
   imported: "#8b5cf6",
   deleted: "#6b7280",
+  restored: "#10b981",
+  pinned: "#f59e0b",
+  unpinned: "#9ca3af",
 };
+
+const ALL_ACTIONS = [
+  "created", "superseded", "reconfirmed", "marked_stale",
+  "imported", "deleted", "restored", "pinned", "unpinned",
+];
 
 function Timeline() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
@@ -34,6 +42,8 @@ function Timeline() {
   const [heatmapDays, setHeatmapDays] = useState<HeatmapDay[]>([]);
   const [heatmapMax, setHeatmapMax] = useState(1);
   const [hoveredDay, setHoveredDay] = useState<HeatmapDay | null>(null);
+  const [actionFilter, setActionFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     fetchTimeline();
@@ -122,13 +132,31 @@ function Timeline() {
     }
   }
 
-  // Group entries by date
+  // Filter and group entries by date
+  const filteredEntries = entries
+    .filter((e) => actionFilter === "all" || e.action === actionFilter)
+    .filter((e) => {
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        (e.memory_key || "").toLowerCase().includes(q) ||
+        (e.details || "").toLowerCase().includes(q) ||
+        e.action.toLowerCase().includes(q)
+      );
+    });
+
   const grouped = new Map<string, AuditEntry[]>();
-  for (const entry of entries) {
+  for (const entry of filteredEntries) {
     const date = formatDate(entry.created_at);
     const group = grouped.get(date) || [];
     group.push(entry);
     grouped.set(date, group);
+  }
+
+  // Action breakdown counts
+  const actionCounts: Record<string, number> = {};
+  for (const entry of entries) {
+    actionCounts[entry.action] = (actionCounts[entry.action] || 0) + 1;
   }
 
   const heatGrid = buildHeatGrid();
@@ -197,13 +225,44 @@ function Timeline() {
         </div>
       )}
 
+      {/* Action breakdown chips */}
+      {Object.keys(actionCounts).length > 0 && (
+        <div className="action-breakdown">
+          {ALL_ACTIONS.filter((a) => actionCounts[a]).map((action) => (
+            <button
+              key={action}
+              className={`action-chip${actionFilter === action ? " action-chip-active" : ""}`}
+              style={{
+                borderColor: actionFilter === action ? ACTION_COLORS[action] : undefined,
+                color: ACTION_COLORS[action],
+              }}
+              onClick={() => setActionFilter(actionFilter === action ? "all" : action)}
+            >
+              {action} ({actionCounts[action]})
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="timeline-controls">
+        <input
+          type="text"
+          className="timeline-search"
+          placeholder="Search timeline..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
         <select value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
           <option value={25}>Last 25</option>
           <option value={50}>Last 50</option>
           <option value={100}>Last 100</option>
           <option value={200}>Last 200</option>
         </select>
+        {(actionFilter !== "all" || searchQuery) && (
+          <span className="timeline-filter-info">
+            Showing {filteredEntries.length} of {entries.length}
+          </span>
+        )}
       </div>
 
       {loading && <p className="muted">Loading...</p>}
