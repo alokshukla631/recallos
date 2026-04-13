@@ -80,6 +80,7 @@ function Memory() {
   const [tagFilter, setTagFilter] = useState("all");
   const [tagFilteredIds, setTagFilteredIds] = useState<Set<number> | null>(null);
   const [scopeFilter, setScopeFilter] = useState("all");
+  const [domainFilter, setDomainFilter] = useState("all");
 
   // Edit state
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -395,6 +396,24 @@ function Memory() {
     if (importRef.current) importRef.current.value = "";
   };
 
+  async function handleExportMarkdown() {
+    try {
+      const res = await fetch("/api/passport/export/markdown");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const md = await res.text();
+      const blob = new Blob([md], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `recallos-memory-${new Date().toISOString().slice(0, 10)}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast("Exported as Markdown", "success");
+    } catch {
+      toast("Markdown export failed", "error");
+    }
+  }
+
   const handleTogglePin = async (id: number, currentlyPinned: boolean) => {
     try {
       const endpoint = currentlyPinned ? "unpin" : "pin";
@@ -483,10 +502,10 @@ function Memory() {
     }
   };
 
-  // Apply tag filter
-  const filteredItems = tagFilteredIds
-    ? items.filter((i) => tagFilteredIds.has(i.id))
-    : items;
+  // Apply tag filter and domain filter
+  const filteredItems = items
+    .filter((i) => (tagFilteredIds ? tagFilteredIds.has(i.id) : true))
+    .filter((i) => (domainFilter === "all" ? true : (i.domain || "") === domainFilter));
 
   // Sort items
   const sortedItems = [...filteredItems].sort((a, b) => {
@@ -574,6 +593,9 @@ function Memory() {
         </button>
         <button className="btn btn-secondary create-toggle" onClick={() => importRef.current?.click()}>
           Import JSON
+        </button>
+        <button className="btn btn-secondary create-toggle" onClick={handleExportMarkdown}>
+          Export MD
         </button>
         <input
           ref={importRef}
@@ -750,6 +772,24 @@ function Memory() {
             <option value="trip">Trip</option>
             <option value="project">Project</option>
             <option value="session">Session</option>
+          </select>
+        </label>
+        <label>
+          Domain
+          <select
+            value={domainFilter}
+            onChange={(e) => setDomainFilter(e.target.value)}
+          >
+            <option value="all">All</option>
+            <option value="travel">Travel</option>
+            <option value="coding">Coding</option>
+            <option value="work">Work</option>
+            <option value="health">Health</option>
+            <option value="finance">Finance</option>
+            <option value="learning">Learning</option>
+            <option value="writing">Writing</option>
+            <option value="personal">Personal</option>
+            <option value="communication">Communication</option>
           </select>
         </label>
         {allTags.length > 0 && (
