@@ -25,6 +25,8 @@ interface Stats {
   links: number;
   trips: number;
   conversations: number;
+  pending_conflicts: number;
+  pinned: number;
 }
 
 interface RetentionData {
@@ -261,6 +263,18 @@ function Dashboard() {
           <span className="big-stat-value">{totalMemory}</span>
           <span className="big-stat-label">Total all-time</span>
         </div>
+        {stats.pinned > 0 && (
+          <div className="big-stat-card">
+            <span className="big-stat-value" style={{ color: "#f59e0b" }}>{stats.pinned}</span>
+            <span className="big-stat-label">Pinned</span>
+          </div>
+        )}
+        {stats.pending_conflicts > 0 && (
+          <div className="big-stat-card">
+            <span className="big-stat-value" style={{ color: "#ef4444" }}>{stats.pending_conflicts}</span>
+            <span className="big-stat-label">Conflicts</span>
+          </div>
+        )}
       </div>
 
       <div className="dashboard-columns">

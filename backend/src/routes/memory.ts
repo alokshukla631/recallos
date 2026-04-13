@@ -295,6 +295,14 @@ router.get("/stats", (_req: Request, res: Response) => {
       "SELECT COUNT(*) as count FROM conversations"
     ) as any;
 
+    // Pending conflicts
+    const pendingConflictsCount = getPendingConflictCount();
+
+    // Pinned count
+    const pinnedCount = queryOne(
+      "SELECT COUNT(*) as count FROM memory_items WHERE pinned = 1 AND status = 'active'"
+    ) as any;
+
     res.json({
       totals: {
         active: totalActive?.count || 0,
@@ -320,6 +328,8 @@ router.get("/stats", (_req: Request, res: Response) => {
       links: linksCount?.count || 0,
       trips: tripsCount?.count || 0,
       conversations: convsCount?.count || 0,
+      pending_conflicts: pendingConflictsCount,
+      pinned: pinnedCount?.count || 0,
     });
   } catch (err) {
     console.error("GET /api/memory/stats error:", err);
@@ -628,10 +638,17 @@ router.post("/:id/reconfirm", (req: Request, res: Response) => {
     }
 
     const now = new Date().toISOString();
-    runSql("UPDATE memory_items SET last_confirmed_at = ?, status = 'active' WHERE id = ?", [now, id]);
-    logAudit(id, "reconfirmed", "Manual reconfirmation by user");
-    fireWebhook("reconfirmed", { id, last_confirmed_at: now });
-    res.json({ message: "Memory item reconfirmed", last_confirmed_at: now });
+    // Boost confidence by 5% on each reconfirmation (capped at 1.0)
+    const full = queryOne("SELECT confidence FROM memory_items WHERE id = ?", [id]) as any;
+    const currentConf = full?.confidence ?? 0.8;
+    const boosted = Math.min(1.0, currentConf + 0.05);
+    runSql(
+      "UPDATE memory_items SET last_confirmed_at = ?, status = 'active', confidence = ? WHERE id = ?",
+      [now, boosted, id]
+    );
+    logAudit(id, "reconfirmed", `Manual reconfirmation (confidence ${Math.round(currentConf * 100)}% -> ${Math.round(boosted * 100)}%)`);
+    fireWebhook("reconfirmed", { id, last_confirmed_at: now, confidence: boosted });
+    res.json({ message: "Memory item reconfirmed", last_confirmed_at: now, confidence: boosted });
   } catch (err) {
     console.error("POST /api/memory/:id/reconfirm error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -642,14 +659,16 @@ router.post("/:id/reconfirm", (req: Request, res: Response) => {
 router.post("/:id/pin", (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;
+    const reason = req.body?.reason || "";
     const item = queryOne("SELECT id FROM memory_items WHERE id = ?", [id]) as any;
     if (!item) {
       res.status(404).json({ error: "Memory item not found" });
       return;
     }
     runSql("UPDATE memory_items SET pinned = 1 WHERE id = ?", [id]);
-    fireWebhook("pinned", { id });
-    res.json({ message: "Memory item pinned", pinned: true });
+    logAudit(id, "pinned", reason ? `Pinned: ${reason}` : "Pinned by user");
+    fireWebhook("pinned", { id, reason });
+    res.json({ message: "Memory item pinned", pinned: true, reason });
   } catch (err) {
     console.error("POST /api/memory/:id/pin error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -666,6 +685,7 @@ router.post("/:id/unpin", (req: Request, res: Response) => {
       return;
     }
     runSql("UPDATE memory_items SET pinned = 0 WHERE id = ?", [id]);
+    logAudit(id, "unpinned", "Unpinned by user");
     fireWebhook("unpinned", { id });
     res.json({ message: "Memory item unpinned", pinned: false });
   } catch (err) {

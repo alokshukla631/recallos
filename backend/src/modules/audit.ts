@@ -13,7 +13,9 @@ export type AuditAction =
   | "reconfirmed"
   | "marked_stale"
   | "imported"
-  | "deleted";
+  | "deleted"
+  | "pinned"
+  | "unpinned";
 
 export interface AuditEntry {
   id: string;
