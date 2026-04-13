@@ -404,6 +404,42 @@ router.get("/stats/retention", (_req: Request, res: Response) => {
   }
 });
 
+// GET /stats/trends - daily counts over time (created, deleted, restored)
+router.get("/stats/trends", (req: Request, res: Response) => {
+  try {
+    const days = parseInt(req.query.days as string) || 30;
+    const trends = queryAll(
+      `SELECT
+         date(created_at) as day,
+         action,
+         COUNT(*) as count
+       FROM memory_audit_log
+       WHERE created_at >= datetime('now', '-' || ? || ' days')
+       GROUP BY day, action
+       ORDER BY day ASC`,
+      [days]
+    ) as Array<{ day: string; action: string; count: number }>;
+
+    // Pivot by day
+    const byDay: Record<string, Record<string, number>> = {};
+    for (const row of trends) {
+      if (!byDay[row.day]) byDay[row.day] = {};
+      byDay[row.day][row.action] = row.count;
+    }
+
+    const result = Object.entries(byDay).map(([day, actions]) => ({
+      day,
+      ...actions,
+      total: Object.values(actions).reduce((s, c) => s + c, 0),
+    }));
+
+    res.json(result);
+  } catch (err) {
+    console.error("GET /api/memory/stats/trends error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /search - full-text search across memory items using BM25
 router.get("/search", (req: Request, res: Response) => {
   try {

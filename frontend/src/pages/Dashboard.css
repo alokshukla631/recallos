@@ -310,6 +310,65 @@
   color: var(--color-accent);
 }
 
+/* Trend chart */
+.trend-chart-section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+}
+
+.trend-chart-section h3 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.trend-chart {
+  width: 100%;
+}
+
+.trend-svg {
+  width: 100%;
+  height: 60px;
+}
+
+.trend-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+.trend-legend {
+  display: flex;
+  gap: 12px;
+}
+
+.trend-legend-total::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 2px;
+  background: rgba(109, 109, 255, 0.6);
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+.trend-legend-created::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 2px;
+  background: rgba(34, 197, 94, 0.5);
+  vertical-align: middle;
+  margin-right: 4px;
+  border-top: 1px dashed rgba(34, 197, 94, 0.5);
+}
+
 /* Sparkline */
 .sparkline-container {
   padding: 4px 0;

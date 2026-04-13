@@ -90,10 +90,11 @@ function Dashboard() {
   const [sparkData, setSparkData] = useState<SparkDay[]>([]);
   const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [trends, setTrends] = useState<Array<{ day: string; total: number; created?: number; deleted?: number }>>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([fetchStats(), fetchAudit(), fetchRetention(), fetchHealth(), fetchSparkline(), fetchInsights()]).finally(() => setLoading(false));
+    Promise.all([fetchStats(), fetchAudit(), fetchRetention(), fetchHealth(), fetchSparkline(), fetchInsights(), fetchTrends()]).finally(() => setLoading(false));
   }, []);
 
   async function fetchStats() {
@@ -142,6 +143,16 @@ function Dashboard() {
       if (!res.ok) return;
       const data = await res.json();
       setSparkData(data.days || []);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function fetchTrends() {
+    try {
+      const res = await fetch("/api/memory/stats/trends?days=30");
+      if (!res.ok) return;
+      setTrends(await res.json());
     } catch {
       // ignore
     }
@@ -280,6 +291,46 @@ function Dashboard() {
 
       {/* Activity heatmap */}
       <ActivityHeatmap weeks={12} />
+
+      {/* 30-day trend chart */}
+      {trends.length > 3 && (
+        <div className="trend-chart-section">
+          <h3>30-Day Activity Trend</h3>
+          <div className="trend-chart">
+            <svg viewBox={`0 0 ${trends.length * 10} 60`} className="trend-svg" preserveAspectRatio="none">
+              {(() => {
+                const max = Math.max(1, ...trends.map((d) => d.total));
+                const totalPoints = trends.map((d, i) => {
+                  const x = i * 10 + 5;
+                  const y = 56 - (d.total / max) * 50;
+                  return `${x},${y}`;
+                }).join(" ");
+                const createdPoints = trends.map((d, i) => {
+                  const x = i * 10 + 5;
+                  const y = 56 - ((d.created || 0) / max) * 50;
+                  return `${x},${y}`;
+                }).join(" ");
+                const areaPoints = `0,56 ${totalPoints} ${(trends.length - 1) * 10 + 5},56`;
+                return (
+                  <>
+                    <polygon points={areaPoints} fill="rgba(109, 109, 255, 0.08)" />
+                    <polyline points={totalPoints} fill="none" stroke="rgba(109, 109, 255, 0.6)" strokeWidth="1.5" />
+                    <polyline points={createdPoints} fill="none" stroke="rgba(34, 197, 94, 0.5)" strokeWidth="1" strokeDasharray="3,2" />
+                  </>
+                );
+              })()}
+            </svg>
+            <div className="trend-labels">
+              <span>{trends[0]?.day.slice(5)}</span>
+              <span className="trend-legend">
+                <span className="trend-legend-total">Total</span>
+                <span className="trend-legend-created">Created</span>
+              </span>
+              <span>{trends[trends.length - 1]?.day.slice(5)}</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="dashboard-columns">
         {/* Left column */}
