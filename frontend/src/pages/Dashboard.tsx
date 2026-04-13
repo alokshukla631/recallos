@@ -65,6 +65,18 @@ interface SparkDay {
   total: number;
 }
 
+interface DuplicateGroup {
+  key: string;
+  items: Array<{ id: string; value: string; scope: string }>;
+}
+
+interface Suggestion {
+  type: string;
+  message: string;
+  memory_id?: string;
+  key?: string;
+}
+
 function Dashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -73,10 +85,12 @@ function Dashboard() {
   const [retention, setRetention] = useState<RetentionData | null>(null);
   const [health, setHealth] = useState<HealthInfo | null>(null);
   const [sparkData, setSparkData] = useState<SparkDay[]>([]);
+  const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([]);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([fetchStats(), fetchAudit(), fetchRetention(), fetchHealth(), fetchSparkline()]).finally(() => setLoading(false));
+    Promise.all([fetchStats(), fetchAudit(), fetchRetention(), fetchHealth(), fetchSparkline(), fetchInsights()]).finally(() => setLoading(false));
   }, []);
 
   async function fetchStats() {
@@ -125,6 +139,25 @@ function Dashboard() {
       if (!res.ok) return;
       const data = await res.json();
       setSparkData(data.days || []);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function fetchInsights() {
+    try {
+      const [dupRes, sugRes] = await Promise.all([
+        fetch("/api/memory/duplicates?threshold=0.6"),
+        fetch("/api/memory/suggestions"),
+      ]);
+      if (dupRes.ok) {
+        const dupData = await dupRes.json();
+        setDuplicates(dupData.groups || []);
+      }
+      if (sugRes.ok) {
+        const sugData = await sugRes.json();
+        setSuggestions(Array.isArray(sugData) ? sugData.slice(0, 5) : []);
+      }
     } catch {
       // ignore
     }
@@ -448,6 +481,42 @@ function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Insights section */}
+      {(duplicates.length > 0 || suggestions.length > 0) && (
+        <div className="insights-section">
+          <h3>Insights</h3>
+          <div className="insights-grid">
+            {duplicates.length > 0 && (
+              <div className="insight-card insight-duplicates">
+                <h4>Possible Duplicates ({duplicates.length})</h4>
+                <div className="insight-list">
+                  {duplicates.slice(0, 5).map((group, i) => (
+                    <div key={i} className="insight-item">
+                      <span className="insight-key">{group.key}</span>
+                      <span className="insight-detail">{group.items.length} items with same key</span>
+                    </div>
+                  ))}
+                </div>
+                <Link to="/memory" className="dash-link">Review in Memory</Link>
+              </div>
+            )}
+            {suggestions.length > 0 && (
+              <div className="insight-card insight-suggestions">
+                <h4>Suggestions</h4>
+                <div className="insight-list">
+                  {suggestions.map((s, i) => (
+                    <div key={i} className="insight-item">
+                      <span className={`insight-type insight-type-${s.type}`}>{s.type}</span>
+                      <span className="insight-message">{s.message}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
