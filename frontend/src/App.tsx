@@ -30,6 +30,7 @@ import Graph from "./pages/Graph";
 import Trash from "./pages/Trash";
 import CommandPalette from "./components/CommandPalette";
 import ShortcutHelp from "./components/ShortcutHelp";
+import NotificationBell from "./components/NotificationBell";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -141,6 +142,7 @@ function App() {
           ))}
         </nav>
         <div className="sidebar-footer">
+          <NotificationBell />
           <button className="theme-toggle" onClick={toggleTheme}>
             {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
             <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
