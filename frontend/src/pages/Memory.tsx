@@ -77,6 +77,8 @@ function Memory() {
   // Filters
   const [statusFilter, setStatusFilter] = useState("active");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [tagFilter, setTagFilter] = useState("all");
+  const [tagFilteredIds, setTagFilteredIds] = useState<Set<number> | null>(null);
   const [scopeFilter, setScopeFilter] = useState("all");
 
   // Edit state
@@ -435,6 +437,31 @@ function Memory() {
     }
   };
 
+  // Tag filter: fetch items with the selected tag
+  useEffect(() => {
+    if (tagFilter === "all") {
+      setTagFilteredIds(null);
+      return;
+    }
+    async function fetchTaggedItems() {
+      try {
+        // Get all items, check each for the tag
+        // A simpler approach: scan the current items and fetch their tags
+        const ids = new Set<number>();
+        for (const item of items) {
+          const res = await fetch(`/api/memory/${item.id}/tags`);
+          if (!res.ok) continue;
+          const tags: Array<{ tag: string }> = await res.json();
+          if (tags.some((t) => t.tag === tagFilter)) ids.add(item.id);
+        }
+        setTagFilteredIds(ids);
+      } catch {
+        setTagFilteredIds(null);
+      }
+    }
+    fetchTaggedItems();
+  }, [tagFilter, items]);
+
   // Escape key clears selection
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -456,8 +483,13 @@ function Memory() {
     }
   };
 
+  // Apply tag filter
+  const filteredItems = tagFilteredIds
+    ? items.filter((i) => tagFilteredIds.has(i.id))
+    : items;
+
   // Sort items
-  const sortedItems = [...items].sort((a, b) => {
+  const sortedItems = [...filteredItems].sort((a, b) => {
     let aVal: any = (a as any)[sortField];
     let bVal: any = (b as any)[sortField];
     if (sortField === "confidence") {
@@ -476,11 +508,11 @@ function Memory() {
   const pagedItems = sortedItems.slice((page - 1) * pageSize, page * pageSize);
 
   // Stats
-  const totalActive = items.filter((i) => i.status === "active").length;
+  const totalActive = filteredItems.filter((i) => i.status === "active").length;
   const byType: Record<string, number> = {};
   const byScope: Record<string, number> = {};
   const byDomain: Record<string, number> = {};
-  for (const item of items) {
+  for (const item of filteredItems) {
     byType[item.type] = (byType[item.type] || 0) + 1;
     byScope[item.scope] = (byScope[item.scope] || 0) + 1;
     if (item.domain) {
@@ -496,7 +528,7 @@ function Memory() {
       {/* Stats summary */}
       <div className="memory-stats">
         <div className="stat-card">
-          <span className="stat-value">{items.length}</span>
+          <span className="stat-value">{filteredItems.length}</span>
           <span className="stat-label">Total shown</span>
         </div>
         <div className="stat-card">
@@ -720,6 +752,20 @@ function Memory() {
             <option value="session">Session</option>
           </select>
         </label>
+        {allTags.length > 0 && (
+          <label>
+            Tag
+            <select
+              value={tagFilter}
+              onChange={(e) => setTagFilter(e.target.value)}
+            >
+              <option value="all">All</option>
+              {allTags.map((t) => (
+                <option key={t.tag} value={t.tag}>{t.tag} ({t.count})</option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       {/* Tags cloud */}
@@ -727,7 +773,14 @@ function Memory() {
         <div className="tags-cloud">
           <span className="tags-label">Tags:</span>
           {allTags.map((t) => (
-            <span key={t.tag} className="tag-chip">{t.tag} ({t.count})</span>
+            <span
+              key={t.tag}
+              className={`tag-chip ${tagFilter === t.tag ? "tag-active" : ""}`}
+              style={{ cursor: "pointer" }}
+              onClick={() => setTagFilter(tagFilter === t.tag ? "all" : t.tag)}
+            >
+              {t.tag} ({t.count})
+            </span>
           ))}
         </div>
       )}
