@@ -45,8 +45,36 @@
 .batch-pin:hover { border-color: #f59e0b; color: #f59e0b; }
 .batch-unpin:hover { border-color: #6b7280; color: #6b7280; }
 .batch-reconfirm:hover { border-color: #22c55e; color: #22c55e; }
+.batch-tag:hover { border-color: var(--color-accent); color: var(--color-accent); }
 .batch-export:hover { border-color: #3b82f6; color: #3b82f6; }
 .batch-delete:hover { border-color: #ef4444; color: #ef4444; }
+
+.batch-tag-input {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.batch-tag-input input {
+  width: 110px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.78rem;
+}
+
+.batch-tag-input input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.batch-tag-apply {
+  background: var(--color-accent) !important;
+  color: #fff !important;
+  border-color: var(--color-accent) !important;
+}
 
 .batch-clear {
   background: none;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useToast } from "./Toast";
 import "./BatchBar.css";
 
@@ -11,6 +11,9 @@ interface Props {
 function BatchBar({ selectedIds, onClear, onDone }: Props) {
   const { toast } = useToast();
   const [running, setRunning] = useState(false);
+  const [showTagInput, setShowTagInput] = useState(false);
+  const [batchTag, setBatchTag] = useState("");
+  const tagInputRef = useRef<HTMLInputElement>(null);
 
   if (selectedIds.length === 0) return null;
 
@@ -29,6 +32,31 @@ function BatchBar({ selectedIds, onClear, onDone }: Props) {
       onDone();
     } catch (err: any) {
       toast(err.message || "Batch failed", "error");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  async function batchAddTag() {
+    const tag = batchTag.trim().toLowerCase();
+    if (!tag) return;
+    setRunning(true);
+    try {
+      let added = 0;
+      for (const id of selectedIds) {
+        const res = await fetch(`/api/memory/${id}/tags`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tag }),
+        });
+        if (res.ok) added++;
+      }
+      toast(`Tagged ${added} item${added !== 1 ? "s" : ""} with "${tag}"`, "success");
+      setBatchTag("");
+      setShowTagInput(false);
+      onDone();
+    } catch (err: any) {
+      toast(err.message || "Batch tag failed", "error");
     } finally {
       setRunning(false);
     }
@@ -64,9 +92,34 @@ function BatchBar({ selectedIds, onClear, onDone }: Props) {
         <button className="batch-btn batch-pin" onClick={() => runBatch("pin")} disabled={running}>Pin</button>
         <button className="batch-btn batch-unpin" onClick={() => runBatch("unpin")} disabled={running}>Unpin</button>
         <button className="batch-btn batch-reconfirm" onClick={() => runBatch("reconfirm")} disabled={running}>Reconfirm</button>
+        <button
+          className="batch-btn batch-tag"
+          onClick={() => {
+            setShowTagInput(!showTagInput);
+            setTimeout(() => tagInputRef.current?.focus(), 50);
+          }}
+          disabled={running}
+        >
+          Tag
+        </button>
         <button className="batch-btn batch-export" onClick={exportSelected} disabled={running}>Export</button>
         <button className="batch-btn batch-delete" onClick={() => runBatch("delete")} disabled={running}>Delete</button>
       </div>
+      {showTagInput && (
+        <div className="batch-tag-input">
+          <input
+            ref={tagInputRef}
+            type="text"
+            placeholder="Tag name..."
+            value={batchTag}
+            onChange={(e) => setBatchTag(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") batchAddTag(); }}
+          />
+          <button className="batch-btn batch-tag-apply" onClick={batchAddTag} disabled={!batchTag.trim() || running}>
+            Apply
+          </button>
+        </div>
+      )}
       <button className="batch-clear" onClick={onClear}>Clear selection</button>
     </div>
   );

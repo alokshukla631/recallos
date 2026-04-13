@@ -22,6 +22,7 @@ import {
   resolveConflict,
   getPendingConflictCount,
 } from "../modules/conflicts.js";
+import { detectDomain } from "../modules/domain-detector.js";
 
 // Ensure tables exist on module load
 ensureVersionTable();
@@ -85,10 +86,13 @@ router.post("/", (req: Request, res: Response) => {
     const id = uuidv4();
     const now = new Date().toISOString();
 
+    // Auto-detect domain if not provided
+    const itemDomain = domain || detectDomain(key.trim(), value.trim());
+
     runSql(
       `INSERT INTO memory_items (id, key, type, value, scope, domain, trip_id, confidence, authority, status, last_confirmed_at, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'explicit', 'active', ?, ?)`,
-      [id, key.trim(), itemType, value.trim(), itemScope, domain || null, trip_id || null, itemConfidence, now, now]
+      [id, key.trim(), itemType, value.trim(), itemScope, itemDomain, trip_id || null, itemConfidence, now, now]
     );
 
     logAudit(id, "created", "Manually created by user");
