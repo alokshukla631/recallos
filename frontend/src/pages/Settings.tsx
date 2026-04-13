@@ -21,6 +21,16 @@ interface Webhook {
   created_at: string;
 }
 
+interface DeliveryEntry {
+  webhook_id: string;
+  url: string;
+  event: string;
+  status: number | null;
+  success: boolean;
+  timestamp: string;
+  error?: string;
+}
+
 interface DecayCandidate {
   id: string;
   key: string;
@@ -51,6 +61,10 @@ function Settings() {
   const [decayCandidates, setDecayCandidates] = useState<DecayCandidate[] | null>(null);
   const [decayLoading, setDecayLoading] = useState(false);
   const [decayApplying, setDecayApplying] = useState(false);
+
+  // Delivery log
+  const [deliveryLog, setDeliveryLog] = useState<DeliveryEntry[]>([]);
+  const [showDeliveryLog, setShowDeliveryLog] = useState(false);
 
   useEffect(() => {
     fetchProviders();
@@ -226,6 +240,17 @@ function Settings() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed";
       showStatus("webhooks", msg, "error");
+    }
+  }
+
+  async function fetchDeliveryLog() {
+    try {
+      const res = await fetch("/api/settings/webhooks/log?limit=50");
+      if (!res.ok) return;
+      setDeliveryLog(await res.json());
+      setShowDeliveryLog(true);
+    } catch {
+      // ignore
     }
   }
 
@@ -616,6 +641,41 @@ function Settings() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+            <div className="passport-actions" style={{ marginTop: 12 }}>
+              <button className="btn btn-secondary" onClick={fetchDeliveryLog}>
+                {showDeliveryLog ? "Refresh Log" : "View Delivery Log"}
+              </button>
+            </div>
+            {showDeliveryLog && (
+              <div className="delivery-log">
+                {deliveryLog.length === 0 ? (
+                  <p className="status-msg success">No deliveries recorded yet.</p>
+                ) : (
+                  <table className="delivery-log-table">
+                    <thead>
+                      <tr>
+                        <th>Time</th>
+                        <th>Event</th>
+                        <th>URL</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deliveryLog.map((entry, i) => (
+                        <tr key={i} className={entry.success ? "" : "delivery-failed"}>
+                          <td className="delivery-time">{new Date(entry.timestamp).toLocaleString()}</td>
+                          <td className="delivery-event">{entry.event}</td>
+                          <td className="delivery-url">{entry.url}</td>
+                          <td className={`delivery-status ${entry.success ? "status-ok" : "status-fail"}`}>
+                            {entry.success ? entry.status || "OK" : entry.error || `${entry.status}`}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             )}
             {statusMessages["webhooks"] && (

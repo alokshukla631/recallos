@@ -357,6 +357,73 @@
   color: var(--color-text-muted);
 }
 
+/* Delivery log */
+.delivery-log {
+  margin-top: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.delivery-log-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.delivery-log-table th {
+  text-align: left;
+  padding: 8px 10px;
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  position: sticky;
+  top: 0;
+}
+
+.delivery-log-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.delivery-time {
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+}
+
+.delivery-event {
+  font-weight: 500;
+  color: var(--color-accent);
+}
+
+.delivery-url {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+}
+
+.delivery-status.status-ok {
+  color: #22c55e;
+  font-weight: 600;
+}
+
+.delivery-status.status-fail {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.delivery-failed {
+  background: rgba(239, 68, 68, 0.05);
+}
+
 /* System prompt */
 .system-prompt-textarea {
   width: 100%;

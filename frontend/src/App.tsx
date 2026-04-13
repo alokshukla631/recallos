@@ -27,6 +27,7 @@ import Scraper from "./pages/Scraper";
 import Health from "./pages/Health";
 import Graph from "./pages/Graph";
 import CommandPalette from "./components/CommandPalette";
+import ShortcutHelp from "./components/ShortcutHelp";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -45,6 +46,7 @@ const navItems = [
 function App() {
   const navigate = useNavigate();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     return (localStorage.getItem("recallos-theme") as "dark" | "light") || "dark";
   });
@@ -60,10 +62,18 @@ function App() {
 
   // Global keyboard shortcuts (Ctrl/Cmd + key)
   const handleKeyboard = useCallback((e: KeyboardEvent) => {
-    if (!e.ctrlKey && !e.metaKey) return;
     // Don't fire when typing in inputs
     const tag = (e.target as HTMLElement).tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+    // ? key (no modifier) opens shortcut help
+    if (e.key === "?" && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      setShortcutHelpOpen((p) => !p);
+      return;
+    }
+
+    if (!e.ctrlKey && !e.metaKey) return;
 
     switch (e.key) {
       case "1": e.preventDefault(); navigate("/"); break;
@@ -84,6 +94,7 @@ function App() {
   return (
     <div className="app">
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <ShortcutHelp open={shortcutHelpOpen} onClose={() => setShortcutHelpOpen(false)} />
       <aside className="sidebar">
         <div className="sidebar-header">
           <h1>RecallOS</h1>
