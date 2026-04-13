@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "../components/Toast";
+import ActivityHeatmap from "../components/ActivityHeatmap";
 import "./Dashboard.css";
 
 interface HealthInfo {
@@ -276,6 +277,9 @@ function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Activity heatmap */}
+      <ActivityHeatmap weeks={12} />
 
       <div className="dashboard-columns">
         {/* Left column */}
