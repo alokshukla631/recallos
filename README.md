@@ -72,6 +72,8 @@ RecallOS sits between you and the AI model. When you send a message:
 - **Trips** - Create and manage trips. Each trip scopes its own conversations and memory items.
 - **Memory** - Browse, search, and filter all stored memory items. Type, scope, domain, and status filter dropdowns. Domain filter for all 9 detected domains. Tag-based filtering with clickable chips. Session stats panel with cleanup. Inline edit and soft-delete. Multi-select with shift-click range selection, batch operations (pin, unpin, reconfirm, tag, export, delete). Client-side sorting and pagination. Search history dropdown. Conflict detection panel. Markdown export button. Import JSON.
 - **Links** - Explore relationships between memory items. Click an item to see all incoming/outgoing links. Create new links with typed relations. Navigate between linked items.
+- **Graph** - Canvas-based force-directed graph visualization. Nodes colored by type or domain. Search to find and highlight nodes. Filter by type, toggle same-key implicit links. Drag, pan, zoom, and click to inspect. Info panel shows connections.
+- **Timeline** - Chronological audit history with 12-week activity heatmap. Filter by action type with clickable chips. Search entries by key or details.
 - **Scraper** - View available log sources (Claude Code, Cursor, ChatGPT) with status indicators. Trigger scrapes to extract memory from external AI tool conversations.
 - **Context Debug** - Inspect context snapshots with full trace: BM25 score, recency boost, final score, and inclusion decision for every memory item.
 - **Health** - Memory health score with breakdown. Duplicate detection with one-click merge. Stale candidate detection with bulk cleanup. Importance distribution (top and bottom items). Conflict count warning. Memory age distribution bar chart.
@@ -256,6 +258,14 @@ recallos/
 ## The bigger picture
 
 Milestone 1 proved the core thesis: the model does reasoning, RecallOS provides the memory/context layer. Milestone 2 made it developer-friendly with an API, CLI, Docker, and agent support. Milestone 3 generalized the engine beyond travel: multi-domain extraction, hierarchical scoping, MCP server for any AI tool, memory relationships, and recency-aware ranking. Post-M3 added cross-tool continuity (log scraping from Claude Code, Cursor, ChatGPT), confidence decay, session expiration, pipeline timing, a Python SDK, bulk import, and a full set of frontend pages.
+
+### Recent fixes
+
+- Fixed backend startup crash caused by router modules calling the database before initialization
+- Fixed route shadowing where GET /:id intercepted static routes (/stats, /search, /tags, /conflicts, /decay, /graph, /duplicates, /suggestions, and more), causing 404 errors on Dashboard, Memory, Health, Graph, and the notification bell
+- Fixed context snapshot compare route being shadowed by the parametric snapshots/:id route
+- Fixed audit log CHECK constraint that rejected 'pinned', 'unpinned', and 'restored' actions, causing 500 errors on pin/unpin/restore with state already mutated
+- Fixed amount extraction regex where $2000 was incorrectly parsed as $200
 
 What's next:
 - Local embedding search (vector similarity alongside BM25)
