@@ -24,11 +24,23 @@ import {
 } from "../modules/conflicts.js";
 import { detectDomain } from "../modules/domain-detector.js";
 
-// Ensure tables exist on module load
-ensureVersionTable();
-ensureConflictsTable();
+// Lazy initialization: these tables are created on first request, not at import time,
+// because router modules are imported before initDatabase() runs in index.ts.
+let _tablesInitialized = false;
+function ensureTables() {
+  if (_tablesInitialized) return;
+  ensureVersionTable();
+  ensureConflictsTable();
+  _tablesInitialized = true;
+}
 
 const router = Router();
+
+// Middleware: ensure extra tables exist before handling any request
+router.use((_req, _res, next) => {
+  ensureTables();
+  next();
+});
 
 // GET / - list memory items with optional filters
 router.get("/", (req: Request, res: Response) => {
@@ -128,88 +140,6 @@ router.get("/recently-deleted", (req: Request, res: Response) => {
     res.json(items);
   } catch (err) {
     console.error("GET /api/memory/recently-deleted error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// GET /:id - get single memory item
-router.get("/:id", (req: Request, res: Response) => {
-  try {
-    const row = queryOne("SELECT * FROM memory_items WHERE id = ?", [req.params.id]);
-    if (!row) {
-      res.status(404).json({ error: "Memory item not found" });
-      return;
-    }
-    res.json(row);
-  } catch (err) {
-    console.error("GET /api/memory/:id error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// GET /:id/detail - comprehensive detail view for a single memory item
-router.get("/:id/detail", (req: Request, res: Response) => {
-  try {
-    const id = req.params.id as string;
-    const item = queryOne("SELECT * FROM memory_items WHERE id = ?", [id]) as any;
-    if (!item) {
-      res.status(404).json({ error: "Memory item not found" });
-      return;
-    }
-
-    // Importance breakdown
-    const importance = computeImportance(id);
-
-    // Tags
-    const tags = getTagsForItem(id);
-
-    // Links (both directions)
-    const links = getLinksForItem(id);
-
-    // Audit history
-    const audit = getAuditForItem(id);
-
-    // Superseded by / supersedes info
-    let superseded_by_item = null;
-    if (item.superseded_by) {
-      superseded_by_item = queryOne(
-        "SELECT id, key, value FROM memory_items WHERE id = ?",
-        [item.superseded_by]
-      );
-    }
-    const supersedes = queryAll(
-      "SELECT id, key, value FROM memory_items WHERE superseded_by = ?",
-      [id]
-    );
-
-    // Context usage: how many snapshots include this item
-    const allSnapshots = queryAll(
-      "SELECT included_memory_ids FROM context_snapshots"
-    ) as any[];
-    let contextAppearances = 0;
-    for (const snap of allSnapshots) {
-      try {
-        const ids = JSON.parse(snap.included_memory_ids || "[]");
-        if (ids.includes(id)) contextAppearances++;
-      } catch { /* skip malformed */ }
-    }
-
-    // Version history
-    const versions = getVersions(id);
-
-    res.json({
-      ...item,
-      importance,
-      tags,
-      links,
-      audit,
-      versions,
-      superseded_by_item,
-      supersedes,
-      context_appearances: contextAppearances,
-    });
-  } catch (err) {
-    console.error("GET /api/memory/:id/detail error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -1223,6 +1153,93 @@ router.post("/merge", (req: Request, res: Response) => {
     res.json(updated);
   } catch (err) {
     console.error("POST /api/memory/merge error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Parametric GET routes MUST be registered last so they don't shadow
+// static paths like /stats, /tags, /search, /conflicts, /graph, etc.
+// ---------------------------------------------------------------------------
+
+// GET /:id - get single memory item
+router.get("/:id", (req: Request, res: Response) => {
+  try {
+    const row = queryOne("SELECT * FROM memory_items WHERE id = ?", [req.params.id]);
+    if (!row) {
+      res.status(404).json({ error: "Memory item not found" });
+      return;
+    }
+    res.json(row);
+  } catch (err) {
+    console.error("GET /api/memory/:id error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /:id/detail - comprehensive detail view for a single memory item
+router.get("/:id/detail", (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const item = queryOne("SELECT * FROM memory_items WHERE id = ?", [id]) as any;
+    if (!item) {
+      res.status(404).json({ error: "Memory item not found" });
+      return;
+    }
+
+    // Importance breakdown
+    const importance = computeImportance(id);
+
+    // Tags
+    const tags = getTagsForItem(id);
+
+    // Links (both directions)
+    const links = getLinksForItem(id);
+
+    // Audit history
+    const audit = getAuditForItem(id);
+
+    // Superseded by / supersedes info
+    let superseded_by_item = null;
+    if (item.superseded_by) {
+      superseded_by_item = queryOne(
+        "SELECT id, key, value FROM memory_items WHERE id = ?",
+        [item.superseded_by]
+      );
+    }
+    const supersedes = queryAll(
+      "SELECT id, key, value FROM memory_items WHERE superseded_by = ?",
+      [id]
+    );
+
+    // Context usage: how many snapshots include this item
+    const allSnapshots = queryAll(
+      "SELECT included_memory_ids FROM context_snapshots"
+    ) as any[];
+    let contextAppearances = 0;
+    for (const snap of allSnapshots) {
+      try {
+        const ids = JSON.parse(snap.included_memory_ids || "[]");
+        if (ids.includes(id)) contextAppearances++;
+      } catch { /* skip malformed */ }
+    }
+
+    // Version history
+    const versions = getVersions(id);
+
+    res.json({
+      ...item,
+      importance,
+      tags,
+      links,
+      audit,
+      versions,
+      superseded_by_item,
+      supersedes,
+      context_appearances: contextAppearances,
+    });
+  } catch (err) {
+    console.error("GET /api/memory/:id/detail error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
