@@ -74,7 +74,7 @@ RecallOS sits between you and the AI model. When you send a message:
 - **Links** - Explore relationships between memory items. Search filter to find items by key, value, or type. Click an item to see all incoming/outgoing links. Linked items highlighted in sidebar. Create new links with typed relations. Navigate between linked items.
 - **Graph** - Canvas-based force-directed graph visualization. Nodes colored by type or domain. Search to find and highlight nodes. Filter by type, toggle same-key implicit links. Drag, pan, zoom, and click to inspect. Info panel shows connections.
 - **Timeline** - Chronological audit history with 12-week activity heatmap. Filter by action type with clickable chips. Search entries by key or details.
-- **Scraper** - View available log sources (Claude Code, Cursor, ChatGPT, Windsurf) with status indicators, descriptions, and paths. Stats bar with source counts. Trigger scrapes to extract memory from external AI tool conversations. Per-source extraction badges and session scrape history.
+- **Scraper** - View available log sources (Claude Code, Cursor, GitHub Copilot, ChatGPT, Windsurf) with status indicators, descriptions, and paths. Stats bar with source counts. Trigger scrapes to extract memory from external AI tool conversations. Per-source extraction badges and session scrape history.
 - **Context Debug** - Inspect context snapshots with full trace: BM25 score, recency boost, final score, and inclusion decision for every memory item.
 - **Analytics** - Advanced memory analytics page with weekly growth bar chart, status breakdown donut, average confidence by type with progress bars, most confirmed keys, most linked items, pinned by domain, memory age span, and context snapshot count.
 - **Health** - Memory health score with breakdown. Duplicate detection with one-click merge. Stale candidate detection with bulk cleanup. Importance distribution (top and bottom items). Conflict count warning. Memory age distribution bar chart. Refresh button with last-checked timestamp.
@@ -114,6 +114,7 @@ RecallOS sits between you and the AI model. When you send a message:
 - **Log scraper** - Scrapes chat logs from local AI tools and extracts memory from conversations that happened outside RecallOS
   - **Claude Code** - Reads JSONL transcripts from `~/.claude/projects/`
   - **Cursor** - Reads SQLite state.vscdb composer data
+  - **GitHub Copilot** - Reads Copilot Chat conversations from VS Code globalStorage
   - **ChatGPT** - Reads `conversations.json` exports (from Settings > Export data)
   - **Windsurf** - Reads SQLite conversation data from Windsurf state
 - **MCP server** - Connect any MCP-compatible AI tool (Claude Desktop, Cursor, VS Code) to your memory. 9 tools, 6 resources, 3 prompts.
@@ -268,11 +269,13 @@ Milestone 1 proved the core thesis: the model does reasoning, RecallOS provides 
 - Added Analytics page with weekly growth chart, status donut, confidence by type, most confirmed/linked rankings
 - Added memory analytics API endpoint (`GET /api/memory/stats/analytics`)
 - Added analytics to CLI (`recallos settings analytics`), TypeScript SDK, and Python SDK
+- Added GitHub Copilot scraper for VS Code Copilot Chat conversations
 - Added Clear All Data endpoint with typed confirmation (keeps provider keys)
 - Added database statistics grid to Settings page
 - Enhanced command palette with Quick Add Memory mode, new actions, and navigation
 - Improved Scraper page with stats bar, source descriptions, per-source badges, and session history
 - Added JSON and Markdown export buttons to Settings
+- Added Copilot to log scraper list
 - Added Windsurf scraper support
 - Fixed backend startup crash caused by router modules calling the database before initialization
 - Fixed route shadowing where GET /:id intercepted static routes, causing 404 errors
@@ -285,7 +288,6 @@ What's next:
 - Memory sharing and collaboration (multi-user support)
 - MCP client connections (pull context from calendars, documents, code repos)
 - Background refiner with a local model for smarter extraction
-- Copilot scraper support
 - Bulk actions from the command palette
 - Memory quality scoring and automated recommendations
 
