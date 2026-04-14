@@ -683,6 +683,13 @@ const API_SPEC = {
         },
       },
     },
+    "/api/settings/scheduled-tasks": {
+      get: {
+        summary: "List scheduled background tasks with run times",
+        tags: ["Settings"],
+        responses: { "200": { description: "Array of { name, last_run, interval_human, enabled }" } },
+      },
+    },
     "/api/settings/system-prompt": {
       get: {
         summary: "Get the current system prompt",

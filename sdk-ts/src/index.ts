@@ -648,6 +648,11 @@ export class RecallOS {
   resetSystemPrompt(): Promise<{ message: string }> {
     return this.del("/api/settings/system-prompt");
   }
+
+  /** Get scheduled background task info. */
+  scheduledTasks(): Promise<Array<{ name: string; last_run: string | null; interval_human: string; enabled: boolean }>> {
+    return this.get("/api/settings/scheduled-tasks");
+  }
 }
 
 export default RecallOS;

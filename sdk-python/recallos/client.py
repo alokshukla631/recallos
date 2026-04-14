@@ -504,6 +504,12 @@ class RecallOS:
         r.raise_for_status()
         return r.json()
 
+    def scheduled_tasks(self) -> list:
+        """Get info about scheduled background tasks."""
+        r = self._client.get("/api/settings/scheduled-tasks")
+        r.raise_for_status()
+        return r.json()
+
 
 class AsyncRecallOS:
     """Async client for the RecallOS API (uses httpx.AsyncClient)."""
@@ -810,5 +816,11 @@ class AsyncRecallOS:
     async def reset_system_prompt(self) -> dict:
         """Reset system prompt to default."""
         r = await self._client.delete("/api/settings/system-prompt")
+        r.raise_for_status()
+        return r.json()
+
+    async def scheduled_tasks(self) -> list:
+        """Get info about scheduled background tasks."""
+        r = await self._client.get("/api/settings/scheduled-tasks")
         r.raise_for_status()
         return r.json()
