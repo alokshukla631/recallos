@@ -66,11 +66,20 @@ function Settings() {
   const [deliveryLog, setDeliveryLog] = useState<DeliveryEntry[]>([]);
   const [showDeliveryLog, setShowDeliveryLog] = useState(false);
 
+  // DB stats
+  const [dbStats, setDbStats] = useState<Record<string, number> | null>(null);
+
+  // Clear data
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [clearConfirmText, setClearConfirmText] = useState("");
+  const [clearing, setClearing] = useState(false);
+
   useEffect(() => {
     fetchProviders();
     fetchMcpConfig();
     fetchWebhooks();
     fetchSystemPrompt();
+    fetchDbStats();
   }, []);
 
   async function fetchProviders() {
@@ -314,6 +323,39 @@ function Settings() {
       fetchSystemPrompt();
     } catch {
       showStatus("prompt", "Reset failed", "error");
+    }
+  }
+
+  async function fetchDbStats() {
+    try {
+      const res = await fetch("/api/settings/stats");
+      if (!res.ok) return;
+      setDbStats(await res.json());
+    } catch {
+      // ignore
+    }
+  }
+
+  async function clearAllData() {
+    if (clearConfirmText !== "DELETE") return;
+    setClearing(true);
+    try {
+      const res = await fetch("/api/settings/clear-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: "DELETE_ALL_DATA" }),
+      });
+      if (!res.ok) throw new Error("Failed to clear");
+      showStatus("clear", "All data has been cleared", "success");
+      setShowClearConfirm(false);
+      setClearConfirmText("");
+      fetchDbStats();
+      fetchProviders();
+      fetchWebhooks();
+    } catch {
+      showStatus("clear", "Failed to clear data", "error");
+    } finally {
+      setClearing(false);
     }
   }
 
@@ -781,14 +823,85 @@ function Settings() {
             )}
           </div>
 
+          {/* Database Stats */}
+          {dbStats && (
+            <div className="settings-section data-section">
+              <h3>Database Statistics</h3>
+              <div className="db-stats-grid">
+                {[
+                  { label: "Memory Items", key: "memory_items" },
+                  { label: "Conversations", key: "conversations" },
+                  { label: "Messages", key: "events" },
+                  { label: "Trips", key: "trips" },
+                  { label: "Links", key: "memory_links" },
+                  { label: "Tags", key: "memory_tags" },
+                  { label: "Audit Entries", key: "memory_audit_log" },
+                  { label: "Context Snapshots", key: "context_snapshots" },
+                  { label: "Conflicts", key: "conflicts" },
+                  { label: "Webhooks", key: "webhooks" },
+                ].map((item) => (
+                  <div key={item.key} className="db-stat-item">
+                    <span className="db-stat-value">{dbStats[item.key] ?? 0}</span>
+                    <span className="db-stat-label">{item.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="settings-section data-section">
             <h3>Data Management</h3>
             <p>
-              Remove all stored memories, conversations, and configuration.
+              Remove all stored memories, conversations, and trips. Provider API keys are kept.
             </p>
-            <button className="btn btn-danger" disabled>
-              Clear All Data (coming soon)
-            </button>
+            {!showClearConfirm ? (
+              <button
+                className="btn btn-danger"
+                onClick={() => setShowClearConfirm(true)}
+              >
+                Clear All Data
+              </button>
+            ) : (
+              <div className="clear-confirm-box">
+                <p className="clear-confirm-warning">
+                  This will permanently delete all memory items, conversations, trips,
+                  links, tags, snapshots, and webhooks. Provider API keys will be kept.
+                </p>
+                <p className="clear-confirm-instruction">
+                  Type <strong>DELETE</strong> to confirm:
+                </p>
+                <div className="clear-confirm-row">
+                  <input
+                    type="text"
+                    value={clearConfirmText}
+                    onChange={(e) => setClearConfirmText(e.target.value)}
+                    placeholder="Type DELETE"
+                    className="clear-confirm-input"
+                  />
+                  <button
+                    className="btn btn-danger"
+                    onClick={clearAllData}
+                    disabled={clearConfirmText !== "DELETE" || clearing}
+                  >
+                    {clearing ? "Clearing..." : "Confirm Delete"}
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setShowClearConfirm(false);
+                      setClearConfirmText("");
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+            {statusMessages["clear"] && (
+              <p className={`status-msg ${statusMessages["clear"].type}`}>
+                {statusMessages["clear"].text}
+              </p>
+            )}
           </div>
         </>
       )}

@@ -249,4 +249,83 @@ router.delete("/system-prompt", (_req: Request, res: Response) => {
   }
 });
 
+// GET /stats - database statistics (row counts per table)
+router.get("/stats", (_req: Request, res: Response) => {
+  try {
+    const tables = [
+      "memory_items",
+      "conversations",
+      "events",
+      "trips",
+      "memory_links",
+      "memory_tags",
+      "memory_audit_log",
+      "context_snapshots",
+      "conflicts",
+      "agent_plans",
+      "agent_steps",
+      "agent_checkpoints",
+      "provider_settings",
+      "webhooks",
+    ];
+    const counts: Record<string, number> = {};
+    for (const table of tables) {
+      try {
+        const row = queryOne(`SELECT COUNT(*) as cnt FROM ${table}`);
+        counts[table] = (row?.cnt as number) || 0;
+      } catch {
+        counts[table] = 0;
+      }
+    }
+    res.json(counts);
+  } catch (err) {
+    console.error("GET /api/settings/stats error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /clear-data - delete all user data (keeps provider settings)
+router.post("/clear-data", (req: Request, res: Response) => {
+  try {
+    const { confirm } = req.body;
+    if (confirm !== "DELETE_ALL_DATA") {
+      res.status(400).json({ error: "Must send { confirm: \"DELETE_ALL_DATA\" } to proceed" });
+      return;
+    }
+
+    // Order matters for foreign key constraints
+    const tablesToClear = [
+      "agent_checkpoints",
+      "agent_steps",
+      "agent_plans",
+      "context_snapshots",
+      "memory_audit_log",
+      "memory_tags",
+      "memory_links",
+      "conflicts",
+      "events",
+      "conversations",
+      "memory_items",
+      "trips",
+      "webhooks",
+    ];
+
+    for (const table of tablesToClear) {
+      try {
+        runSql(`DELETE FROM ${table}`);
+      } catch {
+        // table might not exist yet, skip
+      }
+    }
+
+    // Reset custom system prompt
+    runSql("DELETE FROM app_settings WHERE key = 'system_prompt'");
+
+    res.json({ message: "All data cleared", tables_cleared: tablesToClear.length });
+  } catch (err) {
+    console.error("POST /api/settings/clear-data error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;
