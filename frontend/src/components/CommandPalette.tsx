@@ -19,8 +19,41 @@ function CommandPalette({ open, onClose }: Props) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [mode, setMode] = useState<"commands" | "add-memory">("commands");
+  const [memoryText, setMemoryText] = useState("");
+  const [addingMemory, setAddingMemory] = useState(false);
+  const [memoryStatus, setMemoryStatus] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const memoryInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  async function quickAddMemory() {
+    const text = memoryText.trim();
+    if (!text || addingMemory) return;
+    setAddingMemory(true);
+    setMemoryStatus(null);
+    try {
+      const res = await fetch("/api/memory/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ statements: [text] }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
+      const count = data.added || data.extracted || 0;
+      setMemoryStatus(count > 0 ? `Extracted ${count} memory item(s)` : "Processed (may be duplicate)");
+      setMemoryText("");
+      setTimeout(() => {
+        setMode("commands");
+        setMemoryStatus(null);
+        onClose();
+      }, 1200);
+    } catch {
+      setMemoryStatus("Failed to add memory");
+    } finally {
+      setAddingMemory(false);
+    }
+  }
 
   const commands: CommandItem[] = [
     // Navigation
@@ -32,16 +65,30 @@ function CommandPalette({ open, onClose }: Props) {
     { id: "nav-graph", label: "Go to Graph", category: "Navigation", action: () => navigate("/graph") },
     { id: "nav-links", label: "Go to Links", category: "Navigation", action: () => navigate("/links") },
     { id: "nav-health", label: "Go to Health", category: "Navigation", action: () => navigate("/health") },
+    { id: "nav-trash", label: "Go to Trash", category: "Navigation", action: () => navigate("/trash") },
     { id: "nav-debug", label: "Go to Context Debug", category: "Navigation", action: () => navigate("/debug") },
     { id: "nav-settings", label: "Go to Settings", shortcut: "Ctrl+5", category: "Navigation", action: () => navigate("/settings") },
     { id: "nav-scraper", label: "Go to Scraper", category: "Navigation", action: () => navigate("/scraper") },
 
     // Actions
+    { id: "act-add-memory", label: "Quick add memory", category: "Actions", action: () => {
+      setMode("add-memory");
+      setTimeout(() => memoryInputRef.current?.focus(), 50);
+    }},
+    { id: "act-new-chat", label: "Start new conversation", category: "Actions", action: () => {
+      navigate("/chat?new=1");
+      onClose();
+    }},
     { id: "act-search", label: "Search memory", category: "Actions", action: () => { navigate("/memory"); onClose(); } },
     { id: "act-export-json", label: "Export memory (JSON)", category: "Actions", action: () => { window.open("/api/passport/export", "_blank"); } },
-    { id: "act-export-csv", label: "Export memory (CSV)", category: "Actions", action: () => { window.open("/api/passport/export/csv", "_blank"); } },
+    { id: "act-export-md", label: "Export memory (Markdown)", category: "Actions", action: () => { window.open("/api/passport/export/markdown", "_blank"); } },
     { id: "act-health-check", label: "Run health check", category: "Actions", action: () => navigate("/health") },
+    { id: "act-scrape", label: "Run log scraper", category: "Actions", action: () => navigate("/scraper") },
     { id: "act-docs", label: "View API docs", category: "Actions", action: () => { window.open("/api/docs", "_blank"); } },
+    { id: "act-shortcuts", label: "Show keyboard shortcuts", shortcut: "?", category: "Actions", action: () => {
+      onClose();
+      window.dispatchEvent(new CustomEvent("recallos:show-shortcuts"));
+    }},
 
     // Theme
     { id: "theme-toggle", label: "Toggle dark/light theme", shortcut: "Ctrl+T", category: "Theme", action: () => {
@@ -69,6 +116,9 @@ function CommandPalette({ open, onClose }: Props) {
     if (open) {
       setQuery("");
       setSelectedIndex(0);
+      setMode("commands");
+      setMemoryText("");
+      setMemoryStatus(null);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open]);
@@ -110,6 +160,53 @@ function CommandPalette({ open, onClose }: Props) {
   }
 
   if (!open) return null;
+
+  if (mode === "add-memory") {
+    return (
+      <div className="palette-overlay" onClick={onClose}>
+        <div className="palette-container" onClick={(e) => e.stopPropagation()}>
+          <div className="palette-add-memory-header">
+            <button className="palette-back" onClick={() => setMode("commands")}>Back</button>
+            <span className="palette-add-memory-title">Quick Add Memory</span>
+          </div>
+          <input
+            ref={memoryInputRef}
+            className="palette-input"
+            type="text"
+            placeholder="e.g. I prefer window seats on flights"
+            value={memoryText}
+            onChange={(e) => setMemoryText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") quickAddMemory();
+              if (e.key === "Escape") onClose();
+            }}
+          />
+          <div className="palette-add-memory-body">
+            <p className="palette-add-memory-hint">
+              Type a natural language statement. RecallOS will extract the memory type,
+              scope, and domain automatically.
+            </p>
+            {memoryStatus && (
+              <p className={`palette-add-memory-status ${memoryStatus.startsWith("Failed") ? "error" : "success"}`}>
+                {memoryStatus}
+              </p>
+            )}
+            <button
+              className="palette-add-memory-btn"
+              onClick={quickAddMemory}
+              disabled={!memoryText.trim() || addingMemory}
+            >
+              {addingMemory ? "Adding..." : "Add Memory"}
+            </button>
+          </div>
+          <div className="palette-footer">
+            <span><kbd>Enter</kbd> to add</span>
+            <span><kbd>Esc</kbd> to close</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Group by category
   const categories = new Map<string, CommandItem[]>();
