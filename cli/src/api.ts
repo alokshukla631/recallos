@@ -25,12 +25,26 @@ export async function post<T = any>(path: string, body?: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function del(path: string): Promise<void> {
+export async function put<T = any>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`PUT ${path} failed (${res.status}): ${text}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+export async function del<T = any>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, { method: "DELETE" });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`DELETE ${path} failed (${res.status}): ${text}`);
   }
+  return res.json() as Promise<T>;
 }
 
 export async function fetchRaw(path: string): Promise<Response> {

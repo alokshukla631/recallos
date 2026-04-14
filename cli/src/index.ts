@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { get, post, del, fetchRaw } from "./api.js";
+import { get, post, put, del, fetchRaw } from "./api.js";
 import fs from "fs";
 
 const program = new Command();
@@ -517,6 +517,92 @@ providers
       const def = p.is_default ? " (default)" : "";
       console.log(`  ${p.provider}${def}`);
     }
+  });
+
+providers
+  .command("add <name> <apiKey>")
+  .description("Add or update a provider API key")
+  .action(async (name, apiKey) => {
+    const result = await put(`/api/settings/providers/${name}`, { api_key: apiKey });
+    console.log(result.message || `API key saved for ${name}`);
+  });
+
+providers
+  .command("remove <name>")
+  .description("Remove a provider")
+  .action(async (name) => {
+    const result = await del(`/api/settings/providers/${name}`);
+    console.log(result.message || `Provider ${name} removed`);
+  });
+
+providers
+  .command("default [name]")
+  .description("Get or set the default provider")
+  .action(async (name) => {
+    if (name) {
+      const result = await put("/api/settings/providers/default", { provider: name });
+      console.log(result.message || `Default set to ${name}`);
+    } else {
+      const result = await get("/api/settings/providers/default");
+      console.log(result.provider ? `Default provider: ${result.provider}` : "No default provider set");
+    }
+  });
+
+// ── Settings ──────────────────────────────────────────────────────────────
+
+const settings = program.command("settings").description("Application settings and data management");
+
+settings
+  .command("stats")
+  .description("Show database table row counts")
+  .action(async () => {
+    const counts = await get("/api/settings/stats");
+    console.log("\n  Database statistics:\n");
+    for (const [table, count] of Object.entries(counts)) {
+      console.log(`  ${table}: ${count}`);
+    }
+    console.log();
+  });
+
+settings
+  .command("clear-data")
+  .description("Delete all user data (keeps provider API keys)")
+  .option("--yes", "Skip confirmation prompt")
+  .action(async (opts) => {
+    if (!opts.yes) {
+      console.log("\n  WARNING: This will permanently delete all memory items, conversations,");
+      console.log("  trips, links, tags, snapshots, and webhooks.");
+      console.log("  Provider API keys will be kept.\n");
+      console.log("  Run with --yes to confirm.\n");
+      return;
+    }
+    const result = await post("/api/settings/clear-data", { confirm: "DELETE_ALL_DATA" });
+    console.log(result.message || "All data cleared");
+  });
+
+settings
+  .command("prompt")
+  .description("View the current system prompt")
+  .action(async () => {
+    const data = await get("/api/settings/system-prompt");
+    console.log(`\n  System prompt (${data.is_custom ? "custom" : "default"}):\n`);
+    console.log(`  ${data.prompt}\n`);
+  });
+
+settings
+  .command("set-prompt <text>")
+  .description("Update the system prompt")
+  .action(async (text) => {
+    const result = await put("/api/settings/system-prompt", { prompt: text });
+    console.log(result.message || "System prompt updated");
+  });
+
+settings
+  .command("reset-prompt")
+  .description("Reset the system prompt to default")
+  .action(async () => {
+    const result = await del("/api/settings/system-prompt");
+    console.log(result.message || "System prompt reset to default");
   });
 
 // ── MCP ────────────────────────────────────────────────────────────────────
