@@ -456,6 +456,20 @@ export class RecallOS {
     return this.get("/api/memory/stats/retention");
   }
 
+  /** Get advanced memory analytics (growth, confirmations, links, status breakdown). */
+  analytics(): Promise<{
+    weekly_growth: Array<{ week: string; created: number }>;
+    most_confirmed: Array<{ key: string; confirmations: number }>;
+    by_status: Array<{ status: string; count: number }>;
+    avg_confidence_by_type: Array<{ type: string; avg_confidence: number; count: number }>;
+    pinned_by_domain: Array<{ domain: string; count: number }>;
+    age_stats: { oldest: string | null; newest: string | null; total: number };
+    most_linked: Array<{ key: string; type: string; link_count: number }>;
+    total_snapshots: number;
+  }> {
+    return this.get("/api/memory/stats/analytics");
+  }
+
   // -- Audit ----------------------------------------------------------------
 
   /** Get recent audit log entries. */

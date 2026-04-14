@@ -279,6 +279,12 @@ class RecallOS:
         r.raise_for_status()
         return r.json()
 
+    def analytics(self) -> dict:
+        """Get advanced memory analytics (growth, confirmations, links, status breakdown)."""
+        r = self._client.get("/api/memory/stats/analytics")
+        r.raise_for_status()
+        return r.json()
+
     # -- Webhooks -------------------------------------------------------------
 
     def list_webhooks(self) -> list[dict]:
@@ -627,6 +633,12 @@ class AsyncRecallOS:
 
     async def retention_stats(self) -> dict:
         r = await self._client.get("/api/memory/stats/retention")
+        r.raise_for_status()
+        return r.json()
+
+    async def analytics(self) -> dict:
+        """Get advanced memory analytics (growth, confirmations, links, status breakdown)."""
+        r = await self._client.get("/api/memory/stats/analytics")
         r.raise_for_status()
         return r.json()
 

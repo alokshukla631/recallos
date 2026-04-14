@@ -690,6 +690,18 @@ const API_SPEC = {
         responses: { "200": { description: "Array of { name, last_run, interval_human, enabled }" } },
       },
     },
+    "/api/memory/stats/analytics": {
+      get: {
+        summary: "Get advanced memory analytics",
+        description: "Returns weekly growth, most confirmed keys, status breakdown, average confidence by type, pinned items by domain, age stats, most linked items, and total snapshot count.",
+        tags: ["Memory"],
+        responses: {
+          "200": {
+            description: "Analytics object with weekly_growth, most_confirmed, by_status, avg_confidence_by_type, pinned_by_domain, age_stats, most_linked, total_snapshots",
+          },
+        },
+      },
+    },
     "/api/settings/system-prompt": {
       get: {
         summary: "Get the current system prompt",
