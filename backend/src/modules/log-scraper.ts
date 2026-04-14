@@ -262,6 +262,192 @@ async function parseWindsurfData(): Promise<ScrapedMessage[]> {
 }
 
 // ---------------------------------------------------------------------------
+// GitHub Copilot scraper
+// ---------------------------------------------------------------------------
+
+function findCopilotDb(): string | null {
+  // Copilot Chat stores conversations in VS Code's globalStorage
+  const vscodeDir = path.join(getAppDataPath(), "Code", "User", "globalStorage");
+  if (!fs.existsSync(vscodeDir)) return null;
+
+  // Look for the Copilot Chat extension storage
+  const candidates = [
+    path.join(vscodeDir, "github.copilot-chat", "chat.db"),
+    path.join(vscodeDir, "github.copilot-chat", "state.vscdb"),
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+
+  // Also check for conversation JSON files in the extension directory
+  const copilotDir = path.join(vscodeDir, "github.copilot-chat");
+  if (fs.existsSync(copilotDir)) {
+    // Some versions store conversations as JSON in the extension folder
+    try {
+      const entries = fs.readdirSync(copilotDir);
+      for (const entry of entries) {
+        if (entry.endsWith(".json") && entry.includes("conversation")) {
+          return path.join(copilotDir, entry);
+        }
+      }
+    } catch {
+      // Permission errors
+    }
+    // Return the directory itself if it exists (we'll scan it)
+    return copilotDir;
+  }
+
+  return null;
+}
+
+async function parseCopilotData(): Promise<ScrapedMessage[]> {
+  const copilotPath = findCopilotDb();
+  if (!copilotPath) return [];
+
+  const messages: ScrapedMessage[] = [];
+
+  try {
+    const stat = fs.statSync(copilotPath);
+
+    if (stat.isFile() && copilotPath.endsWith(".json")) {
+      // Parse JSON conversation file
+      const content = fs.readFileSync(copilotPath, "utf-8");
+      const data = JSON.parse(content);
+      const conversations = Array.isArray(data) ? data : data.conversations || [data];
+
+      for (const conv of conversations) {
+        const msgs = conv.messages || conv.turns || conv.conversation || [];
+        if (!Array.isArray(msgs)) continue;
+
+        for (const msg of msgs) {
+          const role = msg.role || msg.author || (msg.isUser ? "user" : "assistant");
+          const content = msg.content || msg.text || msg.message || "";
+          if (!content || content.length < 10) continue;
+          if (role !== "user" && role !== "assistant" && role !== "human") continue;
+
+          messages.push({
+            role: role === "human" ? "user" : role as "user" | "assistant",
+            content: String(content).slice(0, 2000),
+            source: "copilot",
+          });
+        }
+      }
+    } else if (stat.isFile() && (copilotPath.endsWith(".db") || copilotPath.endsWith(".vscdb"))) {
+      // Parse SQLite database
+      const initSqlJs = (await import("sql.js")).default;
+      const SQL = await initSqlJs();
+      const buffer = fs.readFileSync(copilotPath);
+      const db = new SQL.Database(buffer);
+
+      // Try different table structures Copilot might use
+      const tables = ["conversations", "messages", "cursorDiskKV"];
+      for (const table of tables) {
+        try {
+          if (table === "cursorDiskKV") {
+            // VS Code-style key-value store
+            const stmt = db.prepare(
+              `SELECT key, value FROM ${table} WHERE key LIKE '%copilot%' OR key LIKE '%chat%' ORDER BY key`
+            );
+            while (stmt.step()) {
+              try {
+                const row = stmt.getAsObject() as { key: string; value: any };
+                const valueStr = typeof row.value === "string"
+                  ? row.value
+                  : row.value instanceof Uint8Array
+                    ? new TextDecoder().decode(row.value)
+                    : String(row.value);
+
+                const data = JSON.parse(valueStr);
+                const conversation = data.conversation || data.messages || data.turns || [];
+                if (!Array.isArray(conversation)) continue;
+
+                for (const msg of conversation) {
+                  const role = msg.role || msg.author || (msg.isUser ? "user" : "assistant");
+                  const content = msg.content || msg.text || msg.message || "";
+                  if (!content || content.length < 10) continue;
+                  if (role !== "user" && role !== "assistant" && role !== "human") continue;
+
+                  messages.push({
+                    role: role === "human" ? "user" : role as "user" | "assistant",
+                    content: String(content).slice(0, 2000),
+                    source: "copilot",
+                  });
+                }
+              } catch {
+                // Skip unparseable entries
+              }
+            }
+            stmt.free();
+          } else {
+            // Direct messages table
+            const stmt = db.prepare(
+              `SELECT * FROM ${table} ORDER BY rowid`
+            );
+            while (stmt.step()) {
+              try {
+                const row = stmt.getAsObject() as Record<string, any>;
+                const role = row.role || row.author || "unknown";
+                const content = row.content || row.text || row.message || "";
+                if (!content || String(content).length < 10) continue;
+                if (role !== "user" && role !== "assistant") continue;
+
+                messages.push({
+                  role: role as "user" | "assistant",
+                  content: String(content).slice(0, 2000),
+                  source: "copilot",
+                });
+              } catch {
+                // Skip
+              }
+            }
+            stmt.free();
+          }
+        } catch {
+          // Table doesn't exist, try next
+        }
+      }
+      db.close();
+    } else if (stat.isDirectory()) {
+      // Scan directory for JSON conversation files
+      const entries = fs.readdirSync(copilotPath);
+      for (const entry of entries) {
+        if (!entry.endsWith(".json")) continue;
+        try {
+          const content = fs.readFileSync(path.join(copilotPath, entry), "utf-8");
+          const data = JSON.parse(content);
+          const conversations = Array.isArray(data) ? data : [data];
+
+          for (const conv of conversations) {
+            const msgs = conv.messages || conv.turns || conv.conversation || [];
+            if (!Array.isArray(msgs)) continue;
+
+            for (const msg of msgs) {
+              const role = msg.role || msg.author || "unknown";
+              const msgContent = msg.content || msg.text || msg.message || "";
+              if (!msgContent || msgContent.length < 10) continue;
+              if (role !== "user" && role !== "assistant" && role !== "human") continue;
+
+              messages.push({
+                role: role === "human" ? "user" : role as "user" | "assistant",
+                content: String(msgContent).slice(0, 2000),
+                source: "copilot",
+              });
+            }
+          }
+        } catch {
+          // Skip unparseable files
+        }
+      }
+    }
+  } catch {
+    // Read errors
+  }
+
+  return messages;
+}
+
+// ---------------------------------------------------------------------------
 // ChatGPT export scraper
 // ---------------------------------------------------------------------------
 
@@ -509,6 +695,42 @@ export async function scrapeAll(): Promise<ScrapeResult[]> {
 
   results.push(chatgptResult);
 
+  // --- GitHub Copilot ---
+  const copilotResult: ScrapeResult = {
+    source: "copilot",
+    messagesFound: 0,
+    messagesNew: 0,
+    memoryExtracted: 0,
+    errors: [],
+  };
+
+  try {
+    const messages = await parseCopilotData();
+    copilotResult.messagesFound = messages.length;
+
+    const userMessages = messages.filter((m) => m.role === "user");
+    for (const msg of userMessages) {
+      const contentHash = simpleHash(msg.content);
+      const existing = queryOne(
+        "SELECT id FROM events WHERE content = ? AND role = 'user' LIMIT 1",
+        [contentHash]
+      );
+      if (existing) continue;
+
+      copilotResult.messagesNew++;
+      const eventId = "scrape-copilot-" + uuidv4().slice(0, 8);
+      const candidates = await extractMemory(msg.content, eventId);
+      if (candidates.length > 0) {
+        const result = await reconcileMemory(candidates, eventId);
+        copilotResult.memoryExtracted += result.added.length;
+      }
+    }
+  } catch (err: any) {
+    copilotResult.errors.push(err.message || "Unknown error");
+  }
+
+  results.push(copilotResult);
+
   // --- Windsurf ---
   const windsurfResult: ScrapeResult = {
     source: "windsurf",
@@ -548,6 +770,7 @@ export async function scrapeAll(): Promise<ScrapeResult[]> {
   // Save state
   state.lastScrapeTime["claude-code"] = new Date().toISOString();
   state.lastScrapeTime["cursor"] = new Date().toISOString();
+  state.lastScrapeTime["copilot"] = new Date().toISOString();
   state.lastScrapeTime["chatgpt"] = new Date().toISOString();
   state.lastScrapeTime["windsurf"] = new Date().toISOString();
   saveState(state);
@@ -563,6 +786,7 @@ export function getSources(): Array<{ name: string; available: boolean; path: st
 
   const ccTranscripts = findClaudeCodeTranscripts();
   const cursorDb = findCursorDb();
+  const copilotDb = findCopilotDb();
   const chatgptExport = findChatGPTExport();
   const windsurfDb = findWindsurfDb();
 
@@ -580,6 +804,12 @@ export function getSources(): Array<{ name: string; available: boolean; path: st
       available: cursorDb !== null,
       path: cursorDb,
       lastScraped: state.lastScrapeTime["cursor"] || null,
+    },
+    {
+      name: "copilot",
+      available: copilotDb !== null,
+      path: copilotDb,
+      lastScraped: state.lastScrapeTime["copilot"] || null,
     },
     {
       name: "chatgpt",

@@ -24,6 +24,7 @@ interface ScrapeResponse {
 const SOURCE_LABELS: Record<string, string> = {
   "claude-code": "Claude Code",
   cursor: "Cursor",
+  copilot: "GitHub Copilot",
   chatgpt: "ChatGPT",
   windsurf: "Windsurf",
 };
@@ -31,6 +32,7 @@ const SOURCE_LABELS: Record<string, string> = {
 const SOURCE_DESCRIPTIONS: Record<string, string> = {
   "claude-code": "Reads JSONL transcripts from ~/.claude/projects/",
   cursor: "Reads SQLite composer data from Cursor state",
+  copilot: "Reads Copilot Chat conversations from VS Code globalStorage",
   chatgpt: "Reads conversations.json export from ChatGPT (Settings > Export data)",
   windsurf: "Reads SQLite conversation data from Windsurf state",
 };
