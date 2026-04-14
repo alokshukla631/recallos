@@ -23,6 +23,7 @@ function CommandPalette({ open, onClose }: Props) {
   const [memoryText, setMemoryText] = useState("");
   const [addingMemory, setAddingMemory] = useState(false);
   const [memoryStatus, setMemoryStatus] = useState<string | null>(null);
+  const [bulkStatus, setBulkStatus] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const memoryInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -55,6 +56,57 @@ function CommandPalette({ open, onClose }: Props) {
     }
   }
 
+  async function runBulkAction(action: string, label: string) {
+    setBulkStatus(`Running ${label}...`);
+    try {
+      if (action === "scrape") {
+        const res = await fetch("/api/scraper/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+        if (!res.ok) throw new Error("Failed");
+        const data = await res.json();
+        const total = data.results?.reduce((s: number, r: any) => s + (r.memoryExtracted || 0), 0) || 0;
+        setBulkStatus(`Scraper done: ${total} memories extracted`);
+      } else if (action === "decay-preview") {
+        const res = await fetch("/api/memory/decay");
+        if (!res.ok) throw new Error("Failed");
+        const data = await res.json();
+        setBulkStatus(`${data.count} item(s) would be marked stale`);
+      } else if (action === "session-cleanup") {
+        const res = await fetch("/api/memory/session/cleanup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ttl_hours: 24 }) });
+        if (!res.ok) throw new Error("Failed");
+        const data = await res.json();
+        setBulkStatus(`Expired ${data.expired_count} session items`);
+      } else if (action === "export-json") {
+        const res = await fetch("/api/passport/export");
+        if (!res.ok) throw new Error("Failed");
+        const data = await res.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `recallos-export-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setBulkStatus("Memory exported to JSON");
+      } else if (action === "export-md") {
+        const res = await fetch("/api/passport/export/markdown");
+        if (!res.ok) throw new Error("Failed");
+        const text = await res.text();
+        const blob = new Blob([text], { type: "text/markdown" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `recallos-memory-${new Date().toISOString().slice(0, 10)}.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setBulkStatus("Memory exported to Markdown");
+      }
+      setTimeout(() => { setBulkStatus(null); onClose(); }, 1500);
+    } catch {
+      setBulkStatus(`${label} failed`);
+      setTimeout(() => setBulkStatus(null), 2000);
+    }
+  }
+
   const commands: CommandItem[] = [
     // Navigation
     { id: "nav-dashboard", label: "Go to Dashboard", shortcut: "Ctrl+1", category: "Navigation", action: () => navigate("/") },
@@ -64,6 +116,7 @@ function CommandPalette({ open, onClose }: Props) {
     { id: "nav-timeline", label: "Go to Timeline", shortcut: "Ctrl+4", category: "Navigation", action: () => navigate("/timeline") },
     { id: "nav-graph", label: "Go to Graph", category: "Navigation", action: () => navigate("/graph") },
     { id: "nav-links", label: "Go to Links", category: "Navigation", action: () => navigate("/links") },
+    { id: "nav-analytics", label: "Go to Analytics", category: "Navigation", action: () => navigate("/analytics") },
     { id: "nav-health", label: "Go to Health", category: "Navigation", action: () => navigate("/health") },
     { id: "nav-trash", label: "Go to Trash", category: "Navigation", action: () => navigate("/trash") },
     { id: "nav-debug", label: "Go to Context Debug", category: "Navigation", action: () => navigate("/debug") },
@@ -89,6 +142,13 @@ function CommandPalette({ open, onClose }: Props) {
       onClose();
       window.dispatchEvent(new CustomEvent("recallos:show-shortcuts"));
     }},
+
+    // Bulk actions
+    { id: "bulk-scrape", label: "Scrape all log sources now", category: "Bulk Actions", action: () => runBulkAction("scrape", "scraper") },
+    { id: "bulk-decay", label: "Preview decay candidates", category: "Bulk Actions", action: () => runBulkAction("decay-preview", "decay preview") },
+    { id: "bulk-session", label: "Clean up expired sessions", category: "Bulk Actions", action: () => runBulkAction("session-cleanup", "session cleanup") },
+    { id: "bulk-export-json", label: "Download memory as JSON", category: "Bulk Actions", action: () => runBulkAction("export-json", "export") },
+    { id: "bulk-export-md", label: "Download memory as Markdown", category: "Bulk Actions", action: () => runBulkAction("export-md", "export") },
 
     // Theme
     { id: "theme-toggle", label: "Toggle dark/light theme", shortcut: "Ctrl+T", category: "Theme", action: () => {
@@ -253,6 +313,9 @@ function CommandPalette({ open, onClose }: Props) {
             </div>
           ))}
         </div>
+        {bulkStatus && (
+          <div className="palette-bulk-status">{bulkStatus}</div>
+        )}
         <div className="palette-footer">
           <span><kbd>Enter</kbd> to run</span>
           <span><kbd>Esc</kbd> to close</span>
