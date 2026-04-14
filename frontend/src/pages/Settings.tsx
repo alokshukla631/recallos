@@ -69,6 +69,14 @@ function Settings() {
   // DB stats
   const [dbStats, setDbStats] = useState<Record<string, number> | null>(null);
 
+  // Scheduled tasks
+  const [scheduledTasks, setScheduledTasks] = useState<Array<{
+    name: string;
+    last_run: string | null;
+    interval_human: string;
+    enabled: boolean;
+  }> | null>(null);
+
   // Clear data
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearConfirmText, setClearConfirmText] = useState("");
@@ -80,6 +88,7 @@ function Settings() {
     fetchWebhooks();
     fetchSystemPrompt();
     fetchDbStats();
+    fetchScheduledTasks();
   }, []);
 
   async function fetchProviders() {
@@ -331,6 +340,16 @@ function Settings() {
       const res = await fetch("/api/settings/stats");
       if (!res.ok) return;
       setDbStats(await res.json());
+    } catch {
+      // ignore
+    }
+  }
+
+  async function fetchScheduledTasks() {
+    try {
+      const res = await fetch("/api/settings/scheduled-tasks");
+      if (!res.ok) return;
+      setScheduledTasks(await res.json());
     } catch {
       // ignore
     }
@@ -822,6 +841,32 @@ function Settings() {
               </p>
             )}
           </div>
+
+          {/* Scheduled Tasks */}
+          {scheduledTasks && scheduledTasks.length > 0 && (
+            <div className="settings-section data-section">
+              <h3>Background Tasks</h3>
+              <p>Recurring tasks that run automatically in the background.</p>
+              <div className="scheduled-tasks-list">
+                {scheduledTasks.map((task) => (
+                  <div key={task.name} className={`scheduled-task-item ${task.enabled ? "" : "disabled"}`}>
+                    <div className="scheduled-task-name">
+                      {task.name.replace(/_/g, " ")}
+                    </div>
+                    <div className="scheduled-task-meta">
+                      <span className="scheduled-task-interval">every {task.interval_human}</span>
+                      {!task.enabled && <span className="scheduled-task-disabled-badge">Disabled</span>}
+                      <span className="scheduled-task-last-run">
+                        {task.last_run
+                          ? `Last: ${new Date(task.last_run).toLocaleTimeString()}`
+                          : "Not yet run"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Database Stats */}
           {dbStats && (

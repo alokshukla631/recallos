@@ -85,7 +85,29 @@ app.get("/health", (_req, res) => {
 });
 
 const SESSION_CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // Run every hour
+const DECAY_INTERVAL_MS = 60 * 60 * 1000; // Same as session cleanup
 const SCRAPER_INTERVAL_MS = parseInt(process.env.SCRAPER_INTERVAL_MS || "") || 4 * 60 * 60 * 1000; // Default: every 4 hours
+
+// Track scheduled task run times
+const scheduledTaskState = {
+  session_cleanup: { last_run: null as string | null, interval_ms: SESSION_CLEANUP_INTERVAL_MS },
+  confidence_decay: { last_run: null as string | null, interval_ms: DECAY_INTERVAL_MS },
+  scraper: { last_run: null as string | null, interval_ms: SCRAPER_INTERVAL_MS, enabled: process.env.DISABLE_SCRAPER !== "1" },
+};
+
+// GET /api/settings/scheduled-tasks - show scheduled background tasks
+app.get("/api/settings/scheduled-tasks", (_req, res) => {
+  const tasks = Object.entries(scheduledTaskState).map(([name, state]) => ({
+    name,
+    last_run: state.last_run,
+    interval_ms: state.interval_ms,
+    interval_human: state.interval_ms >= 3600000
+      ? `${Math.round(state.interval_ms / 3600000)}h`
+      : `${Math.round(state.interval_ms / 60000)}min`,
+    enabled: "enabled" in state ? (state as any).enabled : true,
+  }));
+  res.json(tasks);
+});
 
 async function start() {
   await initDatabase(DB_PATH);
@@ -94,18 +116,23 @@ async function start() {
   // Run session cleanup and confidence decay on startup and then every hour
   const expired = expireSessionMemory();
   if (expired > 0) console.log(`Session cleanup: expired ${expired} items on startup`);
+  scheduledTaskState.session_cleanup.last_run = new Date().toISOString();
+
   const decay = applyConfidenceDecay();
   if (decay.decayed > 0 || decay.staled > 0) {
     console.log(`Confidence decay: ${decay.decayed} decayed, ${decay.staled} staled on startup`);
   }
+  scheduledTaskState.confidence_decay.last_run = new Date().toISOString();
 
   setInterval(() => {
     const count = expireSessionMemory();
     if (count > 0) console.log(`Session cleanup: expired ${count} items`);
+    scheduledTaskState.session_cleanup.last_run = new Date().toISOString();
     const d = applyConfidenceDecay();
     if (d.decayed > 0 || d.staled > 0) {
       console.log(`Confidence decay: ${d.decayed} decayed, ${d.staled} staled`);
     }
+    scheduledTaskState.confidence_decay.last_run = new Date().toISOString();
   }, SESSION_CLEANUP_INTERVAL_MS);
 
   // Scheduled scraper (every 4 hours by default, configurable via SCRAPER_INTERVAL_MS env)
@@ -118,6 +145,7 @@ async function start() {
         if (totalNew > 0 || totalMemory > 0) {
           console.log(`Scheduled scrape: ${totalNew} new messages, ${totalMemory} memory extracted`);
         }
+        scheduledTaskState.scraper.last_run = new Date().toISOString();
       } catch (err) {
         console.error("Scheduled scrape error:", err);
       }
