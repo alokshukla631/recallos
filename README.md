@@ -106,7 +106,7 @@ RecallOS sits between you and the AI model. When you send a message:
 - **Audit log** - Every memory operation is tracked (created, superseded, reconfirmed, pinned, unpinned, deleted, restored, imported)
 - **Tags** - User-defined tags for free-form categorization with batch tagging
 - **Keyboard shortcuts** - ? for help, Ctrl+K for command palette, Ctrl+1-5 for page navigation, Ctrl+T for theme toggle, Escape to clear selection
-- **Command palette** - Fuzzy-searchable command list (Ctrl+K) with navigation, bulk actions (scrape all sources, preview decay, session cleanup, download JSON/Markdown exports), quick add memory, and theme toggle. Quick Add Memory mode extracts memory from natural language statements. Status feedback for bulk operations
+- **Command palette** - Fuzzy-searchable command list (Ctrl+K) with navigation, global search across memory/conversations/trips, bulk actions (scrape all sources, preview decay, session cleanup, download JSON/Markdown exports), quick add memory, and theme toggle. Quick Add Memory mode extracts memory from natural language statements. Status feedback for bulk operations
 - **Agent state API** - Plans with steps, checkpoints for resumable agents
 
 ### Cross-tool continuity
@@ -125,7 +125,7 @@ RecallOS sits between you and the AI model. When you send a message:
 - **REST API** - Full CRUD for memory, trips, chat, passport, context, agents, scraper, and settings
 - **Python SDK** - Sync and async clients (`RecallOS`, `AsyncRecallOS`) using httpx. Covers all API endpoints. Install with `pip install -e sdk-python/`
 - **TypeScript SDK** - Zero-dependency client for Node 18+, Deno, Bun, and browsers. Covers all API endpoints including memory, trips, chat, context, tags, links, conflicts, decay, merge, restore, and import.
-- **CLI** - `recallos` command-line tool for memory, trips, passport, chat, providers (add/remove/default), scraper, session management, MCP config, trash, restore, settings (stats, analytics, quality, clear-data, prompt management)
+- **CLI** - `recallos` command-line tool with global search, memory, trips, passport, chat, providers (add/remove/default), scraper, session management, MCP config, trash, restore, settings (stats, analytics, quality, clear-data, prompt management)
 - **OpenAPI spec** - Served at `/api/docs/openapi.json` with interactive Swagger UI at `/api/docs/`
 - **Docker** - Multi-stage Dockerfile and docker-compose.yml for one-command deployment
 - **Benchmark endpoint** - `POST /api/context/benchmark` runs the pipeline without calling a provider, returns timing data
@@ -266,6 +266,7 @@ Milestone 1 proved the core thesis: the model does reasoning, RecallOS provides 
 
 ### Recent changes
 
+- Added global search across memory, conversations, and trips (`GET /api/search`, CLI, SDKs, command palette)
 - Added Analytics page with quality score (A-F grade), one-click fix buttons for recommendations, issues, weekly growth chart, status donut, confidence by type, most confirmed/linked rankings
 - Added memory quality score API endpoint (`GET /api/memory/stats/quality`) with grade, breakdown, and recommendations
 - Added memory analytics API endpoint (`GET /api/memory/stats/analytics`)
