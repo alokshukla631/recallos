@@ -74,11 +74,11 @@ RecallOS sits between you and the AI model. When you send a message:
 - **Links** - Explore relationships between memory items. Click an item to see all incoming/outgoing links. Create new links with typed relations. Navigate between linked items.
 - **Graph** - Canvas-based force-directed graph visualization. Nodes colored by type or domain. Search to find and highlight nodes. Filter by type, toggle same-key implicit links. Drag, pan, zoom, and click to inspect. Info panel shows connections.
 - **Timeline** - Chronological audit history with 12-week activity heatmap. Filter by action type with clickable chips. Search entries by key or details.
-- **Scraper** - View available log sources (Claude Code, Cursor, ChatGPT) with status indicators. Trigger scrapes to extract memory from external AI tool conversations.
+- **Scraper** - View available log sources (Claude Code, Cursor, ChatGPT, Windsurf) with status indicators, descriptions, and paths. Stats bar with source counts. Trigger scrapes to extract memory from external AI tool conversations. Per-source extraction badges and session scrape history.
 - **Context Debug** - Inspect context snapshots with full trace: BM25 score, recency boost, final score, and inclusion decision for every memory item.
 - **Health** - Memory health score with breakdown. Duplicate detection with one-click merge. Stale candidate detection with bulk cleanup. Importance distribution (top and bottom items). Conflict count warning. Memory age distribution bar chart.
 - **Trash** - View recently deleted memory items and restore them individually or all at once.
-- **Settings** - Add/remove API keys for OpenAI and Anthropic. Set a default provider. Export/import memory via Memory Passport. MCP server config display with one-click install for Claude Desktop. Webhook delivery log viewer.
+- **Settings** - Add/remove API keys for OpenAI, Anthropic, Gemini, and Ollama. Set a default provider. Customizable system prompt with reset to default. Export/import memory via Memory Passport. JSON and Markdown export buttons. MCP server config display with one-click install for Claude Desktop. Webhook management with delivery log viewer. Memory decay preview and apply. Database statistics grid showing row counts per table. Clear All Data with typed confirmation dialog (keeps provider keys).
 
 ### Core engine
 
@@ -104,6 +104,7 @@ RecallOS sits between you and the AI model. When you send a message:
 - **Audit log** - Every memory operation is tracked (created, superseded, reconfirmed, pinned, unpinned, deleted, restored, imported)
 - **Tags** - User-defined tags for free-form categorization with batch tagging
 - **Keyboard shortcuts** - ? for help, Ctrl+K for command palette, Ctrl+1-5 for page navigation, Ctrl+T for theme toggle, Escape to clear selection
+- **Command palette** - Fuzzy-searchable command list (Ctrl+K) with navigation, actions (quick add memory, export, scrape, new chat), and theme toggle. Quick Add Memory mode extracts memory from natural language statements
 - **Agent state API** - Plans with steps, checkpoints for resumable agents
 
 ### Cross-tool continuity
@@ -112,6 +113,7 @@ RecallOS sits between you and the AI model. When you send a message:
   - **Claude Code** - Reads JSONL transcripts from `~/.claude/projects/`
   - **Cursor** - Reads SQLite state.vscdb composer data
   - **ChatGPT** - Reads `conversations.json` exports (from Settings > Export data)
+  - **Windsurf** - Reads SQLite conversation data from Windsurf state
 - **MCP server** - Connect any MCP-compatible AI tool (Claude Desktop, Cursor, VS Code) to your memory. 9 tools, 6 resources, 3 prompts.
 - **MCP auto-config** - Generate and auto-install config for Claude Desktop. Supports Windows, macOS, and Linux.
 
@@ -257,14 +259,20 @@ recallos/
 
 ## The bigger picture
 
-Milestone 1 proved the core thesis: the model does reasoning, RecallOS provides the memory/context layer. Milestone 2 made it developer-friendly with an API, CLI, Docker, and agent support. Milestone 3 generalized the engine beyond travel: multi-domain extraction, hierarchical scoping, MCP server for any AI tool, memory relationships, and recency-aware ranking. Post-M3 added cross-tool continuity (log scraping from Claude Code, Cursor, ChatGPT), confidence decay, session expiration, pipeline timing, a Python SDK, bulk import, and a full set of frontend pages.
+Milestone 1 proved the core thesis: the model does reasoning, RecallOS provides the memory/context layer. Milestone 2 made it developer-friendly with an API, CLI, Docker, and agent support. Milestone 3 generalized the engine beyond travel: multi-domain extraction, hierarchical scoping, MCP server for any AI tool, memory relationships, and recency-aware ranking. Post-M3 added cross-tool continuity (log scraping from Claude Code, Cursor, ChatGPT, Windsurf), confidence decay, session expiration, pipeline timing, a Python SDK, bulk import, and a full set of frontend pages.
 
-### Recent fixes
+### Recent changes
 
+- Added Clear All Data endpoint with typed confirmation (keeps provider keys)
+- Added database statistics grid to Settings page
+- Enhanced command palette with Quick Add Memory mode, new actions, and navigation
+- Improved Scraper page with stats bar, source descriptions, per-source badges, and session history
+- Added JSON and Markdown export buttons to Settings
+- Added Windsurf scraper support
 - Fixed backend startup crash caused by router modules calling the database before initialization
-- Fixed route shadowing where GET /:id intercepted static routes (/stats, /search, /tags, /conflicts, /decay, /graph, /duplicates, /suggestions, and more), causing 404 errors on Dashboard, Memory, Health, Graph, and the notification bell
+- Fixed route shadowing where GET /:id intercepted static routes, causing 404 errors
 - Fixed context snapshot compare route being shadowed by the parametric snapshots/:id route
-- Fixed audit log CHECK constraint that rejected 'pinned', 'unpinned', and 'restored' actions, causing 500 errors on pin/unpin/restore with state already mutated
+- Fixed audit log CHECK constraint that rejected 'pinned', 'unpinned', and 'restored' actions
 - Fixed amount extraction regex where $2000 was incorrectly parsed as $200
 
 What's next:
@@ -272,8 +280,9 @@ What's next:
 - Memory sharing and collaboration (multi-user support)
 - MCP client connections (pull context from calendars, documents, code repos)
 - Background refiner with a local model for smarter extraction
-- Windsurf and Copilot scraper support
+- Copilot scraper support
 - Scheduled health checks and automated decay runs
+- Bulk actions from the command palette
 
 See the [docs](docs/) folder for the full vision and roadmap.
 
