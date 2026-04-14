@@ -1,0 +1,261 @@
+.analytics-page {
+  max-width: 1100px;
+}
+
+.analytics-page h2 {
+  margin-bottom: 4px;
+}
+
+.analytics-page > p {
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+/* Summary cards */
+.analytics-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.analytics-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.analytics-card-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.analytics-card-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Grid */
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.analytics-wide {
+  grid-column: 1 / -1;
+}
+
+.analytics-section {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.analytics-section h3 {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Weekly growth chart */
+.growth-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 140px;
+  padding-top: 10px;
+}
+
+.growth-bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+}
+
+.growth-bar-wrapper {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.growth-bar {
+  width: 70%;
+  max-width: 40px;
+  background: rgba(109, 109, 255, 0.6);
+  border-radius: 4px 4px 0 0;
+  min-height: 2px;
+  transition: height 0.3s ease;
+}
+
+.growth-bar-count {
+  font-size: 0.75rem;
+  color: var(--text);
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+.growth-bar-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Status donut */
+.status-donut-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.status-donut {
+  width: 100px;
+  height: 100px;
+  flex-shrink: 0;
+}
+
+.status-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.status-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legend-count {
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+/* Confidence by type */
+.confidence-type-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.confidence-type-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.confidence-type-label {
+  width: 80px;
+  font-size: 0.85rem;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.confidence-type-bar-track {
+  flex: 1;
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.confidence-type-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.confidence-type-pct {
+  font-size: 0.8rem;
+  font-weight: 600;
+  width: 36px;
+  text-align: right;
+}
+
+.confidence-type-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  width: 36px;
+}
+
+/* Ranked lists */
+.ranked-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ranked-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.ranked-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ranked-num {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.ranked-key {
+  flex: 1;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ranked-type {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.ranked-value {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+/* Age bar */
+.analytics-age-bar {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}

@@ -15,6 +15,7 @@ import {
   HeartPulse,
   Network,
   Trash2,
+  BarChart3,
 } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Chat from "./pages/Chat";
@@ -28,6 +29,7 @@ import Scraper from "./pages/Scraper";
 import Health from "./pages/Health";
 import Graph from "./pages/Graph";
 import Trash from "./pages/Trash";
+import Analytics from "./pages/Analytics";
 import CommandPalette from "./components/CommandPalette";
 import ShortcutHelp from "./components/ShortcutHelp";
 import NotificationBell from "./components/NotificationBell";
@@ -41,6 +43,7 @@ const navItems = [
   { to: "/links", label: "Links", icon: Link2 },
   { to: "/scraper", label: "Scraper", icon: ScanSearch },
   { to: "/graph", label: "Graph", icon: Network },
+  { to: "/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/health", label: "Health", icon: HeartPulse },
   { to: "/trash", label: "Trash", icon: Trash2 },
   { to: "/debug", label: "Context Debug", icon: Bug },
@@ -168,6 +171,7 @@ function App() {
           <Route path="/links" element={<Links />} />
           <Route path="/scraper" element={<Scraper />} />
           <Route path="/graph" element={<Graph />} />
+          <Route path="/analytics" element={<Analytics />} />
           <Route path="/health" element={<Health />} />
           <Route path="/trash" element={<Trash />} />
           <Route path="/settings" element={<Settings />} />
