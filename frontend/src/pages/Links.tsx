@@ -35,6 +35,7 @@ function Links() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [links, setLinks] = useState<MemoryLink[]>([]);
   const [loadingLinks, setLoadingLinks] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Create link form
   const [targetId, setTargetId] = useState("");
@@ -113,23 +114,52 @@ function Links() {
 
   const selectedItem = items.find((i) => i.id === selectedId);
 
+  const filteredItems = searchQuery.trim()
+    ? items.filter(
+        (i) =>
+          i.key.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          i.value.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          i.type.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : items;
+
+  const linkedItemIds = new Set(
+    links.flatMap((l) => [l.source_id, l.target_id])
+  );
+
   return (
     <div className="links-page">
       <h2>Memory Links</h2>
       <p>Explore and manage relationships between memory items.</p>
 
+      {/* Stats bar */}
+      {!loading && (
+        <div className="links-stats-bar">
+          <span className="links-stat">{items.length} items</span>
+          <span className="links-stat-sep" />
+          <span className="links-stat">{links.length} links on selected</span>
+        </div>
+      )}
+
       <div className="links-layout">
         {/* Item list */}
         <div className="links-sidebar">
-          <h3>Memory Items</h3>
+          <h3>Memory Items ({filteredItems.length})</h3>
+          <input
+            className="links-search"
+            type="text"
+            placeholder="Filter items..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
           {loading ? (
             <p className="muted">Loading...</p>
           ) : (
             <div className="item-list">
-              {items.map((item) => (
+              {filteredItems.map((item) => (
                 <div
                   key={item.id}
-                  className={`item-row ${selectedId === item.id ? "selected" : ""}`}
+                  className={`item-row ${selectedId === item.id ? "selected" : ""} ${linkedItemIds.has(item.id) ? "linked" : ""}`}
                   onClick={() => selectItem(item.id)}
                 >
                   <span className="item-key">{item.key}</span>
@@ -138,6 +168,9 @@ function Links() {
                   </span>
                 </div>
               ))}
+              {filteredItems.length === 0 && (
+                <p className="muted" style={{ padding: "12px 0" }}>No matching items.</p>
+              )}
             </div>
           )}
         </div>
