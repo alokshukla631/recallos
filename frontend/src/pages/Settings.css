@@ -204,6 +204,12 @@
   margin-bottom: 12px;
 }
 
+.export-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
 .passport-actions {
   display: flex;
   gap: 12px;

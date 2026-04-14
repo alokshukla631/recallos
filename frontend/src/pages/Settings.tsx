@@ -726,6 +726,62 @@ function Settings() {
           </div>
 
           <div className="settings-section data-section">
+            <h3>Export Memory</h3>
+            <p>Download your memory in different formats.</p>
+            <div className="export-buttons">
+              <button
+                className="btn btn-secondary"
+                onClick={async () => {
+                  try {
+                    const res = await fetch("/api/passport/export");
+                    if (!res.ok) throw new Error("Export failed");
+                    const data = await res.json();
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `recallos-export-${new Date().toISOString().slice(0, 10)}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showStatus("export", "Exported as JSON", "success");
+                  } catch {
+                    showStatus("export", "Export failed", "error");
+                  }
+                }}
+              >
+                Export JSON
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={async () => {
+                  try {
+                    const res = await fetch("/api/passport/export/markdown");
+                    if (!res.ok) throw new Error("Export failed");
+                    const md = await res.text();
+                    const blob = new Blob([md], { type: "text/markdown" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `recallos-memory-${new Date().toISOString().slice(0, 10)}.md`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showStatus("export", "Exported as Markdown", "success");
+                  } catch {
+                    showStatus("export", "Export failed", "error");
+                  }
+                }}
+              >
+                Export Markdown
+              </button>
+            </div>
+            {statusMessages["export"] && (
+              <p className={`status-msg ${statusMessages["export"].type}`}>
+                {statusMessages["export"].text}
+              </p>
+            )}
+          </div>
+
+          <div className="settings-section data-section">
             <h3>Data Management</h3>
             <p>
               Remove all stored memories, conversations, and configuration.
