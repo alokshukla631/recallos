@@ -565,6 +565,80 @@ settings
   });
 
 settings
+  .command("analytics")
+  .description("Show advanced memory analytics")
+  .action(async () => {
+    const data = await get("/api/memory/stats/analytics");
+    console.log("\n  Memory Analytics\n");
+
+    // Status breakdown
+    if (data.by_status?.length > 0) {
+      console.log("  Status breakdown:");
+      for (const s of data.by_status) {
+        console.log(`    ${s.status}: ${s.count}`);
+      }
+      console.log();
+    }
+
+    // Confidence by type
+    if (data.avg_confidence_by_type?.length > 0) {
+      console.log("  Average confidence by type:");
+      for (const t of data.avg_confidence_by_type) {
+        console.log(`    ${t.type}: ${(t.avg_confidence * 100).toFixed(1)}% (${t.count} items)`);
+      }
+      console.log();
+    }
+
+    // Weekly growth
+    if (data.weekly_growth?.length > 0) {
+      console.log("  Weekly growth (last 8 weeks):");
+      for (const w of data.weekly_growth) {
+        const bar = "#".repeat(Math.min(w.created, 40));
+        console.log(`    ${w.week}: ${bar} ${w.created}`);
+      }
+      console.log();
+    }
+
+    // Most confirmed
+    if (data.most_confirmed?.length > 0) {
+      console.log("  Most confirmed keys:");
+      for (const m of data.most_confirmed) {
+        console.log(`    ${m.key} (${m.confirmations} confirmations)`);
+      }
+      console.log();
+    }
+
+    // Most linked
+    if (data.most_linked?.length > 0) {
+      console.log("  Most linked items:");
+      for (const m of data.most_linked) {
+        console.log(`    ${m.key} [${m.type}] (${m.link_count} links)`);
+      }
+      console.log();
+    }
+
+    // Pinned by domain
+    if (data.pinned_by_domain?.length > 0) {
+      console.log("  Pinned items by domain:");
+      for (const p of data.pinned_by_domain) {
+        console.log(`    ${p.domain}: ${p.count}`);
+      }
+      console.log();
+    }
+
+    // Age stats
+    if (data.age_stats?.total) {
+      console.log("  Age stats:");
+      console.log(`    Total active: ${data.age_stats.total}`);
+      if (data.age_stats.oldest) console.log(`    Oldest: ${new Date(data.age_stats.oldest).toLocaleDateString()}`);
+      if (data.age_stats.newest) console.log(`    Newest: ${new Date(data.age_stats.newest).toLocaleDateString()}`);
+      console.log();
+    }
+
+    console.log(`  Total context snapshots: ${data.total_snapshots}\n`);
+  });
+
+settings
   .command("clear-data")
   .description("Delete all user data (keeps provider API keys)")
   .option("--yes", "Skip confirmation prompt")
