@@ -159,6 +159,29 @@
 
 .quality-rec-desc {
   color: var(--text);
+  flex: 1;
+}
+
+.quality-fix-btn {
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.quality-fix-btn:hover {
+  background: rgba(109, 109, 255, 0.1);
+}
+
+.quality-fix-status {
+  font-size: 0.75rem;
+  color: #22c55e;
+  flex-shrink: 0;
 }
 
 /* Grid */

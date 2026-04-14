@@ -69,6 +69,7 @@ function Analytics() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [quality, setQuality] = useState<QualityData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fixStatus, setFixStatus] = useState<Record<string, string>>({});
 
   useEffect(() => {
     Promise.all([
@@ -82,6 +83,76 @@ function Analytics() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  async function runFix(action: string) {
+    setFixStatus((s) => ({ ...s, [action]: "running" }));
+    try {
+      if (action === "reconfirm") {
+        // Get low-confidence active items and batch reconfirm them
+        const res = await fetch("/api/memory?status=active");
+        if (!res.ok) throw new Error("Failed");
+        const items = await res.json();
+        const lowConf = items.filter((i: any) => i.confidence < 0.5).map((i: any) => i.id);
+        if (lowConf.length > 0) {
+          const batchRes = await fetch("/api/memory/batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids: lowConf.slice(0, 50), action: "reconfirm" }),
+          });
+          if (!batchRes.ok) throw new Error("Failed");
+          const result = await batchRes.json();
+          setFixStatus((s) => ({ ...s, [action]: `Reconfirmed ${result.affected} items` }));
+        } else {
+          setFixStatus((s) => ({ ...s, [action]: "No items to reconfirm" }));
+        }
+      } else if (action === "clean_stale") {
+        const res = await fetch("/api/memory/decay", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+        if (!res.ok) throw new Error("Failed");
+        const result = await res.json();
+        setFixStatus((s) => ({ ...s, [action]: `Marked ${result.marked} items stale` }));
+      } else if (action === "confirm_old") {
+        const res = await fetch("/api/memory?status=active");
+        if (!res.ok) throw new Error("Failed");
+        const items = await res.json();
+        const old = items
+          .filter((i: any) => !i.last_confirmed_at && daysBetween(i.created_at) > 7)
+          .map((i: any) => i.id);
+        if (old.length > 0) {
+          const batchRes = await fetch("/api/memory/batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids: old.slice(0, 50), action: "reconfirm" }),
+          });
+          if (!batchRes.ok) throw new Error("Failed");
+          const result = await batchRes.json();
+          setFixStatus((s) => ({ ...s, [action]: `Confirmed ${result.affected} items` }));
+        } else {
+          setFixStatus((s) => ({ ...s, [action]: "No items to confirm" }));
+        }
+      } else if (action === "session-cleanup") {
+        const res = await fetch("/api/memory/session/cleanup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ttl_hours: 24 }),
+        });
+        if (!res.ok) throw new Error("Failed");
+        const result = await res.json();
+        setFixStatus((s) => ({ ...s, [action]: `Expired ${result.expired_count} session items` }));
+      } else {
+        setFixStatus((s) => ({ ...s, [action]: "Action not available yet" }));
+      }
+      // Refresh quality data
+      setTimeout(async () => {
+        const qRes = await fetch("/api/memory/stats/quality");
+        if (qRes.ok) setQuality(await qRes.json());
+      }, 500);
+    } catch {
+      setFixStatus((s) => ({ ...s, [action]: "Failed" }));
+    }
+    setTimeout(() => setFixStatus((s) => { const n = { ...s }; delete n[action]; return n; }), 3000);
+  }
+
+  const fixableActions = new Set(["reconfirm", "clean_stale", "confirm_old"]);
 
   if (loading) {
     return (
@@ -188,6 +259,18 @@ function Analytics() {
                     {rec.priority}
                   </span>
                   <span className="quality-rec-desc">{rec.description}</span>
+                  {fixableActions.has(rec.action) && (
+                    fixStatus[rec.action] ? (
+                      <span className="quality-fix-status">{fixStatus[rec.action]}</span>
+                    ) : (
+                      <button
+                        className="quality-fix-btn"
+                        onClick={() => runFix(rec.action)}
+                      >
+                        Fix
+                      </button>
+                    )
+                  )}
                 </div>
               ))}
             </div>
