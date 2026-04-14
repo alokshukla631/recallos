@@ -202,6 +202,15 @@ export class RecallOS {
     return this.get("/health");
   }
 
+  /** Search across memory, conversations, and trips. */
+  search(query: string): Promise<{
+    memory: Array<{ id: string; key: string; value: string; type: string; confidence: number }>;
+    conversations: Array<{ id: string; provider: string; message_count: number; created_at: string }>;
+    trips: Array<{ id: string; name: string; destination: string | null; status: string }>;
+  }> {
+    return this.get("/api/search", { q: query });
+  }
+
   // -- Memory ---------------------------------------------------------------
 
   /** List memory items with optional filters. */

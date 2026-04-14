@@ -25,6 +25,43 @@ program
     }
   });
 
+// ── Global search ──────────────────────────────────────────────────────────
+
+program
+  .command("search <query>")
+  .description("Search across memory, conversations, and trips")
+  .action(async (query) => {
+    const data = await get(`/api/search?q=${encodeURIComponent(query)}`);
+
+    if (data.memory.length > 0) {
+      console.log(`\n  Memory (${data.memory.length}):\n`);
+      for (const item of data.memory) {
+        console.log(`  [${item.type}] ${item.key}: ${item.value.slice(0, 70)}`);
+      }
+    }
+
+    if (data.conversations.length > 0) {
+      console.log(`\n  Conversations (${data.conversations.length}):\n`);
+      for (const conv of data.conversations) {
+        console.log(`  ${conv.provider} - ${conv.message_count} messages (${new Date(conv.created_at).toLocaleDateString()})`);
+      }
+    }
+
+    if (data.trips.length > 0) {
+      console.log(`\n  Trips (${data.trips.length}):\n`);
+      for (const trip of data.trips) {
+        const dest = trip.destination ? ` - ${trip.destination}` : "";
+        console.log(`  ${trip.name}${dest} [${trip.status}]`);
+      }
+    }
+
+    const total = data.memory.length + data.conversations.length + data.trips.length;
+    if (total === 0) {
+      console.log(`No results found for "${query}".`);
+    }
+    console.log();
+  });
+
 // ── Memory ──────────────────────────────────────────────────────────────────
 
 const memory = program.command("memory").description("Manage memory items");

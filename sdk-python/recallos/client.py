@@ -35,6 +35,14 @@ class RecallOS:
         r.raise_for_status()
         return r.json()
 
+    # -- Global search --------------------------------------------------------
+
+    def search(self, query: str) -> dict:
+        """Search across memory, conversations, and trips."""
+        r = self._client.get("/api/search", params={"q": query})
+        r.raise_for_status()
+        return r.json()
+
     # -- Memory ---------------------------------------------------------------
 
     def list_memory(
@@ -541,6 +549,12 @@ class AsyncRecallOS:
 
     async def health(self) -> dict:
         r = await self._client.get("/health")
+        r.raise_for_status()
+        return r.json()
+
+    async def search(self, query: str) -> dict:
+        """Search across memory, conversations, and trips."""
+        r = await self._client.get("/api/search", params={"q": query})
         r.raise_for_status()
         return r.json()
 

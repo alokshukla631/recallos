@@ -19,6 +19,18 @@ const API_SPEC = {
         responses: { "200": { description: "Backend is running" } },
       },
     },
+    "/api/search": {
+      get: {
+        summary: "Global search across memory, conversations, and trips",
+        tags: ["System"],
+        parameters: [
+          { name: "q", in: "query", required: true, schema: { type: "string" }, description: "Search query (min 2 characters)" },
+        ],
+        responses: {
+          "200": { description: "Object with memory, conversations, and trips arrays" },
+        },
+      },
+    },
     "/api/chat": {
       post: {
         summary: "Send a chat message (non-streaming)",
