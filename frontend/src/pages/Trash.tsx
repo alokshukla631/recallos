@@ -20,6 +20,8 @@ function Trash() {
   const [items, setItems] = useState<DeletedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [restoring, setRestoring] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"deleted_at" | "key" | "type">("deleted_at");
 
   useEffect(() => {
     fetchDeleted();
@@ -72,6 +74,21 @@ function Trash() {
     return `${days}d ago`;
   }
 
+  const filteredItems = searchQuery.trim()
+    ? items.filter(
+        (i) =>
+          i.key.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          i.value.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          i.type.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : items;
+
+  const sortedItems = [...filteredItems].sort((a, b) => {
+    if (sortBy === "key") return a.key.localeCompare(b.key);
+    if (sortBy === "type") return a.type.localeCompare(b.type);
+    return new Date(b.deleted_at).getTime() - new Date(a.deleted_at).getTime();
+  });
+
   return (
     <div className="page trash-page">
       <div className="trash-header">
@@ -82,9 +99,11 @@ function Trash() {
           </p>
         </div>
         {items.length > 0 && (
-          <button className="btn btn-restore-all" onClick={handleRestoreAll}>
-            Restore All ({items.length})
-          </button>
+          <div className="trash-header-actions">
+            <button className="btn btn-restore-all" onClick={handleRestoreAll}>
+              Restore All ({items.length})
+            </button>
+          </div>
         )}
       </div>
 
@@ -99,8 +118,30 @@ function Trash() {
       )}
 
       {!loading && items.length > 0 && (
-        <div className="trash-list">
-          {items.map((item) => (
+        <>
+          <div className="trash-controls">
+            <input
+              type="text"
+              className="trash-search"
+              placeholder="Search deleted items..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <select
+              className="trash-sort"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            >
+              <option value="deleted_at">Sort by deleted time</option>
+              <option value="key">Sort by key</option>
+              <option value="type">Sort by type</option>
+            </select>
+            <span className="trash-count">
+              {filteredItems.length} of {items.length} items
+            </span>
+          </div>
+          <div className="trash-list">
+          {sortedItems.map((item) => (
             <div key={item.id} className="trash-card">
               <div className="trash-card-top">
                 <span className="trash-card-key">{item.key}</span>
@@ -128,7 +169,8 @@ function Trash() {
               </div>
             </div>
           ))}
-        </div>
+          </div>
+        </>
       )}
     </div>
   );
