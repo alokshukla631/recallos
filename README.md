@@ -76,7 +76,7 @@ RecallOS sits between you and the AI model. When you send a message:
 - **Timeline** - Chronological audit history with 12-week activity heatmap. Filter by action type with clickable chips. Search entries by key or details.
 - **Scraper** - View available log sources (Claude Code, Cursor, GitHub Copilot, ChatGPT, Windsurf) with status indicators, descriptions, and paths. Stats bar with source counts. Trigger scrapes to extract memory from external AI tool conversations. Per-source extraction badges and session scrape history.
 - **Context Debug** - Inspect context snapshots with full trace: BM25 score, recency boost, final score, and inclusion decision for every memory item.
-- **Analytics** - Advanced memory analytics page with weekly growth bar chart, status breakdown donut, average confidence by type with progress bars, most confirmed keys, most linked items, pinned by domain, memory age span, and context snapshot count.
+- **Analytics** - Advanced memory analytics page with quality score (A-F grade ring), issue detection, prioritized recommendations, weekly growth bar chart, status breakdown donut, average confidence by type with progress bars, most confirmed keys, most linked items, pinned by domain, memory age span, and context snapshot count.
 - **Health** - Memory health score with breakdown. Duplicate detection with one-click merge. Stale candidate detection with bulk cleanup. Importance distribution (top and bottom items). Conflict count warning. Memory age distribution bar chart. Refresh button with last-checked timestamp.
 - **Trash** - View recently deleted memory items and restore them individually or all at once. Search filter, sort by deleted time/key/type, and filtered item count.
 - **Settings** - Add/remove API keys for OpenAI, Anthropic, Gemini, and Ollama. Set a default provider. Customizable system prompt with reset to default. Export/import memory via Memory Passport. JSON and Markdown export buttons. MCP server config display with one-click install for Claude Desktop. Webhook management with delivery log viewer. Memory decay preview and apply. Database statistics grid showing row counts per table. Background tasks panel showing session cleanup, confidence decay, and scraper schedules with last-run times. Clear All Data with typed confirmation dialog (keeps provider keys).
@@ -125,7 +125,7 @@ RecallOS sits between you and the AI model. When you send a message:
 - **REST API** - Full CRUD for memory, trips, chat, passport, context, agents, scraper, and settings
 - **Python SDK** - Sync and async clients (`RecallOS`, `AsyncRecallOS`) using httpx. Covers all API endpoints. Install with `pip install -e sdk-python/`
 - **TypeScript SDK** - Zero-dependency client for Node 18+, Deno, Bun, and browsers. Covers all API endpoints including memory, trips, chat, context, tags, links, conflicts, decay, merge, restore, and import.
-- **CLI** - `recallos` command-line tool for memory, trips, passport, chat, providers (add/remove/default), scraper, session management, MCP config, trash, restore, settings (stats, analytics, clear-data, prompt management)
+- **CLI** - `recallos` command-line tool for memory, trips, passport, chat, providers (add/remove/default), scraper, session management, MCP config, trash, restore, settings (stats, analytics, quality, clear-data, prompt management)
 - **OpenAPI spec** - Served at `/api/docs/openapi.json` with interactive Swagger UI at `/api/docs/`
 - **Docker** - Multi-stage Dockerfile and docker-compose.yml for one-command deployment
 - **Benchmark endpoint** - `POST /api/context/benchmark` runs the pipeline without calling a provider, returns timing data
@@ -266,7 +266,8 @@ Milestone 1 proved the core thesis: the model does reasoning, RecallOS provides 
 
 ### Recent changes
 
-- Added Analytics page with weekly growth chart, status donut, confidence by type, most confirmed/linked rankings
+- Added Analytics page with quality score (A-F grade), issues, recommendations, weekly growth chart, status donut, confidence by type, most confirmed/linked rankings
+- Added memory quality score API endpoint (`GET /api/memory/stats/quality`) with grade, breakdown, and recommendations
 - Added memory analytics API endpoint (`GET /api/memory/stats/analytics`)
 - Added analytics to CLI (`recallos settings analytics`), TypeScript SDK, and Python SDK
 - Added bulk actions to command palette (scrape, decay preview, session cleanup, exports)
@@ -285,11 +286,11 @@ Milestone 1 proved the core thesis: the model does reasoning, RecallOS provides 
 - Fixed amount extraction regex where $2000 was incorrectly parsed as $200
 
 What's next:
+- Memory quality auto-fix actions (one-click fix for recommendations)
 - Local embedding search (vector similarity alongside BM25)
 - Memory sharing and collaboration (multi-user support)
 - MCP client connections (pull context from calendars, documents, code repos)
 - Background refiner with a local model for smarter extraction
-- Memory quality scoring and automated recommendations
 
 See the [docs](docs/) folder for the full vision and roadmap.
 
