@@ -285,6 +285,12 @@ class RecallOS:
         r.raise_for_status()
         return r.json()
 
+    def quality_score(self) -> dict:
+        """Get memory quality score with grade, issues, and recommendations."""
+        r = self._client.get("/api/memory/stats/quality")
+        r.raise_for_status()
+        return r.json()
+
     # -- Webhooks -------------------------------------------------------------
 
     def list_webhooks(self) -> list[dict]:
@@ -639,6 +645,12 @@ class AsyncRecallOS:
     async def analytics(self) -> dict:
         """Get advanced memory analytics (growth, confirmations, links, status breakdown)."""
         r = await self._client.get("/api/memory/stats/analytics")
+        r.raise_for_status()
+        return r.json()
+
+    async def quality_score(self) -> dict:
+        """Get memory quality score with grade, issues, and recommendations."""
+        r = await self._client.get("/api/memory/stats/quality")
         r.raise_for_status()
         return r.json()
 

@@ -690,6 +690,18 @@ const API_SPEC = {
         responses: { "200": { description: "Array of { name, last_run, interval_human, enabled }" } },
       },
     },
+    "/api/memory/stats/quality": {
+      get: {
+        summary: "Get memory quality score with recommendations",
+        description: "Returns a 0-100 quality score (A-F grade), breakdown of issues (low confidence, duplicates, short values, stale buildup), and prioritized recommendations for improving memory quality.",
+        tags: ["Memory"],
+        responses: {
+          "200": {
+            description: "Quality score object with grade, breakdown, issues, and recommendations",
+          },
+        },
+      },
+    },
     "/api/memory/stats/analytics": {
       get: {
         summary: "Get advanced memory analytics",

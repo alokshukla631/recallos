@@ -639,6 +639,35 @@ settings
   });
 
 settings
+  .command("quality")
+  .description("Show memory quality score and recommendations")
+  .action(async () => {
+    const data = await get("/api/memory/stats/quality");
+    console.log(`\n  Memory Quality: ${data.grade} (${data.score}/100)\n`);
+    console.log(`  Active memories: ${data.total_active}`);
+    console.log(`  Tagged: ${data.breakdown.tagged_pct}%  |  Linked: ${data.breakdown.linked_pct}%`);
+    console.log();
+
+    if (data.issues.length > 0) {
+      console.log("  Issues:");
+      for (const issue of data.issues) {
+        const sev = issue.severity.toUpperCase().padEnd(7);
+        console.log(`    [${sev}] ${issue.message}`);
+      }
+      console.log();
+    }
+
+    if (data.recommendations.length > 0) {
+      console.log("  Recommendations:");
+      for (const rec of data.recommendations) {
+        const pri = rec.priority.toUpperCase().padEnd(7);
+        console.log(`    [${pri}] ${rec.description}`);
+      }
+      console.log();
+    }
+  });
+
+settings
   .command("clear-data")
   .description("Delete all user data (keeps provider API keys)")
   .option("--yes", "Skip confirmation prompt")

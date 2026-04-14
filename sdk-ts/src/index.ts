@@ -456,6 +456,18 @@ export class RecallOS {
     return this.get("/api/memory/stats/retention");
   }
 
+  /** Get memory quality score with grade, issues, and recommendations. */
+  qualityScore(): Promise<{
+    score: number;
+    grade: string;
+    total_active: number;
+    breakdown: Record<string, number>;
+    issues: Array<{ type: string; severity: string; message: string; count: number }>;
+    recommendations: Array<{ action: string; description: string; priority: string }>;
+  }> {
+    return this.get("/api/memory/stats/quality");
+  }
+
   /** Get advanced memory analytics (growth, confirmations, links, status breakdown). */
   analytics(): Promise<{
     weekly_growth: Array<{ week: string; created: number }>;
