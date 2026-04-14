@@ -231,11 +231,44 @@ export async function initDatabase(filePath: string): Promise<Database> {
     CREATE TABLE IF NOT EXISTS memory_audit_log (
       id TEXT PRIMARY KEY,
       memory_item_id TEXT NOT NULL,
-      action TEXT NOT NULL CHECK (action IN ('created', 'superseded', 'reconfirmed', 'marked_stale', 'imported', 'deleted')),
+      action TEXT NOT NULL CHECK (action IN ('created', 'superseded', 'reconfirmed', 'marked_stale', 'imported', 'deleted', 'pinned', 'unpinned', 'restored')),
       details TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
+
+  // Migration: widen the audit action CHECK constraint if the table already exists
+  // with the old constraint. SQLite does not allow ALTER CHECK, so we must recreate.
+  {
+    const auditInfo = db.exec("PRAGMA table_info(memory_audit_log)");
+    if (auditInfo.length > 0) {
+      // Try inserting a test row with a new action value; if it fails, migrate
+      try {
+        db.run("INSERT INTO memory_audit_log (id, memory_item_id, action) VALUES ('__check__', '__check__', 'pinned')");
+        db.run("DELETE FROM memory_audit_log WHERE id = '__check__'");
+      } catch {
+        // CHECK constraint failed - recreate the table with the expanded constraint
+        db.run("PRAGMA foreign_keys = OFF;");
+        db.run(`
+          CREATE TABLE memory_audit_log_new (
+            id TEXT PRIMARY KEY,
+            memory_item_id TEXT NOT NULL,
+            action TEXT NOT NULL CHECK (action IN ('created', 'superseded', 'reconfirmed', 'marked_stale', 'imported', 'deleted', 'pinned', 'unpinned', 'restored')),
+            details TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+          )
+        `);
+        db.run(`
+          INSERT INTO memory_audit_log_new (id, memory_item_id, action, details, created_at)
+          SELECT id, memory_item_id, action, details, created_at
+          FROM memory_audit_log
+        `);
+        db.run("DROP TABLE memory_audit_log");
+        db.run("ALTER TABLE memory_audit_log_new RENAME TO memory_audit_log");
+        db.run("PRAGMA foreign_keys = ON;");
+      }
+    }
+  }
 
   db.run(`
     CREATE TABLE IF NOT EXISTS provider_settings (
