@@ -55,8 +55,12 @@ function Health() {
   const [ageBuckets, setAgeBuckets] = useState<AgeBucket[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
+  function runHealthCheck() {
+    const isRefresh = !loading;
+    if (isRefresh) setRefreshing(true);
     Promise.all([
       fetchDuplicates(),
       fetchDecay(),
@@ -64,7 +68,15 @@ function Health() {
       fetchSuggestions(),
       fetchConflictCount(),
       fetchAgeDistribution(),
-    ]).finally(() => setLoading(false));
+    ]).finally(() => {
+      setLoading(false);
+      setRefreshing(false);
+      setLastChecked(new Date());
+    });
+  }
+
+  useEffect(() => {
+    runHealthCheck();
   }, []);
 
   async function fetchDuplicates() {
@@ -216,8 +228,26 @@ function Health() {
 
   return (
     <div className="page health-page">
-      <h2>Memory Health</h2>
-      <p>Detect issues and keep your memory clean and efficient.</p>
+      <div className="health-header">
+        <div>
+          <h2>Memory Health</h2>
+          <p>Detect issues and keep your memory clean and efficient.</p>
+        </div>
+        <div className="health-header-right">
+          {lastChecked && (
+            <span className="health-last-checked">
+              Last checked: {lastChecked.toLocaleTimeString()}
+            </span>
+          )}
+          <button
+            className="btn btn-secondary health-refresh-btn"
+            onClick={runHealthCheck}
+            disabled={refreshing}
+          >
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </button>
+        </div>
+      </div>
 
       {actionMsg && <div className="health-action-msg">{actionMsg}</div>}
 
