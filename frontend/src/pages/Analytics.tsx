@@ -1,6 +1,25 @@
 import { useState, useEffect } from "react";
 import "./Analytics.css";
 
+interface QualityData {
+  score: number;
+  grade: string;
+  total_active: number;
+  breakdown: {
+    low_confidence: number;
+    never_confirmed: number;
+    no_tags: number;
+    no_links: number;
+    duplicate_keys: number;
+    short_values: number;
+    stale_count: number;
+    tagged_pct: number;
+    linked_pct: number;
+  };
+  issues: Array<{ type: string; severity: string; message: string; count: number }>;
+  recommendations: Array<{ action: string; description: string; priority: string }>;
+}
+
 interface AnalyticsData {
   weekly_growth: Array<{ week: string; created: number }>;
   most_confirmed: Array<{ key: string; confirmations: number }>;
@@ -26,14 +45,40 @@ const TYPE_COLORS: Record<string, string> = {
   override: "#f97316",
 };
 
+const GRADE_COLORS: Record<string, string> = {
+  A: "#22c55e",
+  B: "#3b82f6",
+  C: "#f59e0b",
+  D: "#f97316",
+  F: "#ef4444",
+};
+
+const SEVERITY_COLORS: Record<string, string> = {
+  high: "#ef4444",
+  medium: "#f59e0b",
+  low: "#6b7280",
+};
+
+const PRIORITY_COLORS: Record<string, string> = {
+  high: "#ef4444",
+  medium: "#f59e0b",
+  low: "#3b82f6",
+};
+
 function Analytics() {
   const [data, setData] = useState<AnalyticsData | null>(null);
+  const [quality, setQuality] = useState<QualityData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/memory/stats/analytics")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setData(d))
+    Promise.all([
+      fetch("/api/memory/stats/analytics").then((r) => (r.ok ? r.json() : null)),
+      fetch("/api/memory/stats/quality").then((r) => (r.ok ? r.json() : null)),
+    ])
+      .then(([analyticsData, qualityData]) => {
+        setData(analyticsData);
+        setQuality(qualityData);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -87,6 +132,68 @@ function Analytics() {
           </div>
         )}
       </div>
+
+      {/* Quality Score */}
+      {quality && (
+        <div className="quality-section">
+          <div className="quality-header">
+            <div className="quality-score-ring">
+              <svg viewBox="0 0 80 80" className="quality-ring-svg">
+                <circle cx="40" cy="40" r="34" fill="none" stroke="var(--border)" strokeWidth="6" />
+                <circle
+                  cx="40" cy="40" r="34"
+                  fill="none"
+                  stroke={GRADE_COLORS[quality.grade] || "#6b7280"}
+                  strokeWidth="6"
+                  strokeDasharray={`${quality.score * 2.136} 213.6`}
+                  strokeLinecap="round"
+                  transform="rotate(-90 40 40)"
+                />
+              </svg>
+              <div className="quality-score-text">
+                <span className="quality-grade" style={{ color: GRADE_COLORS[quality.grade] }}>{quality.grade}</span>
+                <span className="quality-score-num">{quality.score}/100</span>
+              </div>
+            </div>
+            <div className="quality-breakdown">
+              <h3>Memory Quality</h3>
+              <div className="quality-metrics">
+                <span>{quality.breakdown.tagged_pct}% tagged</span>
+                <span>{quality.breakdown.linked_pct}% linked</span>
+                <span>{quality.breakdown.low_confidence} low confidence</span>
+                <span>{quality.breakdown.duplicate_keys} duplicate keys</span>
+              </div>
+            </div>
+          </div>
+
+          {quality.issues.length > 0 && (
+            <div className="quality-issues">
+              {quality.issues.map((issue, i) => (
+                <div key={i} className="quality-issue">
+                  <span className="quality-issue-severity" style={{ color: SEVERITY_COLORS[issue.severity] }}>
+                    {issue.severity}
+                  </span>
+                  <span className="quality-issue-message">{issue.message}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {quality.recommendations.length > 0 && (
+            <div className="quality-recs">
+              <h4>Recommendations</h4>
+              {quality.recommendations.map((rec, i) => (
+                <div key={i} className="quality-rec">
+                  <span className="quality-rec-priority" style={{ background: PRIORITY_COLORS[rec.priority] }}>
+                    {rec.priority}
+                  </span>
+                  <span className="quality-rec-desc">{rec.description}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="analytics-grid">
         {/* Weekly Growth */}
