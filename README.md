@@ -106,7 +106,7 @@ RecallOS sits between you and the AI model. When you send a message:
 - **Audit log** - Every memory operation is tracked (created, superseded, reconfirmed, pinned, unpinned, deleted, restored, imported)
 - **Tags** - User-defined tags for free-form categorization with batch tagging
 - **Keyboard shortcuts** - ? for help, Ctrl+K for command palette, Ctrl+1-5 for page navigation, Ctrl+T for theme toggle, Escape to clear selection
-- **Command palette** - Fuzzy-searchable command list (Ctrl+K) with navigation, actions (quick add memory, export, scrape, new chat), and theme toggle. Quick Add Memory mode extracts memory from natural language statements
+- **Command palette** - Fuzzy-searchable command list (Ctrl+K) with navigation, bulk actions (scrape all sources, preview decay, session cleanup, download JSON/Markdown exports), quick add memory, and theme toggle. Quick Add Memory mode extracts memory from natural language statements. Status feedback for bulk operations
 - **Agent state API** - Plans with steps, checkpoints for resumable agents
 
 ### Cross-tool continuity
@@ -269,6 +269,7 @@ Milestone 1 proved the core thesis: the model does reasoning, RecallOS provides 
 - Added Analytics page with weekly growth chart, status donut, confidence by type, most confirmed/linked rankings
 - Added memory analytics API endpoint (`GET /api/memory/stats/analytics`)
 - Added analytics to CLI (`recallos settings analytics`), TypeScript SDK, and Python SDK
+- Added bulk actions to command palette (scrape, decay preview, session cleanup, exports)
 - Added GitHub Copilot scraper for VS Code Copilot Chat conversations
 - Added Clear All Data endpoint with typed confirmation (keeps provider keys)
 - Added database statistics grid to Settings page
@@ -288,7 +289,6 @@ What's next:
 - Memory sharing and collaboration (multi-user support)
 - MCP client connections (pull context from calendars, documents, code repos)
 - Background refiner with a local model for smarter extraction
-- Bulk actions from the command palette
 - Memory quality scoring and automated recommendations
 
 See the [docs](docs/) folder for the full vision and roadmap.
