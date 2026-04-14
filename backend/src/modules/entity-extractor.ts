@@ -235,8 +235,11 @@ function extractAmounts(text: string): Entity[] {
     out.push({ type: "amount", value: raw, normalized });
   }
 
-  // Symbol + number: $500, EUR1,200, GBP50.5
-  const symbolRe = /([$\u20AC\u00A3\u00A5\u20B9])\s?(\d{1,3}(?:[,\s]\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s?([kKmM])?/g;
+  // Symbol + number: $500, $2000, EUR1,200, GBP50.5
+  // The pattern uses \d+ first to greedily match full numbers like 2000,
+  // then optionally matches decimal parts. Thousands-grouped numbers (1,200)
+  // are handled by the comma-separated alternative.
+  const symbolRe = /([$\u20AC\u00A3\u00A5\u20B9])\s?(\d+(?:[,\s]\d{3})*(?:\.\d+)?)\s?([kKmM])?/g;
   let m: RegExpExecArray | null;
   while ((m = symbolRe.exec(text)) !== null) {
     const symbol = m[1];
