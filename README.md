@@ -71,13 +71,13 @@ RecallOS sits between you and the AI model. When you send a message:
 - **Chat** - Unified chat UI with conversation sidebar, streaming responses (SSE), provider selector, and trip selector. Memory badges show what was extracted and reconciled per message. Pipeline timing breakdown per response. Context panel shows what memory was injected.
 - **Trips** - Create and manage trips. Each trip scopes its own conversations and memory items.
 - **Memory** - Browse, search, and filter all stored memory items. Type, scope, domain, and status filter dropdowns. Domain filter for all 9 detected domains. Tag-based filtering with clickable chips. Session stats panel with cleanup. Inline edit and soft-delete. Multi-select with shift-click range selection, batch operations (pin, unpin, reconfirm, tag, export, delete). Client-side sorting and pagination. Search history dropdown. Conflict detection panel. Markdown export button. Import JSON.
-- **Links** - Explore relationships between memory items. Click an item to see all incoming/outgoing links. Create new links with typed relations. Navigate between linked items.
+- **Links** - Explore relationships between memory items. Search filter to find items by key, value, or type. Click an item to see all incoming/outgoing links. Linked items highlighted in sidebar. Create new links with typed relations. Navigate between linked items.
 - **Graph** - Canvas-based force-directed graph visualization. Nodes colored by type or domain. Search to find and highlight nodes. Filter by type, toggle same-key implicit links. Drag, pan, zoom, and click to inspect. Info panel shows connections.
 - **Timeline** - Chronological audit history with 12-week activity heatmap. Filter by action type with clickable chips. Search entries by key or details.
 - **Scraper** - View available log sources (Claude Code, Cursor, ChatGPT, Windsurf) with status indicators, descriptions, and paths. Stats bar with source counts. Trigger scrapes to extract memory from external AI tool conversations. Per-source extraction badges and session scrape history.
 - **Context Debug** - Inspect context snapshots with full trace: BM25 score, recency boost, final score, and inclusion decision for every memory item.
-- **Health** - Memory health score with breakdown. Duplicate detection with one-click merge. Stale candidate detection with bulk cleanup. Importance distribution (top and bottom items). Conflict count warning. Memory age distribution bar chart.
-- **Trash** - View recently deleted memory items and restore them individually or all at once.
+- **Health** - Memory health score with breakdown. Duplicate detection with one-click merge. Stale candidate detection with bulk cleanup. Importance distribution (top and bottom items). Conflict count warning. Memory age distribution bar chart. Refresh button with last-checked timestamp.
+- **Trash** - View recently deleted memory items and restore them individually or all at once. Search filter, sort by deleted time/key/type, and filtered item count.
 - **Settings** - Add/remove API keys for OpenAI, Anthropic, Gemini, and Ollama. Set a default provider. Customizable system prompt with reset to default. Export/import memory via Memory Passport. JSON and Markdown export buttons. MCP server config display with one-click install for Claude Desktop. Webhook management with delivery log viewer. Memory decay preview and apply. Database statistics grid showing row counts per table. Clear All Data with typed confirmation dialog (keeps provider keys).
 
 ### Core engine
@@ -122,7 +122,7 @@ RecallOS sits between you and the AI model. When you send a message:
 - **REST API** - Full CRUD for memory, trips, chat, passport, context, agents, scraper, and settings
 - **Python SDK** - Sync and async clients (`RecallOS`, `AsyncRecallOS`) using httpx. Covers all API endpoints. Install with `pip install -e sdk-python/`
 - **TypeScript SDK** - Zero-dependency client for Node 18+, Deno, Bun, and browsers. Covers all API endpoints including memory, trips, chat, context, tags, links, conflicts, decay, merge, restore, and import.
-- **CLI** - `recallos` command-line tool for memory, trips, passport, chat, providers, scraper, session management, MCP config, trash, and restore
+- **CLI** - `recallos` command-line tool for memory, trips, passport, chat, providers (add/remove/default), scraper, session management, MCP config, trash, restore, settings (stats, clear-data, prompt management)
 - **OpenAPI spec** - Served at `/api/docs/openapi.json` with interactive Swagger UI at `/api/docs/`
 - **Docker** - Multi-stage Dockerfile and docker-compose.yml for one-command deployment
 - **Benchmark endpoint** - `POST /api/context/benchmark` runs the pipeline without calling a provider, returns timing data
