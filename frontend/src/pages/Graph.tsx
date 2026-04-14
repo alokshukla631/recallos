@@ -39,6 +39,18 @@ const TYPE_COLORS: Record<string, string> = {
   override: "#f97316",
 };
 
+const DOMAIN_COLORS: Record<string, string> = {
+  travel: "#06b6d4",
+  coding: "#10b981",
+  work: "#f59e0b",
+  health: "#ef4444",
+  finance: "#8b5cf6",
+  learning: "#3b82f6",
+  writing: "#ec4899",
+  personal: "#6b7280",
+  communication: "#14b8a6",
+};
+
 const RELATION_COLORS: Record<string, string> = {
   related_to: "#6b7280",
   depends_on: "#3b82f6",
@@ -58,6 +70,9 @@ function Graph() {
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [filterType, setFilterType] = useState("all");
   const [showImplicit, setShowImplicit] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [colorMode, setColorMode] = useState<"type" | "domain">("type");
+  const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
 
   const nodesRef = useRef<GraphNode[]>([]);
   const edgesRef = useRef<GraphEdge[]>([]);
@@ -220,9 +235,12 @@ function Graph() {
     // Draw nodes
     for (const node of visibleNodes) {
       const radius = 4 + (node.importance / 100) * 12;
-      const color = TYPE_COLORS[node.type] || "#6b7280";
+      const color = colorMode === "domain"
+        ? (DOMAIN_COLORS[node.domain || ""] || "#6b7280")
+        : (TYPE_COLORS[node.type] || "#6b7280");
       const isHovered = hoveredNode?.id === node.id;
       const isSelected = selectedNode?.id === node.id;
+      const isHighlighted = highlightedNodeId === node.id;
 
       // Glow for pinned
       if (node.pinned) {
@@ -232,11 +250,20 @@ function Graph() {
         ctx.fill();
       }
 
+      // Highlight ring for search result
+      if (isHighlighted) {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, radius + 6, 0, Math.PI * 2);
+        ctx.strokeStyle = "#22c55e";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
       // Node circle
       ctx.beginPath();
-      ctx.arc(node.x, node.y, isHovered || isSelected ? radius + 2 : radius, 0, Math.PI * 2);
+      ctx.arc(node.x, node.y, isHovered || isSelected || isHighlighted ? radius + 2 : radius, 0, Math.PI * 2);
       ctx.fillStyle = color;
-      ctx.globalAlpha = isHovered || isSelected ? 1 : 0.8;
+      ctx.globalAlpha = isHovered || isSelected || isHighlighted ? 1 : 0.8;
       ctx.fill();
       ctx.globalAlpha = 1;
 
@@ -406,6 +433,27 @@ function Graph() {
 
       {/* Controls */}
       <div className="graph-controls">
+        <input
+          type="text"
+          className="graph-search"
+          placeholder="Find node by key..."
+          value={searchQuery}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
+            const q = e.target.value.toLowerCase().trim();
+            if (q) {
+              const found = nodesRef.current.find((n) => n.key.toLowerCase().includes(q));
+              if (found) {
+                setHighlightedNodeId(found.id);
+                panRef.current = { x: -found.x, y: -found.y };
+              } else {
+                setHighlightedNodeId(null);
+              }
+            } else {
+              setHighlightedNodeId(null);
+            }
+          }}
+        />
         <label className="graph-filter">
           Type
           <select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
@@ -417,15 +465,28 @@ function Graph() {
             <option value="override">Override</option>
           </select>
         </label>
+        <label className="graph-filter">
+          Color
+          <select value={colorMode} onChange={(e) => setColorMode(e.target.value as "type" | "domain")}>
+            <option value="type">By Type</option>
+            <option value="domain">By Domain</option>
+          </select>
+        </label>
+        <button className="graph-btn" onClick={() => {
+          panRef.current = { x: 0, y: 0 };
+          zoomRef.current = 1;
+        }}>
+          Reset View
+        </button>
         <label className="graph-toggle">
           <input type="checkbox" checked={showImplicit} onChange={(e) => setShowImplicit(e.target.checked)} />
           Show same-key links
         </label>
         <div className="graph-legend">
-          {Object.entries(TYPE_COLORS).map(([type, color]) => (
-            <span key={type} className="legend-item">
+          {Object.entries(colorMode === "domain" ? DOMAIN_COLORS : TYPE_COLORS).map(([label, color]) => (
+            <span key={label} className="legend-item">
               <span className="legend-dot" style={{ background: color }} />
-              {type}
+              {label}
             </span>
           ))}
         </div>

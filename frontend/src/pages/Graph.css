@@ -15,6 +15,35 @@
   border-radius: 8px;
 }
 
+.graph-search {
+  padding: 5px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.8rem;
+  width: 160px;
+}
+
+.graph-search:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.graph-btn {
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.graph-btn:hover {
+  background: var(--color-surface-hover);
+}
+
 .graph-filter {
   display: flex;
   align-items: center;
