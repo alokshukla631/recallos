@@ -112,6 +112,13 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyboard);
   }, [handleKeyboard]);
 
+  // Listen for command palette "show shortcuts" event
+  useEffect(() => {
+    const handler = () => setShortcutHelpOpen(true);
+    window.addEventListener("recallos:show-shortcuts", handler);
+    return () => window.removeEventListener("recallos:show-shortcuts", handler);
+  }, []);
+
   return (
     <div className="app">
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />

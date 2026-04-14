@@ -639,6 +639,70 @@ const API_SPEC = {
         responses: { "200": { description: "Confirmation" } },
       },
     },
+    "/api/settings/providers/default": {
+      get: {
+        summary: "Get the default provider",
+        tags: ["Settings"],
+        responses: { "200": { description: "Default provider object or { provider: null }" } },
+      },
+      put: {
+        summary: "Set the default provider",
+        tags: ["Settings"],
+        requestBody: {
+          content: { "application/json": { schema: { type: "object", properties: { provider: { type: "string" } } } } },
+        },
+        responses: { "200": { description: "Confirmation" } },
+      },
+    },
+    "/api/settings/stats": {
+      get: {
+        summary: "Database row counts per table",
+        tags: ["Settings"],
+        responses: { "200": { description: "Object with table names as keys and counts as values" } },
+      },
+    },
+    "/api/settings/clear-data": {
+      post: {
+        summary: "Delete all user data (keeps provider API keys)",
+        tags: ["Settings"],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["confirm"],
+                properties: { confirm: { type: "string", enum: ["DELETE_ALL_DATA"] } },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Data cleared" },
+          "400": { description: "Missing or incorrect confirmation string" },
+        },
+      },
+    },
+    "/api/settings/system-prompt": {
+      get: {
+        summary: "Get the current system prompt",
+        tags: ["Settings"],
+        responses: { "200": { description: "{ prompt, is_custom }" } },
+      },
+      put: {
+        summary: "Update the system prompt",
+        tags: ["Settings"],
+        requestBody: {
+          content: { "application/json": { schema: { type: "object", properties: { prompt: { type: "string" } } } } },
+        },
+        responses: { "200": { description: "Confirmation" } },
+      },
+      delete: {
+        summary: "Reset system prompt to default",
+        tags: ["Settings"],
+        responses: { "200": { description: "Confirmation" } },
+      },
+    },
   },
 };
 

@@ -472,6 +472,38 @@ class RecallOS:
         r.raise_for_status()
         return r.json()
 
+    # -- Settings stats -------------------------------------------------------
+
+    def db_stats(self) -> dict:
+        """Get row counts per database table."""
+        r = self._client.get("/api/settings/stats")
+        r.raise_for_status()
+        return r.json()
+
+    def clear_data(self) -> dict:
+        """Delete all user data (keeps provider API keys)."""
+        r = self._client.post("/api/settings/clear-data", json={"confirm": "DELETE_ALL_DATA"})
+        r.raise_for_status()
+        return r.json()
+
+    def get_system_prompt(self) -> dict:
+        """Get the current system prompt."""
+        r = self._client.get("/api/settings/system-prompt")
+        r.raise_for_status()
+        return r.json()
+
+    def set_system_prompt(self, prompt: str) -> dict:
+        """Update the system prompt."""
+        r = self._client.put("/api/settings/system-prompt", json={"prompt": prompt})
+        r.raise_for_status()
+        return r.json()
+
+    def reset_system_prompt(self) -> dict:
+        """Reset system prompt to default."""
+        r = self._client.delete("/api/settings/system-prompt")
+        r.raise_for_status()
+        return r.json()
+
 
 class AsyncRecallOS:
     """Async client for the RecallOS API (uses httpx.AsyncClient)."""
@@ -746,5 +778,37 @@ class AsyncRecallOS:
         if event_id:
             params["event_id"] = event_id
         r = await self._client.get("/api/context/snapshots", params=params)
+        r.raise_for_status()
+        return r.json()
+
+    # -- Settings stats -------------------------------------------------------
+
+    async def db_stats(self) -> dict:
+        """Get row counts per database table."""
+        r = await self._client.get("/api/settings/stats")
+        r.raise_for_status()
+        return r.json()
+
+    async def clear_data(self) -> dict:
+        """Delete all user data (keeps provider API keys)."""
+        r = await self._client.post("/api/settings/clear-data", json={"confirm": "DELETE_ALL_DATA"})
+        r.raise_for_status()
+        return r.json()
+
+    async def get_system_prompt(self) -> dict:
+        """Get the current system prompt."""
+        r = await self._client.get("/api/settings/system-prompt")
+        r.raise_for_status()
+        return r.json()
+
+    async def set_system_prompt(self, prompt: str) -> dict:
+        """Update the system prompt."""
+        r = await self._client.put("/api/settings/system-prompt", json={"prompt": prompt})
+        r.raise_for_status()
+        return r.json()
+
+    async def reset_system_prompt(self) -> dict:
+        """Reset system prompt to default."""
+        r = await self._client.delete("/api/settings/system-prompt")
         r.raise_for_status()
         return r.json()

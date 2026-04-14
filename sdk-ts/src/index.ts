@@ -623,6 +623,31 @@ export class RecallOS {
   mcpConfig(): Promise<Record<string, unknown>> {
     return this.get("/api/settings/mcp/config");
   }
+
+  /** Get database row counts for every table. */
+  dbStats(): Promise<Record<string, number>> {
+    return this.get("/api/settings/stats");
+  }
+
+  /** Delete all user data (keeps provider API keys). */
+  clearData(): Promise<{ message: string; tables_cleared: number }> {
+    return this.post("/api/settings/clear-data", { confirm: "DELETE_ALL_DATA" });
+  }
+
+  /** Get the current system prompt. */
+  getSystemPrompt(): Promise<{ prompt: string; is_custom: boolean }> {
+    return this.get("/api/settings/system-prompt");
+  }
+
+  /** Update the system prompt. */
+  setSystemPrompt(prompt: string): Promise<{ message: string }> {
+    return this.put("/api/settings/system-prompt", { prompt });
+  }
+
+  /** Reset system prompt to default. */
+  resetSystemPrompt(): Promise<{ message: string }> {
+    return this.del("/api/settings/system-prompt");
+  }
 }
 
 export default RecallOS;
