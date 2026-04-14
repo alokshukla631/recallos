@@ -78,7 +78,7 @@ RecallOS sits between you and the AI model. When you send a message:
 - **Context Debug** - Inspect context snapshots with full trace: BM25 score, recency boost, final score, and inclusion decision for every memory item.
 - **Health** - Memory health score with breakdown. Duplicate detection with one-click merge. Stale candidate detection with bulk cleanup. Importance distribution (top and bottom items). Conflict count warning. Memory age distribution bar chart. Refresh button with last-checked timestamp.
 - **Trash** - View recently deleted memory items and restore them individually or all at once. Search filter, sort by deleted time/key/type, and filtered item count.
-- **Settings** - Add/remove API keys for OpenAI, Anthropic, Gemini, and Ollama. Set a default provider. Customizable system prompt with reset to default. Export/import memory via Memory Passport. JSON and Markdown export buttons. MCP server config display with one-click install for Claude Desktop. Webhook management with delivery log viewer. Memory decay preview and apply. Database statistics grid showing row counts per table. Clear All Data with typed confirmation dialog (keeps provider keys).
+- **Settings** - Add/remove API keys for OpenAI, Anthropic, Gemini, and Ollama. Set a default provider. Customizable system prompt with reset to default. Export/import memory via Memory Passport. JSON and Markdown export buttons. MCP server config display with one-click install for Claude Desktop. Webhook management with delivery log viewer. Memory decay preview and apply. Database statistics grid showing row counts per table. Background tasks panel showing session cleanup, confidence decay, and scraper schedules with last-run times. Clear All Data with typed confirmation dialog (keeps provider keys).
 
 ### Core engine
 
@@ -93,6 +93,7 @@ RecallOS sits between you and the AI model. When you send a message:
 - **Memory relationships** - Link items with typed relations (related_to, depends_on, conflicts_with, refines, derived_from) with configurable strength
 - **Confidence decay** - Items not reconfirmed gradually lose confidence (30-day half-life). Items below threshold are auto-staled.
 - **Session expiration** - Session-scoped memory items expire after configurable TTL (default 24h). Cleanup runs hourly.
+- **Scheduled background tasks** - Session cleanup (hourly), confidence decay (hourly), and log scraper (4h, configurable). Task schedule and last-run times visible in Settings and via API.
 - **Context compilation** - Multi-domain detection, ambiguity flagging, full trace per snapshot
 - **Activity trends** - Daily activity counts over time via /api/memory/stats/trends, with trend chart on Dashboard
 - **Performance timing** - Per-stage timing for the full pipeline (extraction, reconciliation, context compilation, provider call, snapshot save)
@@ -281,8 +282,8 @@ What's next:
 - MCP client connections (pull context from calendars, documents, code repos)
 - Background refiner with a local model for smarter extraction
 - Copilot scraper support
-- Scheduled health checks and automated decay runs
 - Bulk actions from the command palette
+- Memory analytics and usage patterns
 
 See the [docs](docs/) folder for the full vision and roadmap.
 
