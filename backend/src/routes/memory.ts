@@ -445,6 +445,162 @@ router.get("/stats/analytics", (_req: Request, res: Response) => {
   }
 });
 
+// GET /stats/quality - memory quality score and recommendations
+router.get("/stats/quality", (_req: Request, res: Response) => {
+  try {
+    // Total active items
+    const totalRow = queryOne(
+      `SELECT COUNT(*) as count FROM memory_items WHERE status = 'active'`
+    ) as any;
+    const totalActive = totalRow?.count || 0;
+
+    // Items with low confidence (<0.5)
+    const lowConfRow = queryOne(
+      `SELECT COUNT(*) as count FROM memory_items WHERE status = 'active' AND confidence < 0.5`
+    ) as any;
+    const lowConfidence = lowConfRow?.count || 0;
+
+    // Items never confirmed (no reconfirmation in audit log)
+    const neverConfirmedRow = queryOne(
+      `SELECT COUNT(*) as count FROM memory_items m
+       WHERE m.status = 'active' AND m.last_confirmed_at IS NULL
+       AND m.created_at < datetime('now', '-7 days')`
+    ) as any;
+    const neverConfirmed = neverConfirmedRow?.count || 0;
+
+    // Items with no tags
+    const noTagsRow = queryOne(
+      `SELECT COUNT(*) as count FROM memory_items m
+       WHERE m.status = 'active'
+       AND m.id NOT IN (SELECT memory_item_id FROM memory_tags)`
+    ) as any;
+    const noTags = noTagsRow?.count || 0;
+
+    // Items with no links
+    const noLinksRow = queryOne(
+      `SELECT COUNT(*) as count FROM memory_items m
+       WHERE m.status = 'active'
+       AND m.id NOT IN (SELECT source_id FROM memory_links UNION SELECT target_id FROM memory_links)`
+    ) as any;
+    const noLinks = noLinksRow?.count || 0;
+
+    // Duplicate key groups (same key, multiple active items)
+    const dupGroups = queryAll(
+      `SELECT key, COUNT(*) as count FROM memory_items
+       WHERE status = 'active' GROUP BY key HAVING count > 1`
+    ) as any[];
+
+    // Short values (<20 chars, likely low quality)
+    const shortValuesRow = queryOne(
+      `SELECT COUNT(*) as count FROM memory_items
+       WHERE status = 'active' AND LENGTH(value) < 20`
+    ) as any;
+    const shortValues = shortValuesRow?.count || 0;
+
+    // Stale items count
+    const staleRow = queryOne(
+      `SELECT COUNT(*) as count FROM memory_items WHERE status = 'stale'`
+    ) as any;
+    const staleCount = staleRow?.count || 0;
+
+    // Calculate quality score (0-100)
+    let score = 100;
+    const issues: Array<{ type: string; severity: string; message: string; count: number }> = [];
+
+    // Deduct for low confidence items (high severity)
+    if (totalActive > 0) {
+      const lowConfPct = lowConfidence / totalActive;
+      if (lowConfPct > 0.3) {
+        score -= 20;
+        issues.push({ type: "low_confidence", severity: "high", message: `${lowConfidence} items have confidence below 50%`, count: lowConfidence });
+      } else if (lowConfPct > 0.1) {
+        score -= 10;
+        issues.push({ type: "low_confidence", severity: "medium", message: `${lowConfidence} items have confidence below 50%`, count: lowConfidence });
+      }
+    }
+
+    // Deduct for never-confirmed items
+    if (neverConfirmed > 5) {
+      score -= 10;
+      issues.push({ type: "never_confirmed", severity: "medium", message: `${neverConfirmed} items created over 7 days ago have never been confirmed`, count: neverConfirmed });
+    }
+
+    // Deduct for duplicate keys
+    if (dupGroups.length > 3) {
+      score -= 15;
+      issues.push({ type: "duplicate_keys", severity: "high", message: `${dupGroups.length} keys have multiple active items -- consider merging`, count: dupGroups.length });
+    } else if (dupGroups.length > 0) {
+      score -= 5;
+      issues.push({ type: "duplicate_keys", severity: "low", message: `${dupGroups.length} keys have multiple active items`, count: dupGroups.length });
+    }
+
+    // Deduct for short values
+    if (shortValues > 5) {
+      score -= 10;
+      issues.push({ type: "short_values", severity: "medium", message: `${shortValues} items have very short values (under 20 chars)`, count: shortValues });
+    }
+
+    // Deduct for too many stale items
+    if (staleCount > totalActive * 0.5 && staleCount > 10) {
+      score -= 10;
+      issues.push({ type: "stale_buildup", severity: "medium", message: `${staleCount} stale items -- consider running cleanup`, count: staleCount });
+    }
+
+    // Bonus for good practices
+    const taggedPct = totalActive > 0 ? (totalActive - noTags) / totalActive : 0;
+    const linkedPct = totalActive > 0 ? (totalActive - noLinks) / totalActive : 0;
+
+    // Recommendations
+    const recommendations: Array<{ action: string; description: string; priority: string }> = [];
+
+    if (lowConfidence > 0) {
+      recommendations.push({ action: "reconfirm", description: `Reconfirm ${lowConfidence} low-confidence items to boost their scores`, priority: "high" });
+    }
+    if (dupGroups.length > 0) {
+      recommendations.push({ action: "merge_duplicates", description: `Merge ${dupGroups.length} duplicate key groups`, priority: dupGroups.length > 3 ? "high" : "medium" });
+    }
+    if (noTags > totalActive * 0.5 && totalActive > 5) {
+      recommendations.push({ action: "add_tags", description: `Add tags to improve organization (${noTags} items have no tags)`, priority: "low" });
+    }
+    if (noLinks > totalActive * 0.7 && totalActive > 10) {
+      recommendations.push({ action: "add_links", description: `Create links between related items (${noLinks} items are unlinked)`, priority: "low" });
+    }
+    if (shortValues > 0) {
+      recommendations.push({ action: "improve_values", description: `${shortValues} items have very short values -- add more detail`, priority: "medium" });
+    }
+    if (staleCount > 10) {
+      recommendations.push({ action: "clean_stale", description: `Clear ${staleCount} stale items from the database`, priority: "medium" });
+    }
+    if (neverConfirmed > 5) {
+      recommendations.push({ action: "confirm_old", description: `Review and confirm ${neverConfirmed} unconfirmed items over 7 days old`, priority: "medium" });
+    }
+
+    score = Math.max(0, Math.min(100, score));
+
+    res.json({
+      score,
+      grade: score >= 90 ? "A" : score >= 75 ? "B" : score >= 60 ? "C" : score >= 40 ? "D" : "F",
+      total_active: totalActive,
+      breakdown: {
+        low_confidence: lowConfidence,
+        never_confirmed: neverConfirmed,
+        no_tags: noTags,
+        no_links: noLinks,
+        duplicate_keys: dupGroups.length,
+        short_values: shortValues,
+        stale_count: staleCount,
+        tagged_pct: Math.round(taggedPct * 100),
+        linked_pct: Math.round(linkedPct * 100),
+      },
+      issues,
+      recommendations,
+    });
+  } catch (err) {
+    console.error("GET /api/memory/stats/quality error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /search - full-text search across memory items using BM25
 router.get("/search", (req: Request, res: Response) => {
   try {
