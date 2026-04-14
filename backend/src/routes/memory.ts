@@ -370,6 +370,81 @@ router.get("/stats/trends", (req: Request, res: Response) => {
   }
 });
 
+// GET /stats/analytics - advanced memory analytics
+router.get("/stats/analytics", (_req: Request, res: Response) => {
+  try {
+    // Growth rate: items created per week for last 8 weeks
+    const weeklyGrowth = queryAll(
+      `SELECT strftime('%Y-W%W', created_at) as week, COUNT(*) as created
+       FROM memory_items
+       WHERE created_at >= datetime('now', '-56 days')
+       GROUP BY week ORDER BY week ASC`
+    );
+
+    // Top 10 most confirmed keys
+    const mostConfirmed = queryAll(
+      `SELECT memory_key as key, COUNT(*) as confirmations
+       FROM memory_audit_log
+       WHERE action = 'reconfirmed' AND memory_key IS NOT NULL
+       GROUP BY memory_key ORDER BY confirmations DESC LIMIT 10`
+    );
+
+    // Items by status
+    const byStatus = queryAll(
+      `SELECT status, COUNT(*) as count FROM memory_items GROUP BY status`
+    );
+
+    // Average confidence by type
+    const avgConfidenceByType = queryAll(
+      `SELECT type, ROUND(AVG(confidence), 3) as avg_confidence, COUNT(*) as count
+       FROM memory_items WHERE status = 'active'
+       GROUP BY type ORDER BY avg_confidence DESC`
+    );
+
+    // Pinned items by domain
+    const pinnedByDomain = queryAll(
+      `SELECT COALESCE(domain, 'none') as domain, COUNT(*) as count
+       FROM memory_items WHERE pinned = 1
+       GROUP BY domain ORDER BY count DESC`
+    );
+
+    // Memory age stats
+    const ageStats = queryOne(
+      `SELECT
+         MIN(created_at) as oldest,
+         MAX(created_at) as newest,
+         COUNT(*) as total
+       FROM memory_items WHERE status = 'active'`
+    );
+
+    // Most linked items (top 10)
+    const mostLinked = queryAll(
+      `SELECT m.key, m.type, COUNT(DISTINCT l.id) as link_count
+       FROM memory_items m
+       JOIN memory_links l ON m.id = l.source_id OR m.id = l.target_id
+       WHERE m.status = 'active'
+       GROUP BY m.id ORDER BY link_count DESC LIMIT 10`
+    );
+
+    // Context inclusion rate (how often items get included)
+    const totalSnapshots = queryOne(`SELECT COUNT(*) as count FROM context_snapshots`);
+
+    res.json({
+      weekly_growth: weeklyGrowth,
+      most_confirmed: mostConfirmed,
+      by_status: byStatus,
+      avg_confidence_by_type: avgConfidenceByType,
+      pinned_by_domain: pinnedByDomain,
+      age_stats: ageStats || {},
+      most_linked: mostLinked,
+      total_snapshots: (totalSnapshots as any)?.count || 0,
+    });
+  } catch (err) {
+    console.error("GET /api/memory/stats/analytics error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /search - full-text search across memory items using BM25
 router.get("/search", (req: Request, res: Response) => {
   try {
