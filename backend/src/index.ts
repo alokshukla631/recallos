@@ -15,7 +15,7 @@ import { expireSessionMemory } from "./modules/session-cleanup.js";
 import { applyConfidenceDecay } from "./modules/confidence-decay.js";
 import { scrapeAll } from "./modules/log-scraper.js";
 import { rateLimits } from "./middleware/rate-limit.js";
-import { queryOne } from "./db/index.js";
+import { queryOne, queryAll } from "./db/index.js";
 import fs from "fs";
 
 const app = express();
@@ -44,6 +44,58 @@ app.use("/api/passport", passportRouter);
 app.use("/api/docs", docsRouter);
 app.use("/api/agents", agentsRouter);
 app.use("/api/scraper", scraperRouter);
+
+// Global search across memory, conversations, and trips
+app.get("/api/search", (req, res) => {
+  try {
+    const q = (req.query.q as string || "").trim();
+    if (!q || q.length < 2) {
+      res.json({ memory: [], conversations: [], trips: [] });
+      return;
+    }
+
+    const pattern = `%${q}%`;
+
+    // Search memory items
+    const memory = queryAll(
+      `SELECT id, key, value, type, scope, domain, status, confidence
+       FROM memory_items
+       WHERE (key LIKE ? OR value LIKE ?) AND status = 'active'
+       ORDER BY confidence DESC
+       LIMIT 10`,
+      [pattern, pattern]
+    );
+
+    // Search conversations
+    const conversations = queryAll(
+      `SELECT c.id, c.provider, c.created_at,
+              (SELECT COUNT(*) FROM events WHERE conversation_id = c.id) as message_count
+       FROM conversations c
+       WHERE c.id IN (
+         SELECT DISTINCT conversation_id FROM events
+         WHERE content LIKE ? AND conversation_id IS NOT NULL
+       )
+       ORDER BY c.created_at DESC
+       LIMIT 5`,
+      [pattern]
+    );
+
+    // Search trips
+    const trips = queryAll(
+      `SELECT id, name, destination, status, start_date, end_date
+       FROM trips
+       WHERE name LIKE ? OR destination LIKE ?
+       ORDER BY created_at DESC
+       LIMIT 5`,
+      [pattern, pattern]
+    );
+
+    res.json({ memory, conversations, trips });
+  } catch (err) {
+    console.error("GET /api/search error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 app.get("/health", (_req, res) => {
   try {

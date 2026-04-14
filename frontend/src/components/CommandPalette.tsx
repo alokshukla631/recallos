@@ -2,6 +2,14 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import "./CommandPalette.css";
 
+const TYPE_COLORS: Record<string, string> = {
+  preference: "#3b82f6",
+  constraint: "#ef4444",
+  fact: "#22c55e",
+  goal: "#a855f7",
+  override: "#f97316",
+};
+
 interface CommandItem {
   id: string;
   label: string;
@@ -19,12 +27,17 @@ function CommandPalette({ open, onClose }: Props) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [mode, setMode] = useState<"commands" | "add-memory">("commands");
+  const [mode, setMode] = useState<"commands" | "add-memory" | "search">("commands");
   const [memoryText, setMemoryText] = useState("");
   const [addingMemory, setAddingMemory] = useState(false);
   const [memoryStatus, setMemoryStatus] = useState<string | null>(null);
   const [bulkStatus, setBulkStatus] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<{ memory: any[]; conversations: any[]; trips: any[] }>({ memory: [], conversations: [], trips: [] });
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const memoryInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -54,6 +67,23 @@ function CommandPalette({ open, onClose }: Props) {
     } finally {
       setAddingMemory(false);
     }
+  }
+
+  function handleSearchInput(value: string) {
+    setSearchQuery(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (value.trim().length < 2) {
+      setSearchResults({ memory: [], conversations: [], trips: [] });
+      return;
+    }
+    setSearchLoading(true);
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(value.trim())}`);
+        if (res.ok) setSearchResults(await res.json());
+      } catch { /* ignore */ }
+      setSearchLoading(false);
+    }, 300);
   }
 
   async function runBulkAction(action: string, label: string) {
@@ -133,6 +163,12 @@ function CommandPalette({ open, onClose }: Props) {
       onClose();
     }},
     { id: "act-search", label: "Search memory", category: "Actions", action: () => { navigate("/memory"); onClose(); } },
+    { id: "act-global-search", label: "Search everything", category: "Actions", action: () => {
+      setMode("search");
+      setSearchQuery("");
+      setSearchResults({ memory: [], conversations: [], trips: [] });
+      setTimeout(() => searchInputRef.current?.focus(), 50);
+    }},
     { id: "act-export-json", label: "Export memory (JSON)", category: "Actions", action: () => { window.open("/api/passport/export", "_blank"); } },
     { id: "act-export-md", label: "Export memory (Markdown)", category: "Actions", action: () => { window.open("/api/passport/export/markdown", "_blank"); } },
     { id: "act-health-check", label: "Run health check", category: "Actions", action: () => navigate("/health") },
@@ -179,6 +215,8 @@ function CommandPalette({ open, onClose }: Props) {
       setMode("commands");
       setMemoryText("");
       setMemoryStatus(null);
+      setSearchQuery("");
+      setSearchResults({ memory: [], conversations: [], trips: [] });
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open]);
@@ -261,6 +299,98 @@ function CommandPalette({ open, onClose }: Props) {
           </div>
           <div className="palette-footer">
             <span><kbd>Enter</kbd> to add</span>
+            <span><kbd>Esc</kbd> to close</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === "search") {
+    const hasResults = searchResults.memory.length > 0 || searchResults.conversations.length > 0 || searchResults.trips.length > 0;
+    return (
+      <div className="palette-overlay" onClick={onClose}>
+        <div className="palette-container palette-search-container" onClick={(e) => e.stopPropagation()}>
+          <div className="palette-add-memory-header">
+            <button className="palette-back" onClick={() => setMode("commands")}>Back</button>
+            <span className="palette-add-memory-title">Search Everything</span>
+          </div>
+          <input
+            ref={searchInputRef}
+            className="palette-input"
+            type="text"
+            placeholder="Search memory, conversations, trips..."
+            value={searchQuery}
+            onChange={(e) => handleSearchInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") onClose();
+            }}
+          />
+          <div className="palette-list">
+            {searchLoading && <div className="palette-empty">Searching...</div>}
+            {!searchLoading && searchQuery.length >= 2 && !hasResults && (
+              <div className="palette-empty">No results found</div>
+            )}
+            {!searchLoading && searchQuery.length < 2 && (
+              <div className="palette-empty">Type at least 2 characters to search</div>
+            )}
+
+            {searchResults.memory.length > 0 && (
+              <>
+                <div className="palette-category">Memory ({searchResults.memory.length})</div>
+                {searchResults.memory.map((item: any) => (
+                  <div
+                    key={item.id}
+                    className="palette-item"
+                    onClick={() => { navigate("/memory"); onClose(); }}
+                  >
+                    <span className="palette-item-label">
+                      <span className="search-type-badge" style={{ background: TYPE_COLORS[item.type] || "#6b7280" }}>{item.type}</span>
+                      {" "}{item.key}: {item.value.slice(0, 60)}
+                    </span>
+                    <span className="palette-item-shortcut">{Math.round(item.confidence * 100)}%</span>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {searchResults.conversations.length > 0 && (
+              <>
+                <div className="palette-category">Conversations ({searchResults.conversations.length})</div>
+                {searchResults.conversations.map((conv: any) => (
+                  <div
+                    key={conv.id}
+                    className="palette-item"
+                    onClick={() => { navigate("/chat"); onClose(); }}
+                  >
+                    <span className="palette-item-label">
+                      {conv.provider} - {conv.message_count} messages
+                    </span>
+                    <span className="palette-item-shortcut">{new Date(conv.created_at).toLocaleDateString()}</span>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {searchResults.trips.length > 0 && (
+              <>
+                <div className="palette-category">Trips ({searchResults.trips.length})</div>
+                {searchResults.trips.map((trip: any) => (
+                  <div
+                    key={trip.id}
+                    className="palette-item"
+                    onClick={() => { navigate("/trips"); onClose(); }}
+                  >
+                    <span className="palette-item-label">
+                      {trip.name}{trip.destination ? ` - ${trip.destination}` : ""}
+                    </span>
+                    <span className="palette-item-shortcut">[{trip.status}]</span>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+          <div className="palette-footer">
             <span><kbd>Esc</kbd> to close</span>
           </div>
         </div>
