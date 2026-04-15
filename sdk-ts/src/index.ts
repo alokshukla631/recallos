@@ -18,7 +18,7 @@ export interface MemoryItem {
   domain: string | null;
   confidence: number;
   status: string;
-  trip_id: string | null;
+  project_id: string | null;
   source_event_id: string | null;
   superseded_by: string | null;
   last_confirmed_at: string | null;
@@ -29,10 +29,10 @@ export interface MemoryItem {
   pinned: boolean;
 }
 
-export interface Trip {
+export interface Project {
   id: string;
   name: string;
-  destination: string | null;
+  description: string | null;
   start_date: string | null;
   end_date: string | null;
   status: string;
@@ -205,11 +205,11 @@ export class RecallOS {
     return this.get("/health");
   }
 
-  /** Search across memory, conversations, and trips. */
+  /** Search across memory, conversations, and projects. */
   search(query: string): Promise<{
     memory: Array<{ id: string; key: string; value: string; type: string; confidence: number }>;
     conversations: Array<{ id: string; provider: string; message_count: number; created_at: string }>;
-    trips: Array<{ id: string; name: string; destination: string | null; status: string }>;
+    projects: Array<{ id: string; name: string; description: string | null; status: string }>;
   }> {
     return this.get("/api/search", { q: query });
   }
@@ -221,13 +221,13 @@ export class RecallOS {
     status?: string;
     type?: string;
     scope?: string;
-    trip_id?: string;
+    project_id?: string;
   }): Promise<MemoryItem[]> {
     const params: Record<string, string> = {};
     if (filters?.status) params.status = filters.status;
     if (filters?.type) params.type = filters.type;
     if (filters?.scope) params.scope = filters.scope;
-    if (filters?.trip_id) params.trip_id = filters.trip_id;
+    if (filters?.project_id) params.project_id = filters.project_id;
     return this.get("/api/memory", params);
   }
 
@@ -262,7 +262,7 @@ export class RecallOS {
     scope?: string;
     domain?: string;
     confidence?: number;
-    trip_id?: string;
+    project_id?: string;
   }): Promise<MemoryItem> {
     return this.post("/api/memory", item);
   }
@@ -509,9 +509,9 @@ export class RecallOS {
   // -- Bulk import ----------------------------------------------------------
 
   /** Import memory from a list of natural-language statements. */
-  bulkImport(statements: string[], tripId?: string): Promise<Record<string, unknown>> {
+  bulkImport(statements: string[], projectId?: string): Promise<Record<string, unknown>> {
     const body: Record<string, unknown> = { statements };
-    if (tripId) body.trip_id = tripId;
+    if (projectId) body.project_id = projectId;
     return this.post("/api/memory/bulk", body);
   }
 
@@ -547,9 +547,9 @@ export class RecallOS {
   }
 
   /** Run the pipeline without calling a provider, return timing. */
-  benchmark(message: string, tripId?: string): Promise<Record<string, unknown>> {
+  benchmark(message: string, projectId?: string): Promise<Record<string, unknown>> {
     const body: Record<string, string> = { message };
-    if (tripId) body.trip_id = tripId;
+    if (projectId) body.project_id = projectId;
     return this.post("/api/context/benchmark", body);
   }
 
@@ -560,11 +560,11 @@ export class RecallOS {
     message: string,
     provider: string,
     conversationId?: string,
-    tripId?: string
+    projectId?: string
   ): Promise<Record<string, unknown>> {
     const body: Record<string, string> = { message, provider };
     if (conversationId) body.conversation_id = conversationId;
-    if (tripId) body.trip_id = tripId;
+    if (projectId) body.project_id = projectId;
     return this.post("/api/chat", body);
   }
 
@@ -578,40 +578,40 @@ export class RecallOS {
     return this.del(`/api/chat/conversations/${id}`);
   }
 
-  // -- Trips ----------------------------------------------------------------
+  // -- Projects -------------------------------------------------------------
 
-  /** List all trips. */
-  listTrips(): Promise<Trip[]> {
-    return this.get("/api/trips");
+  /** List all projects. */
+  listProjects(): Promise<Project[]> {
+    return this.get("/api/projects");
   }
 
-  /** Create a new trip. */
-  createTrip(
+  /** Create a new project. */
+  createProject(
     name: string,
-    destination?: string,
+    description?: string,
     startDate?: string,
     endDate?: string
-  ): Promise<Trip> {
+  ): Promise<Project> {
     const body: Record<string, string> = { name };
-    if (destination) body.destination = destination;
+    if (description) body.description = description;
     if (startDate) body.start_date = startDate;
     if (endDate) body.end_date = endDate;
-    return this.post("/api/trips", body);
+    return this.post("/api/projects", body);
   }
 
-  /** Delete a trip. */
-  deleteTrip(id: string): Promise<{ message: string }> {
-    return this.del(`/api/trips/${id}`);
+  /** Delete a project. */
+  deleteProject(id: string): Promise<{ message: string }> {
+    return this.del(`/api/projects/${id}`);
   }
 
   // -- Passport -------------------------------------------------------------
 
-  /** Export all memory and trips as a portable JSON passport. */
+  /** Export all memory and projects as a portable JSON passport. */
   exportPassport(): Promise<Record<string, unknown>> {
     return this.get("/api/passport/export");
   }
 
-  /** Import memory and trips from a passport JSON. */
+  /** Import memory and projects from a passport JSON. */
   importPassport(passport: Record<string, unknown>): Promise<Record<string, unknown>> {
     return this.post("/api/passport/import", passport);
   }

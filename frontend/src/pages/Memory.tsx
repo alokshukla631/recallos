@@ -29,8 +29,7 @@ const TYPE_COLORS: Record<string, string> = {
 const SCOPE_COLORS: Record<string, string> = {
   global: "#6b7280",
   domain: "#8b5cf6",
-  trip: "#06b6d4",
-  project: "#f59e0b",
+  project: "#06b6d4",
   session: "#ec4899",
 };
 
@@ -632,7 +631,6 @@ function Memory() {
                   <option value="global">Global</option>
                   <option value="domain">Domain</option>
                   <option value="project">Project</option>
-                  <option value="trip">Trip</option>
                   <option value="session">Session</option>
                 </select>
               </label>
@@ -769,7 +767,6 @@ function Memory() {
             <option value="all">All</option>
             <option value="global">Global</option>
             <option value="domain">Domain</option>
-            <option value="trip">Trip</option>
             <option value="project">Project</option>
             <option value="session">Session</option>
           </select>

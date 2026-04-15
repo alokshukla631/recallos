@@ -38,7 +38,7 @@ router.get("/export/csv", (req: Request, res: Response) => {
     const passport = exportPassport(Object.keys(filters).length > 0 ? filters : undefined);
 
     // Build CSV
-    const headers = ["key", "type", "value", "scope", "confidence", "authority", "trip_name", "created_at", "last_confirmed_at"];
+    const headers = ["key", "type", "value", "scope", "confidence", "authority", "project_name", "created_at", "last_confirmed_at"];
     const escapeCSV = (val: string | null): string => {
       if (val === null || val === undefined) return "";
       const s = String(val);

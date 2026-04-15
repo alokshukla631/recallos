@@ -76,7 +76,7 @@ async function main() {
     { description: "All active memory items stored in RecallOS" },
     async () => {
       const items = queryAll(
-        "SELECT id, key, type, value, scope, trip_id, confidence, authority, status FROM memory_items WHERE status = 'active' ORDER BY created_at DESC"
+        "SELECT id, key, type, value, scope, project_id, confidence, authority, status FROM memory_items WHERE status = 'active' ORDER BY created_at DESC"
       );
       return {
         contents: [
@@ -139,7 +139,7 @@ async function main() {
     { description: "Active temporary overrides that take priority over preferences" },
     async () => {
       const items = queryAll(
-        "SELECT id, key, value, scope, trip_id, confidence FROM memory_items WHERE status = 'active' AND type = 'override' ORDER BY created_at DESC"
+        "SELECT id, key, value, scope, project_id, confidence FROM memory_items WHERE status = 'active' AND type = 'override' ORDER BY created_at DESC"
       );
       return {
         contents: [
@@ -153,50 +153,50 @@ async function main() {
     }
   );
 
-  // All trips
+  // All projects
   server.resource(
-    "trips",
-    "memory://trips",
-    { description: "All trips the user has created" },
+    "projects",
+    "memory://projects",
+    { description: "All projects the user has created" },
     async () => {
-      const trips = queryAll(
-        "SELECT id, name, destination, start_date, end_date, status FROM trips ORDER BY created_at DESC"
+      const projects = queryAll(
+        "SELECT id, name, description, start_date, end_date, status FROM projects ORDER BY created_at DESC"
       );
       return {
         contents: [
           {
-            uri: "memory://trips",
+            uri: "memory://projects",
             mimeType: "application/json",
-            text: JSON.stringify(trips, null, 2),
+            text: JSON.stringify(projects, null, 2),
           },
         ],
       };
     }
   );
 
-  // Single trip with its memory (template resource)
+  // Single project with its memory (template resource)
   server.resource(
-    "trip-detail",
-    new ResourceTemplate("memory://trips/{tripId}", { list: undefined }),
-    { description: "A specific trip with its scoped memory items" },
+    "project-detail",
+    new ResourceTemplate("memory://projects/{projectId}", { list: undefined }),
+    { description: "A specific project with its scoped memory items" },
     async (uri, params) => {
-      const tripId = params.tripId as string;
-      const trip = queryOne("SELECT * FROM trips WHERE id = ?", [tripId]);
-      if (!trip) {
+      const projectId = params.projectId as string;
+      const project = queryOne("SELECT * FROM projects WHERE id = ?", [projectId]);
+      if (!project) {
         return {
           contents: [
             {
               uri: uri.href,
               mimeType: "application/json",
-              text: JSON.stringify({ error: "Trip not found" }),
+              text: JSON.stringify({ error: "Project not found" }),
             },
           ],
         };
       }
 
       const memory = queryAll(
-        "SELECT id, key, type, value, scope, confidence FROM memory_items WHERE status = 'active' AND trip_id = ? ORDER BY type, created_at DESC",
-        [tripId]
+        "SELECT id, key, type, value, scope, confidence FROM memory_items WHERE status = 'active' AND project_id = ? ORDER BY type, created_at DESC",
+        [projectId]
       );
 
       return {
@@ -204,7 +204,7 @@ async function main() {
           {
             uri: uri.href,
             mimeType: "application/json",
-            text: JSON.stringify({ trip, memory }, null, 2),
+            text: JSON.stringify({ project, memory }, null, 2),
           },
         ],
       };
@@ -222,7 +222,7 @@ async function main() {
     { query: z.string().describe("Search query to find relevant memory items") },
     async ({ query }) => {
       const items = queryAll(
-        "SELECT id, key, type, value, scope, trip_id, confidence FROM memory_items WHERE status = 'active'"
+        "SELECT id, key, type, value, scope, project_id, confidence FROM memory_items WHERE status = 'active'"
       );
 
       const docs = (items as any[]).map((item) => ({
@@ -239,7 +239,7 @@ async function main() {
           type: item.type,
           value: item.value,
           scope: item.scope,
-          trip_id: item.trip_id,
+          project_id: item.project_id,
           confidence: item.confidence,
           relevance_score: parseFloat(r.score.toFixed(4)),
         };
@@ -262,10 +262,10 @@ async function main() {
     "Compile relevant context for a given message. Returns the user's relevant preferences, constraints, goals, facts, and overrides scored by relevance to the message.",
     {
       message: z.string().describe("The user's current message to compile context for"),
-      trip_id: z.string().optional().describe("Optional trip ID to scope context to a specific trip"),
+      project_id: z.string().optional().describe("Optional project ID to scope context"),
     },
-    async ({ message, trip_id }) => {
-      const compiled = await compileContext("mcp", message, trip_id);
+    async ({ message, project_id }) => {
+      const compiled = await compileContext("mcp", message, project_id);
       return {
         content: [
           {
@@ -283,10 +283,10 @@ async function main() {
     "Get the full structured context packet for a message. Returns categorized memory items with BM25 scores and inclusion decisions.",
     {
       message: z.string().describe("The user's current message"),
-      trip_id: z.string().optional().describe("Optional trip ID to scope context"),
+      project_id: z.string().optional().describe("Optional project ID to scope context"),
     },
-    async ({ message, trip_id }) => {
-      const compiled = await compileContext("mcp", message, trip_id);
+    async ({ message, project_id }) => {
+      const compiled = await compileContext("mcp", message, project_id);
       return {
         content: [
           {
@@ -318,16 +318,16 @@ async function main() {
     "Extract and store memory from text. Use this when the user states a preference, constraint, fact, goal, or override. The extraction pipeline will parse the text and store structured memory items.",
     {
       text: z.string().describe("The text to extract memory from (e.g. a user message)"),
-      trip_id: z.string().optional().describe("Optional trip ID to scope the memory to"),
+      project_id: z.string().optional().describe("Optional project ID to scope the memory to"),
     },
-    async ({ text, trip_id }) => {
+    async ({ text, project_id }) => {
       // Create a real event row so source_event_id is not dangling
       const mcpEventId = "mcp-" + Date.now().toString(36);
       runSql(
         "INSERT INTO events (id, conversation_id, role, content, provider, created_at) VALUES (?, ?, 'user', ?, 'mcp', datetime('now'))",
         [mcpEventId, "mcp-session", text]
       );
-      const candidates = await extractMemory(text, mcpEventId, trip_id);
+      const candidates = await extractMemory(text, mcpEventId, project_id);
       if (candidates.length === 0) {
         return {
           content: [
@@ -375,16 +375,16 @@ async function main() {
       key: z.string().describe("Short snake_case key (e.g. 'seat_preference', 'budget_limit')"),
       type: z.enum(["preference", "constraint", "fact", "goal", "override"]).describe("Memory type"),
       value: z.string().describe("The value to store"),
-      scope: z.enum(["global", "trip", "domain", "project", "session"]).default("global").describe("Whether this applies globally or to a specific trip"),
-      trip_id: z.string().optional().describe("Trip ID if scope is 'trip'"),
+      scope: z.enum(["global", "domain", "project", "session"]).default("global").describe("Whether this applies globally or to a specific project"),
+      project_id: z.string().optional().describe("Project ID if scope is 'project'"),
     },
-    async ({ key, type, value, scope, trip_id }) => {
+    async ({ key, type, value, scope, project_id }) => {
       const candidate = {
         key,
         type: type as any,
         value,
         scope: scope as any,
-        tripId: trip_id,
+        projectId: project_id,
         confidence: 0.9,
         authority: "explicit" as const,
       };
@@ -417,11 +417,11 @@ async function main() {
     "List all active memory items, optionally filtered by type or scope.",
     {
       type: z.enum(["preference", "constraint", "fact", "goal", "override"]).optional().describe("Filter by memory type"),
-      scope: z.enum(["global", "trip", "domain", "project", "session"]).optional().describe("Filter by scope"),
-      trip_id: z.string().optional().describe("Filter by trip ID"),
+      scope: z.enum(["global", "domain", "project", "session"]).optional().describe("Filter by scope"),
+      project_id: z.string().optional().describe("Filter by project ID"),
     },
-    async ({ type, scope, trip_id }) => {
-      let sql = "SELECT id, key, type, value, scope, trip_id, confidence, created_at FROM memory_items WHERE status = 'active'";
+    async ({ type, scope, project_id }) => {
+      let sql = "SELECT id, key, type, value, scope, project_id, confidence, created_at FROM memory_items WHERE status = 'active'";
       const params: unknown[] = [];
 
       if (type) {
@@ -432,9 +432,9 @@ async function main() {
         sql += " AND scope = ?";
         params.push(scope);
       }
-      if (trip_id) {
-        sql += " AND trip_id = ?";
-        params.push(trip_id);
+      if (project_id) {
+        sql += " AND project_id = ?";
+        params.push(project_id);
       }
 
       sql += " ORDER BY type, created_at DESC";
@@ -453,22 +453,22 @@ async function main() {
     }
   );
 
-  // List trips
+  // List projects
   server.tool(
-    "list_trips",
-    "List all trips the user has created.",
+    "list_projects",
+    "List all projects the user has created.",
     {},
     async () => {
-      const trips = queryAll(
-        "SELECT id, name, destination, start_date, end_date, status FROM trips ORDER BY created_at DESC"
+      const projects = queryAll(
+        "SELECT id, name, description, start_date, end_date, status FROM projects ORDER BY created_at DESC"
       );
       return {
         content: [
           {
             type: "text" as const,
-            text: trips.length > 0
-              ? JSON.stringify(trips, null, 2)
-              : "No trips found.",
+            text: projects.length > 0
+              ? JSON.stringify(projects, null, 2)
+              : "No projects found.",
           },
         ],
       };
@@ -520,10 +520,10 @@ async function main() {
     "Include the user's relevant personal context when answering a question",
     {
       message: z.string().describe("The user's question or request"),
-      trip_id: z.string().optional().describe("Optional trip ID for trip-specific context"),
+      project_id: z.string().optional().describe("Optional project ID for project-specific context"),
     },
-    async ({ message, trip_id }) => {
-      const compiled = await compileContext("mcp", message, trip_id);
+    async ({ message, project_id }) => {
+      const compiled = await compileContext("mcp", message, project_id);
       return {
         messages: [
           {
@@ -547,16 +547,16 @@ async function main() {
   );
 
   server.prompt(
-    "trip_planning",
-    "Plan a trip using the user's stored travel preferences and constraints",
+    "project_planning",
+    "Plan a project using the user's stored preferences and constraints",
     {
-      destination: z.string().optional().describe("Trip destination"),
-      details: z.string().optional().describe("Additional trip details or questions"),
+      name: z.string().optional().describe("Project name or topic"),
+      details: z.string().optional().describe("Additional project details or questions"),
     },
-    async ({ destination, details }) => {
-      const message = destination
-        ? `Plan a trip to ${destination}. ${details || ""}`
-        : details || "Help me plan a trip";
+    async ({ name, details }) => {
+      const message = name
+        ? `Plan a project: ${name}. ${details || ""}`
+        : details || "Help me plan a project";
 
       const compiled = await compileContext("mcp", message);
       return {
@@ -570,7 +570,7 @@ async function main() {
                 "",
                 compiled.contextText,
                 "",
-                `Help me plan a trip${destination ? " to " + destination : ""}.`,
+                `Help me plan${name ? " the project: " + name : " a project"}.`,
                 details ? `Additional details: ${details}` : "",
                 "",
                 "Use all of my stored preferences and constraints. Ask clarifying questions if anything is ambiguous.",
@@ -593,7 +593,7 @@ async function main() {
       const allItems = queryAll(
         "SELECT key, type, value, scope FROM memory_items WHERE status = 'active' ORDER BY type, created_at DESC"
       );
-      const trips = queryAll("SELECT name, destination, status FROM trips ORDER BY created_at DESC");
+      const projects = queryAll("SELECT name, description, status FROM projects ORDER BY created_at DESC");
 
       const sections: string[] = ["Here is everything RecallOS knows about the user:", ""];
 
@@ -621,11 +621,11 @@ async function main() {
         sections.push("");
       }
 
-      // Trips
-      if ((trips as any[]).length > 0) {
-        sections.push("Trips:");
-        for (const trip of trips as any[]) {
-          sections.push(`  - ${trip.name}${trip.destination ? " to " + trip.destination : ""} (${trip.status})`);
+      // Projects
+      if ((projects as any[]).length > 0) {
+        sections.push("Projects:");
+        for (const project of projects as any[]) {
+          sections.push(`  - ${project.name}${project.description ? ": " + project.description : ""} (${project.status})`);
         }
       }
 

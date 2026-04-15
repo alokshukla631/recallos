@@ -2,7 +2,7 @@
  * Memory Passport: export and import memory as portable JSON.
  *
  * The passport format is model-agnostic and human-readable. It contains
- * all active memory items, trips, and conflicts. It does NOT contain
+ * all active memory items, projects, and conflicts. It does NOT contain
  * conversation history or API keys, keeping the export lightweight and
  * safe to share.
  */
@@ -14,7 +14,7 @@ export interface PassportMemoryItem {
   type: string;
   value: string;
   scope: string;
-  trip_name: string | null;
+  project_name: string | null;
   confidence: number;
   authority: string;
   status: string;
@@ -24,9 +24,9 @@ export interface PassportMemoryItem {
   created_at: string;
 }
 
-export interface PassportTrip {
+export interface PassportProject {
   name: string;
-  destination: string | null;
+  description: string | null;
   start_date: string | null;
   end_date: string | null;
   status: string;
@@ -45,11 +45,11 @@ export interface Passport {
   exported_at: string;
   stats: {
     memory_items: number;
-    trips: number;
+    projects: number;
     conflicts: number;
   };
   memory_items: PassportMemoryItem[];
-  trips: PassportTrip[];
+  projects: PassportProject[];
   conflicts: PassportConflict[];
 }
 
@@ -62,7 +62,7 @@ export interface ExportFilters {
 }
 
 /**
- * Export active memory, trips, and unresolved conflicts into a
+ * Export active memory, projects, and unresolved conflicts into a
  * portable JSON passport. Optional filters narrow the export.
  */
 export function exportPassport(filters?: ExportFilters): Passport {
@@ -86,15 +86,15 @@ export function exportPassport(filters?: ExportFilters): Passport {
     params.push(filters.pinned ? 1 : 0);
   }
 
-  let sql = `SELECT mi.*, t.name AS trip_name
+  let sql = `SELECT mi.*, p.name AS project_name
      FROM memory_items mi
-     LEFT JOIN trips t ON mi.trip_id = t.id
+     LEFT JOIN projects p ON mi.project_id = p.id
      WHERE ${conditions.join(" AND ")}`;
 
   if (filters?.tag) {
-    sql = `SELECT mi.*, t.name AS trip_name
+    sql = `SELECT mi.*, p.name AS project_name
      FROM memory_items mi
-     LEFT JOIN trips t ON mi.trip_id = t.id
+     LEFT JOIN projects p ON mi.project_id = p.id
      INNER JOIN memory_tags mt ON mt.memory_item_id = mi.id AND mt.tag = ?
      WHERE ${conditions.join(" AND ")}`;
     params.unshift(filters.tag);
@@ -102,13 +102,13 @@ export function exportPassport(filters?: ExportFilters): Passport {
 
   sql += " ORDER BY mi.created_at ASC";
 
-  const memories = queryAll(sql, params) as unknown as (Record<string, unknown> & { trip_name: string | null })[];
+  const memories = queryAll(sql, params) as unknown as (Record<string, unknown> & { project_name: string | null })[];
 
-  const trips = queryAll(
-    `SELECT name, destination, start_date, end_date, status, notes
-     FROM trips
+  const projects = queryAll(
+    `SELECT name, description, start_date, end_date, status, notes
+     FROM projects
      ORDER BY created_at ASC`
-  ) as unknown as PassportTrip[];
+  ) as unknown as PassportProject[];
 
   const conflicts = queryAll(
     `SELECT key, resolution, explanation, created_at
@@ -121,7 +121,7 @@ export function exportPassport(filters?: ExportFilters): Passport {
     type: m.type as string,
     value: m.value as string,
     scope: m.scope as string,
-    trip_name: m.trip_name ?? null,
+    project_name: m.project_name ?? null,
     confidence: m.confidence as number,
     authority: m.authority as string,
     status: m.status as string,
@@ -136,18 +136,18 @@ export function exportPassport(filters?: ExportFilters): Passport {
     exported_at: new Date().toISOString(),
     stats: {
       memory_items: items.length,
-      trips: trips.length,
+      projects: projects.length,
       conflicts: conflicts.length,
     },
     memory_items: items,
-    trips: trips,
+    projects: projects,
     conflicts: conflicts,
   };
 }
 
 export interface ImportResult {
-  trips_created: number;
-  trips_skipped: number;
+  projects_created: number;
+  projects_skipped: number;
   memories_created: number;
   memories_skipped: number;
   conflicts_created: number;
@@ -157,7 +157,7 @@ export interface ImportResult {
  * Import a passport into the local database.
  *
  * Strategy:
- *  - Trips are matched by name. If a trip with the same name exists, skip it.
+ *  - Projects are matched by name. If a project with the same name exists, skip it.
  *  - Memory items are matched by key + type + scope. If a match exists with
  *    the same normalized value, skip it. Otherwise, create it as new.
  *  - Conflicts are imported as-is.
@@ -173,7 +173,7 @@ export function exportPassportMarkdown(): string {
   lines.push("# RecallOS Memory Export");
   lines.push("");
   lines.push(`Exported: ${passport.exported_at.slice(0, 10)}`);
-  lines.push(`Items: ${passport.stats.memory_items} | Trips: ${passport.stats.trips} | Conflicts: ${passport.stats.conflicts}`);
+  lines.push(`Items: ${passport.stats.memory_items} | Projects: ${passport.stats.projects} | Conflicts: ${passport.stats.conflicts}`);
   lines.push("");
 
   // Group items by type
@@ -190,7 +190,7 @@ export function exportPassportMarkdown(): string {
     for (const item of items) {
       const meta: string[] = [];
       meta.push(`scope: ${item.scope}`);
-      if (item.trip_name) meta.push(`trip: ${item.trip_name}`);
+      if (item.project_name) meta.push(`project: ${item.project_name}`);
       meta.push(`confidence: ${item.confidence}`);
       if (item.authority !== "explicit") meta.push(`authority: ${item.authority}`);
 
@@ -200,15 +200,15 @@ export function exportPassportMarkdown(): string {
     lines.push("");
   }
 
-  if (passport.trips.length > 0) {
-    lines.push("## Trips");
+  if (passport.projects.length > 0) {
+    lines.push("## Projects");
     lines.push("");
-    for (const trip of passport.trips) {
-      const dates = [trip.start_date, trip.end_date].filter(Boolean).join(" to ");
-      lines.push(`- **${trip.name}**${trip.destination ? ` - ${trip.destination}` : ""}`);
+    for (const project of passport.projects) {
+      const dates = [project.start_date, project.end_date].filter(Boolean).join(" to ");
+      lines.push(`- **${project.name}**${project.description ? ` - ${project.description}` : ""}`);
       if (dates) lines.push(`  Dates: ${dates}`);
-      lines.push(`  Status: ${trip.status}`);
-      if (trip.notes) lines.push(`  Notes: ${trip.notes}`);
+      lines.push(`  Status: ${project.status}`);
+      if (project.notes) lines.push(`  Notes: ${project.notes}`);
     }
     lines.push("");
   }
@@ -233,48 +233,48 @@ export function importPassport(passport: Passport): ImportResult {
   }
 
   const result: ImportResult = {
-    trips_created: 0,
-    trips_skipped: 0,
+    projects_created: 0,
+    projects_skipped: 0,
     memories_created: 0,
     memories_skipped: 0,
     conflicts_created: 0,
   };
 
-  // Build a name-to-id map for trips
-  const tripNameToId = new Map<string, string>();
+  // Build a name-to-id map for projects
+  const projectNameToId = new Map<string, string>();
 
-  // Import trips
-  for (const trip of passport.trips ?? []) {
+  // Import projects
+  for (const project of passport.projects ?? []) {
     const existing = queryOne(
-      "SELECT id FROM trips WHERE name = ?",
-      [trip.name]
+      "SELECT id FROM projects WHERE name = ?",
+      [project.name]
     );
     if (existing) {
-      tripNameToId.set(trip.name, existing.id as string);
-      result.trips_skipped++;
+      projectNameToId.set(project.name, existing.id as string);
+      result.projects_skipped++;
       continue;
     }
     const id = uuidv4();
     runSql(
-      `INSERT INTO trips (id, name, destination, start_date, end_date, status, notes)
+      `INSERT INTO projects (id, name, description, start_date, end_date, status, notes)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
-        trip.name,
-        trip.destination ?? null,
-        trip.start_date ?? null,
-        trip.end_date ?? null,
-        trip.status ?? "planning",
-        trip.notes ?? null,
+        project.name,
+        project.description ?? null,
+        project.start_date ?? null,
+        project.end_date ?? null,
+        project.status ?? "planning",
+        project.notes ?? null,
       ]
     );
-    tripNameToId.set(trip.name, id);
-    result.trips_created++;
+    projectNameToId.set(project.name, id);
+    result.projects_created++;
   }
 
   // Import memory items
   for (const mem of passport.memory_items ?? []) {
-    const tripId = mem.trip_name ? tripNameToId.get(mem.trip_name) ?? null : null;
+    const projectId = mem.project_name ? projectNameToId.get(mem.project_name) ?? null : null;
 
     // Check for duplicate: same key, type, scope, active
     const existing = queryOne(
@@ -296,7 +296,7 @@ export function importPassport(passport: Passport): ImportResult {
     const id = uuidv4();
     runSql(
       `INSERT INTO memory_items
-         (id, key, type, value, scope, trip_id, confidence, authority, status, valid_from, valid_to, last_confirmed_at)
+         (id, key, type, value, scope, project_id, confidence, authority, status, valid_from, valid_to, last_confirmed_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`,
       [
         id,
@@ -304,7 +304,7 @@ export function importPassport(passport: Passport): ImportResult {
         mem.type,
         mem.value,
         mem.scope,
-        tripId,
+        projectId,
         mem.confidence ?? 0.8,
         mem.authority ?? "explicit",
         mem.valid_from ?? null,

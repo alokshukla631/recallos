@@ -6,7 +6,7 @@ import chatRouter from "./routes/chat.js";
 import memoryRouter from "./routes/memory.js";
 import settingsRouter from "./routes/settings.js";
 import contextRouter from "./routes/context.js";
-import tripsRouter from "./routes/trips.js";
+import projectsRouter from "./routes/projects.js";
 import passportRouter from "./routes/passport.js";
 import docsRouter from "./routes/docs.js";
 import agentsRouter from "./routes/agents.js";
@@ -39,18 +39,18 @@ app.use("/api/chat", chatRouter);
 app.use("/api/memory", memoryRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api/context", contextRouter);
-app.use("/api/trips", tripsRouter);
+app.use("/api/projects", projectsRouter);
 app.use("/api/passport", passportRouter);
 app.use("/api/docs", docsRouter);
 app.use("/api/agents", agentsRouter);
 app.use("/api/scraper", scraperRouter);
 
-// Global search across memory, conversations, and trips
+// Global search across memory, conversations, and projects
 app.get("/api/search", (req, res) => {
   try {
     const q = (req.query.q as string || "").trim();
     if (!q || q.length < 2) {
-      res.json({ memory: [], conversations: [], trips: [] });
+      res.json({ memory: [], conversations: [], projects: [] });
       return;
     }
 
@@ -80,17 +80,17 @@ app.get("/api/search", (req, res) => {
       [pattern]
     );
 
-    // Search trips
-    const trips = queryAll(
-      `SELECT id, name, destination, status, start_date, end_date
-       FROM trips
-       WHERE name LIKE ? OR destination LIKE ?
+    // Search projects
+    const projects = queryAll(
+      `SELECT id, name, description, status, start_date, end_date
+       FROM projects
+       WHERE name LIKE ? OR description LIKE ?
        ORDER BY created_at DESC
        LIMIT 5`,
       [pattern, pattern]
     );
 
-    res.json({ memory, conversations, trips });
+    res.json({ memory, conversations, projects });
   } catch (err) {
     console.error("GET /api/search error:", err);
     res.status(500).json({ error: "Internal server error" });

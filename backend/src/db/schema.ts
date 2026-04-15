@@ -19,11 +19,45 @@ export async function initDatabase(filePath: string): Promise<Database> {
 
   db.run("PRAGMA foreign_keys = ON;");
 
+  // ---------------------------------------------------------------------------
+  // Migration: rename trips -> projects, trip_id -> project_id
+  // ---------------------------------------------------------------------------
+  const hasOldTrips = db.exec(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='trips'"
+  );
+  if (hasOldTrips.length > 0 && hasOldTrips[0].values.length > 0) {
+    db.run("ALTER TABLE trips RENAME TO projects");
+    // Rename destination -> description for domain-agnostic naming
+    const projCols = db.exec("PRAGMA table_info(projects)");
+    const projColNames = projCols[0]?.values.map((row: unknown[]) => row[1]) || [];
+    if (projColNames.includes("destination") && !projColNames.includes("description")) {
+      db.run("ALTER TABLE projects RENAME COLUMN destination TO description");
+    }
+  }
+
+  // Rename trip_id -> project_id in conversations
+  {
+    const convCols = db.exec("PRAGMA table_info(conversations)");
+    const convColNames = convCols[0]?.values.map((row: unknown[]) => row[1]) || [];
+    if (convColNames.includes("trip_id") && !convColNames.includes("project_id")) {
+      db.run("ALTER TABLE conversations RENAME COLUMN trip_id TO project_id");
+    }
+  }
+
+  // Rename trip_id -> project_id in events
+  {
+    const evtCols = db.exec("PRAGMA table_info(events)");
+    const evtColNames = evtCols[0]?.values.map((row: unknown[]) => row[1]) || [];
+    if (evtColNames.includes("trip_id") && !evtColNames.includes("project_id")) {
+      db.run("ALTER TABLE events RENAME COLUMN trip_id TO project_id");
+    }
+  }
+
   db.run(`
-    CREATE TABLE IF NOT EXISTS trips (
+    CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
-      destination TEXT,
+      description TEXT,
       start_date TEXT,
       end_date TEXT,
       status TEXT DEFAULT 'planning' CHECK (status IN ('planning', 'active', 'completed', 'cancelled')),
@@ -37,7 +71,7 @@ export async function initDatabase(filePath: string): Promise<Database> {
     CREATE TABLE IF NOT EXISTS conversations (
       id TEXT PRIMARY KEY,
       title TEXT,
-      trip_id TEXT,
+      project_id TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
@@ -47,7 +81,7 @@ export async function initDatabase(filePath: string): Promise<Database> {
     CREATE TABLE IF NOT EXISTS events (
       id TEXT PRIMARY KEY,
       conversation_id TEXT NOT NULL,
-      trip_id TEXT,
+      project_id TEXT,
       role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
       content TEXT NOT NULL,
       provider TEXT,
@@ -56,24 +90,21 @@ export async function initDatabase(filePath: string): Promise<Database> {
   `);
 
   // ---------------------------------------------------------------------------
-  // memory_items - with migration for expanded scope
+  // memory_items - with migration for expanded scope and trip->project rename
   // ---------------------------------------------------------------------------
-  // Check if memory_items table exists with the old schema (only global/trip).
-  // If so, migrate to the new schema that supports domain, project, and session scopes.
   const tableExists = db.exec(
     "SELECT name FROM sqlite_master WHERE type='table' AND name='memory_items'"
   );
 
   if (tableExists.length > 0 && tableExists[0].values.length > 0) {
-    // Table exists - check if it has the domain column (new schema indicator)
     const columns = db.exec("PRAGMA table_info(memory_items)");
     const colNames = columns[0]?.values.map((row: unknown[]) => row[1]) || [];
     const hasDomainCol = colNames.includes("domain");
+    const hasOldTripId = colNames.includes("trip_id") && !colNames.includes("project_id");
 
-    if (!hasDomainCol) {
-      // Migrate: add new columns to existing table
-      // SQLite allows ADD COLUMN but not changing CHECK constraints.
-      // We recreate the table with the expanded schema.
+    if (!hasDomainCol || hasOldTripId) {
+      // Recreate with the current schema: project_id instead of trip_id,
+      // 'trip' scope merged into 'project', domain column added.
       db.run("PRAGMA foreign_keys = OFF;");
 
       db.run(`
@@ -82,26 +113,36 @@ export async function initDatabase(filePath: string): Promise<Database> {
           key TEXT NOT NULL,
           type TEXT NOT NULL CHECK (type IN ('preference', 'constraint', 'fact', 'goal', 'override')),
           value TEXT NOT NULL,
-          scope TEXT NOT NULL DEFAULT 'global' CHECK (scope IN ('global', 'trip', 'domain', 'project', 'session')),
+          scope TEXT NOT NULL DEFAULT 'global' CHECK (scope IN ('global', 'domain', 'project', 'session')),
           domain TEXT,
-          trip_id TEXT,
+          project_id TEXT,
           source_event_id TEXT REFERENCES events(id),
           confidence REAL DEFAULT 0.8,
           authority TEXT DEFAULT 'explicit',
-          status TEXT DEFAULT 'active' CHECK (status IN ('active', 'stale', 'superseded')),
+          status TEXT DEFAULT 'active' CHECK (status IN ('active', 'stale', 'superseded', 'deleted')),
           superseded_by TEXT REFERENCES memory_items(id),
           valid_from TEXT,
           valid_to TEXT,
           last_confirmed_at TEXT,
+          deleted_at TEXT,
           created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
       `);
 
+      // Copy data, renaming trip_id -> project_id and scope 'trip' -> 'project'
+      const srcCol = colNames.includes("trip_id") ? "trip_id" : (colNames.includes("project_id") ? "project_id" : "NULL");
+      const hasDomain = colNames.includes("domain");
+      const hasDeletedAt = colNames.includes("deleted_at");
       db.run(`
-        INSERT INTO memory_items_new (id, key, type, value, scope, trip_id, source_event_id,
-          confidence, authority, status, superseded_by, valid_from, valid_to, last_confirmed_at, created_at)
-        SELECT id, key, type, value, scope, trip_id, source_event_id,
-          confidence, authority, status, superseded_by, valid_from, valid_to, last_confirmed_at, created_at
+        INSERT INTO memory_items_new (id, key, type, value, scope, domain, project_id,
+          source_event_id, confidence, authority, status, superseded_by, valid_from, valid_to,
+          last_confirmed_at, deleted_at, created_at)
+        SELECT id, key, type, value,
+          CASE WHEN scope = 'trip' THEN 'project' ELSE scope END,
+          ${hasDomain ? "domain" : "NULL"},
+          ${srcCol},
+          source_event_id, confidence, authority, status, superseded_by, valid_from, valid_to,
+          last_confirmed_at, ${hasDeletedAt ? "deleted_at" : "NULL"}, created_at
         FROM memory_items
       `);
 
@@ -110,24 +151,25 @@ export async function initDatabase(filePath: string): Promise<Database> {
       db.run("PRAGMA foreign_keys = ON;");
     }
   } else {
-    // Fresh database - create with full schema
+    // Fresh database - create with current schema
     db.run(`
       CREATE TABLE IF NOT EXISTS memory_items (
         id TEXT PRIMARY KEY,
         key TEXT NOT NULL,
         type TEXT NOT NULL CHECK (type IN ('preference', 'constraint', 'fact', 'goal', 'override')),
         value TEXT NOT NULL,
-        scope TEXT NOT NULL DEFAULT 'global' CHECK (scope IN ('global', 'trip', 'domain', 'project', 'session')),
+        scope TEXT NOT NULL DEFAULT 'global' CHECK (scope IN ('global', 'domain', 'project', 'session')),
         domain TEXT,
-        trip_id TEXT,
+        project_id TEXT,
         source_event_id TEXT REFERENCES events(id),
         confidence REAL DEFAULT 0.8,
         authority TEXT DEFAULT 'explicit',
-        status TEXT DEFAULT 'active' CHECK (status IN ('active', 'stale', 'superseded')),
+        status TEXT DEFAULT 'active' CHECK (status IN ('active', 'stale', 'superseded', 'deleted')),
         superseded_by TEXT REFERENCES memory_items(id),
         valid_from TEXT,
         valid_to TEXT,
         last_confirmed_at TEXT,
+        deleted_at TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       )
     `);

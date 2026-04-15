@@ -33,7 +33,7 @@ function CommandPalette({ open, onClose }: Props) {
   const [memoryStatus, setMemoryStatus] = useState<string | null>(null);
   const [bulkStatus, setBulkStatus] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<{ memory: any[]; conversations: any[]; trips: any[] }>({ memory: [], conversations: [], trips: [] });
+  const [searchResults, setSearchResults] = useState<{ memory: any[]; conversations: any[]; projects: any[] }>({ memory: [], conversations: [], projects: [] });
   const [searchLoading, setSearchLoading] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -73,7 +73,7 @@ function CommandPalette({ open, onClose }: Props) {
     setSearchQuery(value);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     if (value.trim().length < 2) {
-      setSearchResults({ memory: [], conversations: [], trips: [] });
+      setSearchResults({ memory: [], conversations: [], projects: [] });
       return;
     }
     setSearchLoading(true);
@@ -142,7 +142,7 @@ function CommandPalette({ open, onClose }: Props) {
     { id: "nav-dashboard", label: "Go to Dashboard", shortcut: "Ctrl+1", category: "Navigation", action: () => navigate("/") },
     { id: "nav-chat", label: "Go to Chat", shortcut: "Ctrl+2", category: "Navigation", action: () => navigate("/chat") },
     { id: "nav-memory", label: "Go to Memory", shortcut: "Ctrl+3", category: "Navigation", action: () => navigate("/memory") },
-    { id: "nav-trips", label: "Go to Trips", category: "Navigation", action: () => navigate("/trips") },
+    { id: "nav-projects", label: "Go to Projects", category: "Navigation", action: () => navigate("/projects") },
     { id: "nav-timeline", label: "Go to Timeline", shortcut: "Ctrl+4", category: "Navigation", action: () => navigate("/timeline") },
     { id: "nav-graph", label: "Go to Graph", category: "Navigation", action: () => navigate("/graph") },
     { id: "nav-links", label: "Go to Links", category: "Navigation", action: () => navigate("/links") },
@@ -166,7 +166,7 @@ function CommandPalette({ open, onClose }: Props) {
     { id: "act-global-search", label: "Search everything", category: "Actions", action: () => {
       setMode("search");
       setSearchQuery("");
-      setSearchResults({ memory: [], conversations: [], trips: [] });
+      setSearchResults({ memory: [], conversations: [], projects: [] });
       setTimeout(() => searchInputRef.current?.focus(), 50);
     }},
     { id: "act-export-json", label: "Export memory (JSON)", category: "Actions", action: () => { window.open("/api/passport/export", "_blank"); } },
@@ -216,7 +216,7 @@ function CommandPalette({ open, onClose }: Props) {
       setMemoryText("");
       setMemoryStatus(null);
       setSearchQuery("");
-      setSearchResults({ memory: [], conversations: [], trips: [] });
+      setSearchResults({ memory: [], conversations: [], projects: [] });
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open]);
@@ -307,7 +307,7 @@ function CommandPalette({ open, onClose }: Props) {
   }
 
   if (mode === "search") {
-    const hasResults = searchResults.memory.length > 0 || searchResults.conversations.length > 0 || searchResults.trips.length > 0;
+    const hasResults = searchResults.memory.length > 0 || searchResults.conversations.length > 0 || searchResults.projects.length > 0;
     return (
       <div className="palette-overlay" onClick={onClose}>
         <div className="palette-container palette-search-container" onClick={(e) => e.stopPropagation()}>
@@ -319,7 +319,7 @@ function CommandPalette({ open, onClose }: Props) {
             ref={searchInputRef}
             className="palette-input"
             type="text"
-            placeholder="Search memory, conversations, trips..."
+            placeholder="Search memory, conversations, projects..."
             value={searchQuery}
             onChange={(e) => handleSearchInput(e.target.value)}
             onKeyDown={(e) => {
@@ -372,19 +372,19 @@ function CommandPalette({ open, onClose }: Props) {
               </>
             )}
 
-            {searchResults.trips.length > 0 && (
+            {searchResults.projects.length > 0 && (
               <>
-                <div className="palette-category">Trips ({searchResults.trips.length})</div>
-                {searchResults.trips.map((trip: any) => (
+                <div className="palette-category">Projects ({searchResults.projects.length})</div>
+                {searchResults.projects.map((project: any) => (
                   <div
-                    key={trip.id}
+                    key={project.id}
                     className="palette-item"
-                    onClick={() => { navigate("/trips"); onClose(); }}
+                    onClick={() => { navigate("/projects"); onClose(); }}
                   >
                     <span className="palette-item-label">
-                      {trip.name}{trip.destination ? ` - ${trip.destination}` : ""}
+                      {project.name}{project.description ? ` - ${project.description}` : ""}
                     </span>
-                    <span className="palette-item-shortcut">[{trip.status}]</span>
+                    <span className="palette-item-shortcut">[{project.status}]</span>
                   </div>
                 ))}
               </>

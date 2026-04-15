@@ -11,7 +11,7 @@ export interface MemoryItem {
   value: string;
   scope: MemoryScope;
   domain: string | null;
-  trip_id: string | null;
+  project_id: string | null;
   source_event_id: string | null;
   confidence: number;
   authority: string;
@@ -55,7 +55,7 @@ function normalizeForDedup(value: string): string {
 
 /**
  * Checks if the candidate is a duplicate of an existing active item.
- * Duplicate = same key, same type, same normalized value, same scope (and trip if scoped).
+ * Duplicate = same key, same type, same normalized value, same scope (and project if scoped).
  */
 function findDuplicate(
   candidate: MemoryCandidate
@@ -63,11 +63,11 @@ function findDuplicate(
   const normalizedCandidate = normalizeForDedup(candidate.value);
 
   let rows: MemoryItem[];
-  if ((candidate.scope === "trip" || candidate.scope === "project") && candidate.tripId) {
+  if ((candidate.scope === "project") && candidate.projectId) {
     rows = queryAll(
       `SELECT * FROM memory_items
-       WHERE key = ? AND type = ? AND scope = ? AND trip_id = ? AND status = 'active'`,
-      [candidate.key, candidate.type, candidate.scope, candidate.tripId]
+       WHERE key = ? AND type = ? AND scope = ? AND project_id = ? AND status = 'active'`,
+      [candidate.key, candidate.type, candidate.scope, candidate.projectId]
     ) as unknown as MemoryItem[];
   } else {
     rows = queryAll(
@@ -105,21 +105,20 @@ function reconfirmItem(itemId: string, currentConfidence: number): MemoryItem {
 
 /**
  * Scope hierarchy (most specific to least specific):
- *   session > project > trip > domain > global
+ *   session > project > domain > global
  *
  * Precedence rules (highest to lowest):
  *   1. Stale historical memory (lowest)
  *   2. Inferred preference (lower confidence)
  *   3. Explicit global
  *   4. Explicit domain-scoped
- *   5. Explicit trip/project-scoped
+ *   5. Explicit project-scoped
  *   6. Explicit session-scoped
  *   7. Override in any narrow scope (highest)
  */
 const SCOPE_WEIGHT: Record<string, number> = {
   global: 0,
   domain: 1,
-  trip: 2,
   project: 2,
   session: 3,
 };
@@ -147,14 +146,14 @@ function getPrecedence(item: {
   return base;
 }
 
-function findExistingByKey(key: string, scope: string, tripId?: string): MemoryItem | undefined {
+function findExistingByKey(key: string, scope: string, projectId?: string): MemoryItem | undefined {
   // For scoped items, look for an existing item at the same scope
-  if ((scope === "trip" || scope === "project") && tripId) {
+  if ((scope === "project") && projectId) {
     return queryOne(
       `SELECT * FROM memory_items
-       WHERE key = ? AND scope = ? AND trip_id = ? AND status = 'active'
+       WHERE key = ? AND scope = ? AND project_id = ? AND status = 'active'
        ORDER BY created_at DESC LIMIT 1`,
-      [key, scope, tripId]
+      [key, scope, projectId]
     ) as unknown as MemoryItem | undefined;
   }
 
@@ -172,9 +171,9 @@ function insertMemoryItem(candidate: MemoryCandidate, eventId: string): MemoryIt
   const now = new Date().toISOString();
 
   runSql(
-    `INSERT INTO memory_items (id, key, type, value, scope, domain, trip_id, source_event_id, confidence, authority, status, valid_from)
+    `INSERT INTO memory_items (id, key, type, value, scope, domain, project_id, source_event_id, confidence, authority, status, valid_from)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
-    [id, candidate.key, candidate.type, candidate.value, candidate.scope, candidate.domain ?? null, candidate.tripId ?? null, eventId, candidate.confidence, candidate.authority, now]
+    [id, candidate.key, candidate.type, candidate.value, candidate.scope, candidate.domain ?? null, candidate.projectId ?? null, eventId, candidate.confidence, candidate.authority, now]
   );
 
   return queryOne("SELECT * FROM memory_items WHERE id = ?", [id]) as unknown as MemoryItem;
@@ -224,7 +223,7 @@ export async function reconcileMemory(
       continue;
     }
 
-    const existing = findExistingByKey(candidate.key, candidate.scope, candidate.tripId);
+    const existing = findExistingByKey(candidate.key, candidate.scope, candidate.projectId);
 
     if (!existing) {
       const item = insertMemoryItem(candidate, eventId);

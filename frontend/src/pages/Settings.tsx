@@ -600,7 +600,7 @@ function Settings() {
                       if (!res.ok) throw new Error(data.error || "Import failed");
                       showStatus(
                         "passport",
-                        `Imported: ${data.memories_created} memories, ${data.trips_created} trips (${data.memories_skipped} skipped)`,
+                        `Imported: ${data.memories_created} memories, ${data.projects_created} projects (${data.memories_skipped} skipped)`,
                         "success"
                       );
                     } catch (err) {
@@ -877,7 +877,7 @@ function Settings() {
                   { label: "Memory Items", key: "memory_items" },
                   { label: "Conversations", key: "conversations" },
                   { label: "Messages", key: "events" },
-                  { label: "Trips", key: "trips" },
+                  { label: "Projects", key: "projects" },
                   { label: "Links", key: "memory_links" },
                   { label: "Tags", key: "memory_tags" },
                   { label: "Audit Entries", key: "memory_audit_log" },
@@ -897,7 +897,7 @@ function Settings() {
           <div className="settings-section data-section">
             <h3>Data Management</h3>
             <p>
-              Remove all stored memories, conversations, and trips. Provider API keys are kept.
+              Remove all stored memories, conversations, and projects. Provider API keys are kept.
             </p>
             {!showClearConfirm ? (
               <button
@@ -909,7 +909,7 @@ function Settings() {
             ) : (
               <div className="clear-confirm-box">
                 <p className="clear-confirm-warning">
-                  This will permanently delete all memory items, conversations, trips,
+                  This will permanently delete all memory items, conversations, projects,
                   links, tags, snapshots, and webhooks. Provider API keys will be kept.
                 </p>
                 <p className="clear-confirm-instruction">

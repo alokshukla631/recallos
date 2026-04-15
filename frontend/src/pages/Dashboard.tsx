@@ -24,7 +24,7 @@ interface Stats {
   };
   timeline: { oldest_active: string | null; newest_active: string | null };
   links: number;
-  trips: number;
+  projects: number;
   conversations: number;
   pending_conflicts: number;
   pinned: number;
@@ -260,8 +260,8 @@ function Dashboard() {
           <span className="big-stat-label">Conversations</span>
         </div>
         <div className="big-stat-card">
-          <span className="big-stat-value">{stats.trips}</span>
-          <span className="big-stat-label">Trips</span>
+          <span className="big-stat-value">{stats.projects}</span>
+          <span className="big-stat-label">Projects</span>
         </div>
         <div className="big-stat-card">
           <span className="big-stat-value">{stats.links}</span>

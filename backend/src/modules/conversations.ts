@@ -3,7 +3,7 @@ import { queryOne, queryAll, runSql } from "../db/index.js";
 export interface Conversation {
   id: string;
   title: string | null;
-  trip_id: string | null;
+  project_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -28,7 +28,7 @@ export function generateTitle(message: string): string {
 export function ensureConversation(
   conversationId: string,
   firstMessage: string,
-  tripId?: string
+  projectId?: string
 ): Conversation {
   const existing = queryOne(
     "SELECT * FROM conversations WHERE id = ?",
@@ -46,8 +46,8 @@ export function ensureConversation(
 
   const title = generateTitle(firstMessage);
   runSql(
-    `INSERT INTO conversations (id, title, trip_id) VALUES (?, ?, ?)`,
-    [conversationId, title, tripId ?? null]
+    `INSERT INTO conversations (id, title, project_id) VALUES (?, ?, ?)`,
+    [conversationId, title, projectId ?? null]
   );
 
   return queryOne(

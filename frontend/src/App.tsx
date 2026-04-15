@@ -6,7 +6,7 @@ import {
   Brain,
   Bug,
   Settings as SettingsIcon,
-  Plane,
+  FolderKanban,
   ScanSearch,
   Link2,
   Sun,
@@ -24,7 +24,7 @@ import Links from "./pages/Links";
 import Timeline from "./pages/Timeline";
 import ContextDebug from "./pages/ContextDebug";
 import Settings from "./pages/Settings";
-import Trips from "./pages/Trips";
+import Projects from "./pages/Projects";
 import Scraper from "./pages/Scraper";
 import Health from "./pages/Health";
 import Graph from "./pages/Graph";
@@ -37,7 +37,7 @@ import NotificationBell from "./components/NotificationBell";
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/chat", label: "Chat", icon: MessageSquare },
-  { to: "/trips", label: "Trips", icon: Plane },
+  { to: "/projects", label: "Projects", icon: FolderKanban },
   { to: "/memory", label: "Memory", icon: Brain },
   { to: "/timeline", label: "Timeline", icon: Clock },
   { to: "/links", label: "Links", icon: Link2 },
@@ -164,7 +164,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/chat" element={<Chat />} />
-          <Route path="/trips" element={<Trips />} />
+          <Route path="/projects" element={<Projects />} />
           <Route path="/memory" element={<Memory />} />
           <Route path="/timeline" element={<Timeline />} />
           <Route path="/debug" element={<ContextDebug />} />

@@ -21,13 +21,13 @@ const API_SPEC = {
     },
     "/api/search": {
       get: {
-        summary: "Global search across memory, conversations, and trips",
+        summary: "Global search across memory, conversations, and projects",
         tags: ["System"],
         parameters: [
           { name: "q", in: "query", required: true, schema: { type: "string" }, description: "Search query (min 2 characters)" },
         ],
         responses: {
-          "200": { description: "Object with memory, conversations, and trips arrays" },
+          "200": { description: "Object with memory, conversations, and projects arrays" },
         },
       },
     },
@@ -46,7 +46,7 @@ const API_SPEC = {
                   message: { type: "string" },
                   provider: { type: "string", enum: ["openai", "anthropic", "gemini", "ollama"] },
                   conversation_id: { type: "string" },
-                  trip_id: { type: "string" },
+                  project_id: { type: "string" },
                 },
               },
             },
@@ -72,7 +72,7 @@ const API_SPEC = {
                   message: { type: "string" },
                   provider: { type: "string", enum: ["openai", "anthropic", "gemini", "ollama"] },
                   conversation_id: { type: "string" },
-                  trip_id: { type: "string" },
+                  project_id: { type: "string" },
                 },
               },
             },
@@ -95,8 +95,8 @@ const API_SPEC = {
         parameters: [
           { name: "status", in: "query", schema: { type: "string", enum: ["active", "stale", "superseded", "all"] } },
           { name: "type", in: "query", schema: { type: "string", enum: ["preference", "constraint", "fact", "goal", "override", "all"] } },
-          { name: "scope", in: "query", schema: { type: "string", enum: ["global", "trip", "all"] } },
-          { name: "trip_id", in: "query", schema: { type: "string" } },
+          { name: "scope", in: "query", schema: { type: "string", enum: ["global", "domain", "project", "session", "all"] } },
+          { name: "project_id", in: "query", schema: { type: "string" } },
         ],
         responses: { "200": { description: "Array of memory items" } },
       },
@@ -177,15 +177,15 @@ const API_SPEC = {
         responses: { "200": { description: "Array of audit entries" } },
       },
     },
-    "/api/trips": {
+    "/api/projects": {
       get: {
-        summary: "List all trips",
-        tags: ["Trips"],
-        responses: { "200": { description: "Array of trips with conversation/memory counts" } },
+        summary: "List all projects",
+        tags: ["Projects"],
+        responses: { "200": { description: "Array of projects with conversation/memory counts" } },
       },
       post: {
-        summary: "Create a trip",
-        tags: ["Trips"],
+        summary: "Create a project",
+        tags: ["Projects"],
         requestBody: {
           content: {
             "application/json": {
@@ -194,7 +194,7 @@ const API_SPEC = {
                 required: ["name"],
                 properties: {
                   name: { type: "string" },
-                  destination: { type: "string" },
+                  description: { type: "string" },
                   start_date: { type: "string" },
                   end_date: { type: "string" },
                   status: { type: "string", enum: ["planning", "active", "completed", "cancelled"] },
@@ -204,13 +204,13 @@ const API_SPEC = {
             },
           },
         },
-        responses: { "201": { description: "Created trip" } },
+        responses: { "201": { description: "Created project" } },
       },
     },
-    "/api/trips/{id}": {
-      get: { summary: "Get a trip", tags: ["Trips"], responses: { "200": { description: "Trip object" } } },
-      patch: { summary: "Update a trip", tags: ["Trips"], responses: { "200": { description: "Updated trip" } } },
-      delete: { summary: "Delete a trip", tags: ["Trips"], responses: { "200": { description: "Confirmation" } } },
+    "/api/projects/{id}": {
+      get: { summary: "Get a project", tags: ["Projects"], responses: { "200": { description: "Project object" } } },
+      patch: { summary: "Update a project", tags: ["Projects"], responses: { "200": { description: "Updated project" } } },
+      delete: { summary: "Delete a project", tags: ["Projects"], responses: { "200": { description: "Confirmation" } } },
     },
     "/api/passport/export": {
       get: {
@@ -262,7 +262,7 @@ const API_SPEC = {
         summary: "Bulk import memory from natural-language statements",
         tags: ["Memory"],
         requestBody: {
-          content: { "application/json": { schema: { type: "object", required: ["statements"], properties: { statements: { type: "array", items: { type: "string" } }, trip_id: { type: "string" } } } } },
+          content: { "application/json": { schema: { type: "object", required: ["statements"], properties: { statements: { type: "array", items: { type: "string" } }, project_id: { type: "string" } } } } },
         },
         responses: { "200": { description: "Import results" } },
       },
@@ -486,7 +486,7 @@ const API_SPEC = {
                         key: { type: "string" },
                         value: { type: "string" },
                         type: { type: "string", enum: ["preference", "constraint", "fact", "goal", "override"] },
-                        scope: { type: "string", enum: ["global", "domain", "trip", "project", "session"] },
+                        scope: { type: "string", enum: ["global", "domain", "project", "session"] },
                         domain: { type: "string" },
                         confidence: { type: "number", minimum: 0, maximum: 1 },
                       },

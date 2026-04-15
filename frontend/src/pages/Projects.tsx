@@ -1,15 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
-import "./Trips.css";
+import "./Projects.css";
 
-type TripStatus = "planning" | "active" | "completed" | "cancelled";
+type ProjectStatus = "planning" | "active" | "completed" | "cancelled";
 
-interface Trip {
+interface Project {
   id: string;
   name: string;
-  destination: string | null;
+  description: string | null;
   start_date: string | null;
   end_date: string | null;
-  status: TripStatus;
+  status: ProjectStatus;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -19,38 +19,38 @@ interface Trip {
 
 const EMPTY_FORM = {
   name: "",
-  destination: "",
+  description: "",
   start_date: "",
   end_date: "",
-  status: "planning" as TripStatus,
+  status: "planning" as ProjectStatus,
   notes: "",
 };
 
-function Trips() {
-  const [trips, setTrips] = useState<Trip[]>([]);
+function Projects() {
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchTrips = useCallback(async () => {
+  const fetchProjects = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/trips");
-      if (!res.ok) throw new Error("Failed to load trips");
-      const data: Trip[] = await res.json();
-      setTrips(data);
+      const res = await fetch("/api/projects");
+      if (!res.ok) throw new Error("Failed to load projects");
+      const data: Project[] = await res.json();
+      setProjects(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load trips");
+      setError(err instanceof Error ? err.message : "Failed to load projects");
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchTrips();
-  }, [fetchTrips]);
+    fetchProjects();
+  }, [fetchProjects]);
 
   function openNewForm() {
     setEditingId(null);
@@ -59,15 +59,15 @@ function Trips() {
     setError(null);
   }
 
-  function openEditForm(trip: Trip) {
-    setEditingId(trip.id);
+  function openEditForm(project: Project) {
+    setEditingId(project.id);
     setForm({
-      name: trip.name,
-      destination: trip.destination ?? "",
-      start_date: trip.start_date ?? "",
-      end_date: trip.end_date ?? "",
-      status: trip.status,
-      notes: trip.notes ?? "",
+      name: project.name,
+      description: project.description ?? "",
+      start_date: project.start_date ?? "",
+      end_date: project.end_date ?? "",
+      status: project.status,
+      notes: project.notes ?? "",
     });
     setShowForm(true);
     setError(null);
@@ -80,7 +80,7 @@ function Trips() {
     setError(null);
   }
 
-  async function saveTrip(e: React.FormEvent) {
+  async function saveProject(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
@@ -91,7 +91,7 @@ function Trips() {
 
     const body = {
       name: form.name.trim(),
-      destination: form.destination.trim() || null,
+      description: form.description.trim() || null,
       start_date: form.start_date || null,
       end_date: form.end_date || null,
       status: form.status,
@@ -99,7 +99,7 @@ function Trips() {
     };
 
     try {
-      const url = editingId ? `/api/trips/${editingId}` : "/api/trips";
+      const url = editingId ? `/api/projects/${editingId}` : "/api/projects";
       const method = editingId ? "PATCH" : "POST";
       const res = await fetch(url, {
         method,
@@ -108,32 +108,29 @@ function Trips() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to save trip");
+        throw new Error(data.error || "Failed to save project");
       }
-      await fetchTrips();
+      await fetchProjects();
       closeForm();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save trip");
+      setError(err instanceof Error ? err.message : "Failed to save project");
     }
   }
 
-  async function removeTrip(id: string) {
-    if (!confirm("Delete this trip? Conversations and memories linked to it will be kept but unlinked.")) return;
+  async function removeProject(id: string) {
+    if (!confirm("Delete this project? Conversations and memories linked to it will be kept but unlinked.")) return;
     try {
-      const res = await fetch(`/api/trips/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete trip");
-      fetchTrips();
+      const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete project");
+      fetchProjects();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete trip");
+      setError(err instanceof Error ? err.message : "Failed to delete project");
     }
   }
 
   function formatDate(date: string | null) {
-    if (!date) return "—";
+    if (!date) return "\u2014";
     try {
-      // Parse as local date to avoid UTC midnight rolling back a day
-      // in negative-UTC-offset timezones (e.g. "2026-07-10" parsed as
-      // UTC midnight becomes July 9 in UTC-5).
       const [y, m, d] = date.split("-").map(Number);
       return new Date(y, m - 1, d).toLocaleDateString();
     } catch {
@@ -143,29 +140,29 @@ function Trips() {
 
   if (loading) {
     return (
-      <div className="trips-page">
-        <div className="trips-header">
-          <h2>Trips</h2>
+      <div className="projects-page">
+        <div className="projects-header">
+          <h2>Projects</h2>
         </div>
-        <div className="trips-empty">Loading...</div>
+        <div className="projects-empty">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="trips-page">
-      <div className="trips-header">
-        <h2>Trips</h2>
-        <button className="trips-new-btn" onClick={openNewForm}>
-          + New Trip
+    <div className="projects-page">
+      <div className="projects-header">
+        <h2>Projects</h2>
+        <button className="projects-new-btn" onClick={openNewForm}>
+          + New Project
         </button>
       </div>
 
-      {error && <div className="trips-error">{error}</div>}
+      {error && <div className="projects-error">{error}</div>}
 
       {showForm && (
-        <form className="trip-form" onSubmit={saveTrip}>
-          <h3>{editingId ? "Edit Trip" : "New Trip"}</h3>
+        <form className="project-form" onSubmit={saveProject}>
+          <h3>{editingId ? "Edit Project" : "New Project"}</h3>
           <div className="form-row">
             <label>
               Name *
@@ -173,19 +170,19 @@ function Trips() {
                 type="text"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Summer Japan trip"
+                placeholder="My Project"
                 required
               />
             </label>
           </div>
           <div className="form-row">
             <label>
-              Destination
+              Description
               <input
                 type="text"
-                value={form.destination}
-                onChange={(e) => setForm({ ...form, destination: e.target.value })}
-                placeholder="Tokyo, Japan"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                placeholder="Brief description of the project"
               />
             </label>
           </div>
@@ -212,7 +209,7 @@ function Trips() {
               Status
               <select
                 value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value as TripStatus })}
+                onChange={(e) => setForm({ ...form, status: e.target.value as ProjectStatus })}
               >
                 <option value="planning">Planning</option>
                 <option value="active">Active</option>
@@ -227,7 +224,7 @@ function Trips() {
               <textarea
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                placeholder="Any notes about this trip..."
+                placeholder="Any notes about this project..."
                 rows={3}
               />
             </label>
@@ -237,38 +234,38 @@ function Trips() {
               Cancel
             </button>
             <button type="submit" className="btn-primary">
-              {editingId ? "Save Changes" : "Create Trip"}
+              {editingId ? "Save Changes" : "Create Project"}
             </button>
           </div>
         </form>
       )}
 
-      {trips.length === 0 ? (
-        <div className="trips-empty">
-          No trips yet. Create one to scope memories and conversations to a specific trip.
+      {projects.length === 0 ? (
+        <div className="projects-empty">
+          No projects yet. Create one to scope memories and conversations to a specific project.
         </div>
       ) : (
-        <div className="trips-grid">
-          {trips.map((trip) => (
-            <div key={trip.id} className={`trip-card status-${trip.status}`}>
-              <div className="trip-card-header">
-                <h3>{trip.name}</h3>
-                <span className={`status-badge status-${trip.status}`}>{trip.status}</span>
+        <div className="projects-grid">
+          {projects.map((project) => (
+            <div key={project.id} className={`project-card status-${project.status}`}>
+              <div className="project-card-header">
+                <h3>{project.name}</h3>
+                <span className={`status-badge status-${project.status}`}>{project.status}</span>
               </div>
-              {trip.destination && <div className="trip-destination">{trip.destination}</div>}
-              <div className="trip-dates">
-                {formatDate(trip.start_date)} → {formatDate(trip.end_date)}
+              {project.description && <div className="project-description">{project.description}</div>}
+              <div className="project-dates">
+                {formatDate(project.start_date)} &rarr; {formatDate(project.end_date)}
               </div>
-              {trip.notes && <div className="trip-notes">{trip.notes}</div>}
-              <div className="trip-stats">
-                <span>{trip.conversation_count ?? 0} conversations</span>
-                <span>{trip.memory_count ?? 0} memories</span>
+              {project.notes && <div className="project-notes">{project.notes}</div>}
+              <div className="project-stats">
+                <span>{project.conversation_count ?? 0} conversations</span>
+                <span>{project.memory_count ?? 0} memories</span>
               </div>
-              <div className="trip-actions">
-                <button className="btn-link" onClick={() => openEditForm(trip)}>
+              <div className="project-actions">
+                <button className="btn-link" onClick={() => openEditForm(project)}>
                   Edit
                 </button>
-                <button className="btn-link danger" onClick={() => removeTrip(trip.id)}>
+                <button className="btn-link danger" onClick={() => removeProject(project.id)}>
                   Delete
                 </button>
               </div>
@@ -280,4 +277,4 @@ function Trips() {
   );
 }
 
-export default Trips;
+export default Projects;

@@ -45,7 +45,7 @@ router.use((_req, _res, next) => {
 // GET / - list memory items with optional filters
 router.get("/", (req: Request, res: Response) => {
   try {
-    const { scope, type, status = "active", trip_id } = req.query;
+    const { scope, type, status = "active", project_id } = req.query;
 
     let sql = "SELECT * FROM memory_items WHERE 1=1";
     const params: unknown[] = [];
@@ -62,9 +62,9 @@ router.get("/", (req: Request, res: Response) => {
       sql += " AND type = ?";
       params.push(type);
     }
-    if (trip_id) {
-      sql += " AND trip_id = ?";
-      params.push(trip_id);
+    if (project_id) {
+      sql += " AND project_id = ?";
+      params.push(project_id);
     }
 
     sql += " ORDER BY created_at DESC";
@@ -78,7 +78,7 @@ router.get("/", (req: Request, res: Response) => {
 // POST / - create a memory item directly
 router.post("/", (req: Request, res: Response) => {
   try {
-    const { key, type, value, scope, domain, confidence, trip_id } = req.body;
+    const { key, type, value, scope, domain, confidence, project_id } = req.body;
 
     if (!key || typeof key !== "string" || !key.trim()) {
       res.status(400).json({ error: "key is required" });
@@ -91,7 +91,7 @@ router.post("/", (req: Request, res: Response) => {
 
     const validTypes = ["preference", "constraint", "fact", "goal", "override"];
     const itemType = validTypes.includes(type) ? type : "fact";
-    const validScopes = ["global", "trip", "domain", "project", "session"];
+    const validScopes = ["global", "domain", "project", "session"];
     const itemScope = validScopes.includes(scope) ? scope : "global";
     const itemConfidence = typeof confidence === "number" ? Math.max(0, Math.min(1, confidence)) : 0.8;
 
@@ -102,9 +102,9 @@ router.post("/", (req: Request, res: Response) => {
     const itemDomain = domain || detectDomain(key.trim(), value.trim());
 
     runSql(
-      `INSERT INTO memory_items (id, key, type, value, scope, domain, trip_id, confidence, authority, status, last_confirmed_at, created_at)
+      `INSERT INTO memory_items (id, key, type, value, scope, domain, project_id, confidence, authority, status, last_confirmed_at, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'explicit', 'active', ?, ?)`,
-      [id, key.trim(), itemType, value.trim(), itemScope, itemDomain, trip_id || null, itemConfidence, now, now]
+      [id, key.trim(), itemType, value.trim(), itemScope, itemDomain, project_id || null, itemConfidence, now, now]
     );
 
     logAudit(id, "created", "Manually created by user");
@@ -240,8 +240,8 @@ router.get("/stats", (_req: Request, res: Response) => {
     ) as any;
 
     // Trips count
-    const tripsCount = queryOne(
-      "SELECT COUNT(*) as count FROM trips"
+    const projectsCount = queryOne(
+      "SELECT COUNT(*) as count FROM projects"
     ) as any;
 
     // Conversations count
@@ -280,7 +280,7 @@ router.get("/stats", (_req: Request, res: Response) => {
         newest_active: newest?.created_at || null,
       },
       links: linksCount?.count || 0,
-      trips: tripsCount?.count || 0,
+      projects: projectsCount?.count || 0,
       conversations: convsCount?.count || 0,
       pending_conflicts: pendingConflictsCount,
       pinned: pinnedCount?.count || 0,
@@ -940,7 +940,7 @@ router.post("/session/cleanup", (req: Request, res: Response) => {
 // POST /bulk - import memory from an array of text statements
 router.post("/bulk", async (req: Request, res: Response) => {
   try {
-    const { statements, trip_id } = req.body;
+    const { statements, project_id } = req.body;
     if (!Array.isArray(statements) || statements.length === 0) {
       res.status(400).json({ error: "statements must be a non-empty array of strings" });
       return;
@@ -953,7 +953,7 @@ router.post("/bulk", async (req: Request, res: Response) => {
     for (const text of statements) {
       if (typeof text !== "string" || text.trim().length < 5) continue;
       const eventId = "bulk-" + Date.now().toString(36);
-      const candidates = await extractMemory(text.trim(), eventId, trip_id);
+      const candidates = await extractMemory(text.trim(), eventId, project_id);
       if (candidates.length > 0) {
         const result = await reconcileMemory(candidates, eventId);
         totalExtracted += candidates.length;
@@ -1047,7 +1047,7 @@ router.post("/import", (req: Request, res: Response) => {
       }
 
       const validTypes = ["preference", "constraint", "fact", "goal", "override"];
-      const validScopes = ["global", "domain", "trip", "project", "session"];
+      const validScopes = ["global", "domain", "project", "session"];
       const itemType = validTypes.includes(type) ? type : "fact";
       const itemScope = validScopes.includes(scope) ? scope : "global";
       const itemConfidence = typeof confidence === "number" ? Math.min(1, Math.max(0, confidence)) : 0.8;

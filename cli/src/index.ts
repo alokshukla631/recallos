@@ -7,7 +7,7 @@ const program = new Command();
 
 program
   .name("recallos")
-  .description("RecallOS CLI - manage memory, trips, and chat from the terminal")
+  .description("RecallOS CLI - manage memory, projects, and chat from the terminal")
   .version("0.1.0");
 
 // ── Health ──────────────────────────────────────────────────────────────────
@@ -29,7 +29,7 @@ program
 
 program
   .command("search <query>")
-  .description("Search across memory, conversations, and trips")
+  .description("Search across memory, conversations, and projects")
   .action(async (query) => {
     const data = await get(`/api/search?q=${encodeURIComponent(query)}`);
 
@@ -47,15 +47,15 @@ program
       }
     }
 
-    if (data.trips.length > 0) {
-      console.log(`\n  Trips (${data.trips.length}):\n`);
-      for (const trip of data.trips) {
-        const dest = trip.destination ? ` - ${trip.destination}` : "";
-        console.log(`  ${trip.name}${dest} [${trip.status}]`);
+    if (data.projects.length > 0) {
+      console.log(`\n  Projects (${data.projects.length}):\n`);
+      for (const project of data.projects) {
+        const desc = project.description ? ` - ${project.description}` : "";
+        console.log(`  ${project.name}${desc} [${project.status}]`);
       }
     }
 
-    const total = data.memory.length + data.conversations.length + data.trips.length;
+    const total = data.memory.length + data.conversations.length + data.projects.length;
     if (total === 0) {
       console.log(`No results found for "${query}".`);
     }
@@ -71,7 +71,7 @@ memory
   .description("List active memory items")
   .option("-s, --status <status>", "Filter by status (active, stale, superseded, all)", "active")
   .option("-t, --type <type>", "Filter by type (preference, constraint, fact, goal, override)")
-  .option("--scope <scope>", "Filter by scope (global, trip)")
+  .option("--scope <scope>", "Filter by scope (global, project)")
   .action(async (opts) => {
     const params = new URLSearchParams();
     if (opts.status) params.set("status", opts.status);
@@ -96,7 +96,7 @@ memory
   .command("create <key> <value>")
   .description("Create a memory item directly")
   .option("-t, --type <type>", "Type: fact, preference, constraint, goal, override", "fact")
-  .option("-s, --scope <scope>", "Scope: global, domain, project, trip, session", "global")
+  .option("-s, --scope <scope>", "Scope: global, domain, project, session", "global")
   .option("-d, --domain <domain>", "Domain (e.g. travel, coding, health)")
   .action(async (key, value, opts) => {
     const body: any = { key, value, type: opts.type, scope: opts.scope };
@@ -170,7 +170,7 @@ memory
 memory
   .command("bulk <file>")
   .description("Bulk import memory from a file (one statement per line)")
-  .option("-t, --trip <id>", "Scope all imported memory to a trip")
+  .option("-t, --project <id>", "Scope all imported memory to a project")
   .action(async (file, opts) => {
     const content = fs.readFileSync(file, "utf-8");
     const statements = content.split("\n").map((l) => l.trim()).filter((l) => l.length > 5);
@@ -180,7 +180,7 @@ memory
     }
     console.log(`Importing ${statements.length} statements...`);
     const body: any = { statements };
-    if (opts.trip) body.trip_id = opts.trip;
+    if (opts.project) body.project_id = opts.project;
     const result = await post("/api/memory/bulk", body);
     console.log(`Done: ${result.extracted} extracted, ${result.added} added, ${result.duplicates} duplicates`);
   });
@@ -449,52 +449,52 @@ memory
     console.log(`\n${items.length} item(s) in trash. Use "recallos memory restore <id>" to recover.`);
   });
 
-// ── Trips ───────────────────────────────────────────────────────────────────
+// ── Projects ───────────────────────────────────────────────────────────────
 
-const trips = program.command("trips").description("Manage trips");
+const projects = program.command("projects").description("Manage projects");
 
-trips
+projects
   .command("list")
-  .description("List all trips")
+  .description("List all projects")
   .action(async () => {
-    const list = await get("/api/trips");
+    const list = await get("/api/projects");
     if (list.length === 0) {
-      console.log("No trips.");
+      console.log("No projects.");
       return;
     }
-    console.log(`\n  ${list.length} trips:\n`);
+    console.log(`\n  ${list.length} projects:\n`);
     for (const t of list) {
       const dates = [t.start_date, t.end_date].filter(Boolean).join(" to ") || "no dates";
       console.log(`  ${t.name}  [${t.status}]`);
-      if (t.destination) console.log(`    Destination: ${t.destination}`);
+      if (t.description) console.log(`    Description: ${t.description}`);
       console.log(`    ${dates}`);
       console.log(`    Conversations: ${t.conversation_count ?? 0}  Memories: ${t.memory_count ?? 0}`);
       console.log();
     }
   });
 
-trips
+projects
   .command("create <name>")
-  .description("Create a new trip")
-  .option("-d, --destination <dest>", "Destination")
+  .description("Create a new project")
+  .option("-d, --description <desc>", "Description")
   .option("--start <date>", "Start date (YYYY-MM-DD)")
   .option("--end <date>", "End date (YYYY-MM-DD)")
   .action(async (name, opts) => {
-    const trip = await post("/api/trips", {
+    const project = await post("/api/projects", {
       name,
-      destination: opts.destination,
+      description: opts.description,
       start_date: opts.start,
       end_date: opts.end,
     });
-    console.log(`Trip created: ${trip.name} (${trip.id})`);
+    console.log(`Project created: ${project.name} (${project.id})`);
   });
 
-trips
+projects
   .command("delete <id>")
-  .description("Delete a trip")
+  .description("Delete a project")
   .action(async (id) => {
-    await del(`/api/trips/${id}`);
-    console.log("Trip deleted.");
+    await del(`/api/projects/${id}`);
+    console.log("Project deleted.");
   });
 
 // ── Passport ────────────────────────────────────────────────────────────────
@@ -510,7 +510,7 @@ passport
     const data = await res.json();
     const outPath = file || `recallos-passport-${new Date().toISOString().slice(0, 10)}.json`;
     fs.writeFileSync(outPath, JSON.stringify(data, null, 2));
-    console.log(`Exported ${data.stats.memory_items} memories, ${data.stats.trips} trips to ${outPath}`);
+    console.log(`Exported ${data.stats.memory_items} memories, ${data.stats.projects} projects to ${outPath}`);
   });
 
 passport
@@ -534,7 +534,7 @@ passport
     const result = await post("/api/passport/import", passport);
     console.log(`Import complete:`);
     console.log(`  Memories: ${result.memories_created} created, ${result.memories_skipped} skipped`);
-    console.log(`  Trips: ${result.trips_created} created, ${result.trips_skipped} skipped`);
+    console.log(`  Projects: ${result.projects_created} created, ${result.projects_skipped} skipped`);
   });
 
 // ── Providers ───────────────────────────────────────────────────────────────
@@ -711,7 +711,7 @@ settings
   .action(async (opts) => {
     if (!opts.yes) {
       console.log("\n  WARNING: This will permanently delete all memory items, conversations,");
-      console.log("  trips, links, tags, snapshots, and webhooks.");
+      console.log("  projects, links, tags, snapshots, and webhooks.");
       console.log("  Provider API keys will be kept.\n");
       console.log("  Run with --yes to confirm.\n");
       return;
@@ -844,7 +844,7 @@ program
   .description("Send a single message and print the response")
   .option("-p, --provider <provider>", "Provider to use (openai, anthropic)")
   .option("-c, --conversation <id>", "Continue an existing conversation")
-  .option("-t, --trip <id>", "Scope to a trip")
+  .option("-t, --project <id>", "Scope to a project")
   .action(async (message, opts) => {
     let provider = opts.provider;
     if (!provider) {
@@ -859,7 +859,7 @@ program
 
     const body: any = { message, provider };
     if (opts.conversation) body.conversation_id = opts.conversation;
-    if (opts.trip) body.trip_id = opts.trip;
+    if (opts.project) body.project_id = opts.project;
 
     const data = await post("/api/chat", body);
     console.log(`\n${data.assistant_message?.content ?? "(no response)"}\n`);

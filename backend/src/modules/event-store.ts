@@ -4,7 +4,7 @@ import { queryAll, queryOne, runSql } from "../db/index.js";
 export interface Event {
   id: string;
   conversation_id: string;
-  trip_id: string | null;
+  project_id: string | null;
   role: "user" | "assistant" | "system";
   content: string;
   provider: string | null;
@@ -16,14 +16,14 @@ export async function storeEvent(
   role: "user" | "assistant" | "system",
   content: string,
   provider: string | null,
-  tripId?: string
+  projectId?: string
 ): Promise<Event> {
   const id = uuidv4();
 
   runSql(
-    `INSERT INTO events (id, conversation_id, trip_id, role, content, provider)
+    `INSERT INTO events (id, conversation_id, project_id, role, content, provider)
      VALUES (?, ?, ?, ?, ?, ?)`,
-    [id, conversationId, tripId ?? null, role, content, provider ?? null]
+    [id, conversationId, projectId ?? null, role, content, provider ?? null]
   );
 
   return queryOne("SELECT * FROM events WHERE id = ?", [id]) as unknown as Event;

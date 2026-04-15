@@ -18,7 +18,7 @@ import { extractEntities } from "../modules/entity-extractor.js";
 
 interface ScenarioStep {
   user: string;
-  tripId?: string;
+  projectId?: string;
   expect: {
     memoryAddedMin?: number;
     memoryUpdatedMin?: number;
@@ -156,12 +156,12 @@ async function runStep(
     "user",
     step.user,
     "bench",
-    step.tripId
+    step.projectId
   );
 
-  const candidates = await extractMemory(step.user, userEvent.id, step.tripId);
+  const candidates = await extractMemory(step.user, userEvent.id, step.projectId);
   const reconcile = await reconcileMemory(candidates, userEvent.id);
-  const compiled = await compileContext(conversationId, step.user, step.tripId);
+  const compiled = await compileContext(conversationId, step.user, step.projectId);
 
   const entities = extractEntities(step.user);
   const entityTypes = Array.from(new Set(entities.map((e) => e.type)));

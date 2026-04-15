@@ -38,7 +38,7 @@ class RecallOS:
     # -- Global search --------------------------------------------------------
 
     def search(self, query: str) -> dict:
-        """Search across memory, conversations, and trips."""
+        """Search across memory, conversations, and projects."""
         r = self._client.get("/api/search", params={"q": query})
         r.raise_for_status()
         return r.json()
@@ -50,7 +50,7 @@ class RecallOS:
         status: str = "active",
         type: Optional[str] = None,
         scope: Optional[str] = None,
-        trip_id: Optional[str] = None,
+        project_id: Optional[str] = None,
     ) -> list[dict]:
         """List memory items with optional filters."""
         params: dict[str, str] = {"status": status}
@@ -58,8 +58,8 @@ class RecallOS:
             params["type"] = type
         if scope:
             params["scope"] = scope
-        if trip_id:
-            params["trip_id"] = trip_id
+        if project_id:
+            params["project_id"] = project_id
         r = self._client.get("/api/memory", params=params)
         r.raise_for_status()
         return r.json()
@@ -123,22 +123,22 @@ class RecallOS:
 
     # -- Bulk import ----------------------------------------------------------
 
-    def bulk_import(self, statements: list[str], trip_id: Optional[str] = None) -> dict:
+    def bulk_import(self, statements: list[str], project_id: Optional[str] = None) -> dict:
         """Import memory from a list of natural-language statements."""
         body: dict[str, Any] = {"statements": statements}
-        if trip_id:
-            body["trip_id"] = trip_id
+        if project_id:
+            body["project_id"] = project_id
         r = self._client.post("/api/memory/bulk", json=body)
         r.raise_for_status()
         return r.json()
 
     # -- Context --------------------------------------------------------------
 
-    def get_context(self, message: str, trip_id: Optional[str] = None) -> dict:
+    def get_context(self, message: str, project_id: Optional[str] = None) -> dict:
         """Compile context for a message (without calling a provider)."""
         body: dict[str, Any] = {"message": message}
-        if trip_id:
-            body["trip_id"] = trip_id
+        if project_id:
+            body["project_id"] = project_id
         r = self._client.post("/api/context/benchmark", json=body)
         r.raise_for_status()
         return r.json()
@@ -150,61 +150,61 @@ class RecallOS:
         message: str,
         provider: str,
         conversation_id: Optional[str] = None,
-        trip_id: Optional[str] = None,
+        project_id: Optional[str] = None,
     ) -> dict:
         """Send a chat message through the full pipeline."""
         body: dict[str, Any] = {"message": message, "provider": provider}
         if conversation_id:
             body["conversation_id"] = conversation_id
-        if trip_id:
-            body["trip_id"] = trip_id
+        if project_id:
+            body["project_id"] = project_id
         r = self._client.post("/api/chat", json=body)
         r.raise_for_status()
         return r.json()
 
-    # -- Trips ----------------------------------------------------------------
+    # -- Projects -------------------------------------------------------------
 
-    def list_trips(self) -> list[dict]:
-        """List all trips."""
-        r = self._client.get("/api/trips")
+    def list_projects(self) -> list[dict]:
+        """List all projects."""
+        r = self._client.get("/api/projects")
         r.raise_for_status()
         return r.json()
 
-    def create_trip(
+    def create_project(
         self,
         name: str,
-        destination: Optional[str] = None,
+        description: Optional[str] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> dict:
-        """Create a new trip."""
+        """Create a new project."""
         body: dict[str, Any] = {"name": name}
-        if destination:
-            body["destination"] = destination
+        if description:
+            body["description"] = description
         if start_date:
             body["start_date"] = start_date
         if end_date:
             body["end_date"] = end_date
-        r = self._client.post("/api/trips", json=body)
+        r = self._client.post("/api/projects", json=body)
         r.raise_for_status()
         return r.json()
 
-    def delete_trip(self, trip_id: str) -> dict:
-        """Delete a trip."""
-        r = self._client.delete(f"/api/trips/{trip_id}")
+    def delete_project(self, project_id: str) -> dict:
+        """Delete a project."""
+        r = self._client.delete(f"/api/projects/{project_id}")
         r.raise_for_status()
         return r.json()
 
     # -- Passport -------------------------------------------------------------
 
     def export_passport(self) -> dict:
-        """Export all memory and trips as a portable JSON passport."""
+        """Export all memory and projects as a portable JSON passport."""
         r = self._client.get("/api/passport/export")
         r.raise_for_status()
         return r.json()
 
     def import_passport(self, passport: dict) -> dict:
-        """Import memory and trips from a passport JSON."""
+        """Import memory and projects from a passport JSON."""
         r = self._client.post("/api/passport/import", json=passport)
         r.raise_for_status()
         return r.json()
@@ -553,7 +553,7 @@ class AsyncRecallOS:
         return r.json()
 
     async def search(self, query: str) -> dict:
-        """Search across memory, conversations, and trips."""
+        """Search across memory, conversations, and projects."""
         r = await self._client.get("/api/search", params={"q": query})
         r.raise_for_status()
         return r.json()
@@ -597,10 +597,10 @@ class AsyncRecallOS:
         r.raise_for_status()
         return r.json()
 
-    async def get_context(self, message: str, trip_id: Optional[str] = None) -> dict:
+    async def get_context(self, message: str, project_id: Optional[str] = None) -> dict:
         body: dict[str, Any] = {"message": message}
-        if trip_id:
-            body["trip_id"] = trip_id
+        if project_id:
+            body["project_id"] = project_id
         r = await self._client.post("/api/context/benchmark", json=body)
         r.raise_for_status()
         return r.json()
@@ -610,19 +610,19 @@ class AsyncRecallOS:
         message: str,
         provider: str,
         conversation_id: Optional[str] = None,
-        trip_id: Optional[str] = None,
+        project_id: Optional[str] = None,
     ) -> dict:
         body: dict[str, Any] = {"message": message, "provider": provider}
         if conversation_id:
             body["conversation_id"] = conversation_id
-        if trip_id:
-            body["trip_id"] = trip_id
+        if project_id:
+            body["project_id"] = project_id
         r = await self._client.post("/api/chat", json=body)
         r.raise_for_status()
         return r.json()
 
-    async def list_trips(self) -> list[dict]:
-        r = await self._client.get("/api/trips")
+    async def list_projects(self) -> list[dict]:
+        r = await self._client.get("/api/projects")
         r.raise_for_status()
         return r.json()
 
@@ -689,10 +689,10 @@ class AsyncRecallOS:
         r.raise_for_status()
         return r.text
 
-    async def bulk_import(self, statements: list[str], trip_id: Optional[str] = None) -> dict:
+    async def bulk_import(self, statements: list[str], project_id: Optional[str] = None) -> dict:
         body: dict[str, Any] = {"statements": statements}
-        if trip_id:
-            body["trip_id"] = trip_id
+        if project_id:
+            body["project_id"] = project_id
         r = await self._client.post("/api/memory/bulk", json=body)
         r.raise_for_status()
         return r.json()

@@ -28,7 +28,7 @@ function getSystemPrompt(): string {
 // POST / - the full chat pipeline
 router.post("/", async (req: Request, res: Response) => {
   try {
-    const { message, provider, conversation_id, trip_id } = req.body;
+    const { message, provider, conversation_id, project_id } = req.body;
 
     if (!message || !provider) {
       res.status(400).json({ error: "message and provider are required" });
@@ -54,15 +54,15 @@ router.post("/", async (req: Request, res: Response) => {
     const convId = conversation_id || uuidv4();
 
     // Step 1: Ensure the conversation row exists (creates on first message)
-    ensureConversation(convId, message, trip_id);
+    ensureConversation(convId, message, project_id);
 
     // Step 2: Store user event
     timer.begin("store_event");
-    const userEvent = await storeEvent(convId, "user", message, provider, trip_id);
+    const userEvent = await storeEvent(convId, "user", message, provider, project_id);
 
     // Step 3: Extract memory candidates from the user message
     timer.begin("extraction");
-    const candidates = await extractMemory(message, userEvent.id, trip_id);
+    const candidates = await extractMemory(message, userEvent.id, project_id);
 
     // Step 4: Reconcile memory (conflict detection, supersession)
     timer.begin("reconciliation");
@@ -70,7 +70,7 @@ router.post("/", async (req: Request, res: Response) => {
 
     // Step 5: Compile context packet
     timer.begin("context_compilation");
-    const compiled = await compileContext(convId, message, trip_id);
+    const compiled = await compileContext(convId, message, project_id);
 
     // Step 6: Build message history for the provider
     timer.begin("history_fetch");
@@ -96,7 +96,7 @@ router.post("/", async (req: Request, res: Response) => {
       "assistant",
       providerResponse.content,
       provider,
-      trip_id
+      project_id
     );
 
     // Step 9: Save context snapshot (include traces in rationale)
@@ -147,7 +147,7 @@ router.post("/", async (req: Request, res: Response) => {
 
 // POST /stream - streaming version of the chat pipeline (SSE)
 router.post("/stream", async (req: Request, res: Response) => {
-  const { message, provider, conversation_id, trip_id } = req.body;
+  const { message, provider, conversation_id, project_id } = req.body;
 
   if (!message || !provider) {
     res.status(400).json({ error: "message and provider are required" });
@@ -186,15 +186,15 @@ router.post("/stream", async (req: Request, res: Response) => {
     const timer = new PerfTimer();
     const convId = conversation_id || uuidv4();
 
-    ensureConversation(convId, message, trip_id);
+    ensureConversation(convId, message, project_id);
 
     send("conversation", { conversation_id: convId });
 
     timer.begin("store_event");
-    const userEvent = await storeEvent(convId, "user", message, provider, trip_id);
+    const userEvent = await storeEvent(convId, "user", message, provider, project_id);
 
     timer.begin("extraction");
-    const candidates = await extractMemory(message, userEvent.id, trip_id);
+    const candidates = await extractMemory(message, userEvent.id, project_id);
 
     timer.begin("reconciliation");
     const reconcileResult = await reconcileMemory(candidates, userEvent.id);
@@ -208,7 +208,7 @@ router.post("/stream", async (req: Request, res: Response) => {
     });
 
     timer.begin("context_compilation");
-    const compiled = await compileContext(convId, message, trip_id);
+    const compiled = await compileContext(convId, message, project_id);
 
     send("context", {
       included_count: compiled.includedIds.length,
@@ -253,7 +253,7 @@ router.post("/stream", async (req: Request, res: Response) => {
       "assistant",
       assistantContent,
       provider,
-      trip_id
+      project_id
     );
 
     timer.begin("save_snapshot");
@@ -396,7 +396,7 @@ router.delete("/conversations/:id", (req: Request, res: Response) => {
 router.get("/conversations/:id", (req: Request, res: Response) => {
   try {
     const rows = queryAll(
-      `SELECT id, conversation_id, trip_id, role, content, provider, created_at
+      `SELECT id, conversation_id, project_id, role, content, provider, created_at
        FROM events
        WHERE conversation_id = ?
        ORDER BY created_at ASC`,
@@ -453,7 +453,7 @@ router.get("/conversations/:id/export", (req: Request, res: Response) => {
       const exportData = {
         id: conv.id,
         title: conv.title,
-        trip_id: conv.trip_id,
+        project_id: conv.project_id,
         created_at: conv.created_at,
         messages: events.map((e) => ({
           role: e.role,

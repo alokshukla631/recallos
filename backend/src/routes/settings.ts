@@ -256,7 +256,7 @@ router.get("/stats", (_req: Request, res: Response) => {
       "memory_items",
       "conversations",
       "events",
-      "trips",
+      "projects",
       "memory_links",
       "memory_tags",
       "memory_audit_log",
@@ -308,7 +308,7 @@ router.post("/clear-data", (req: Request, res: Response) => {
       "events",
       "conversations",
       "memory_items",
-      "trips",
+      "projects",
       "webhooks",
     ];
 

@@ -124,7 +124,7 @@ router.get("/snapshots/:id", (req: Request, res: Response) => {
 // POST /benchmark - run the pipeline without calling a provider, return timing
 router.post("/benchmark", async (req: Request, res: Response) => {
   try {
-    const { message, trip_id } = req.body;
+    const { message, project_id } = req.body;
     if (!message) {
       res.status(400).json({ error: "message is required" });
       return;
@@ -133,10 +133,10 @@ router.post("/benchmark", async (req: Request, res: Response) => {
     const timer = new PerfTimer();
 
     timer.begin("extraction");
-    const candidates = await extractMemory(message, "benchmark-" + Date.now().toString(36), trip_id);
+    const candidates = await extractMemory(message, "benchmark-" + Date.now().toString(36), project_id);
 
     timer.begin("context_compilation");
-    const compiled = await compileContext("benchmark", message, trip_id);
+    const compiled = await compileContext("benchmark", message, project_id);
 
     const timing = timer.finish();
 

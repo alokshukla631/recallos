@@ -1,14 +1,14 @@
 import { extractEntities } from "./entity-extractor.js";
 
 export type MemoryType = "preference" | "constraint" | "fact" | "goal" | "override";
-export type MemoryScope = "global" | "trip" | "domain" | "project" | "session";
+export type MemoryScope = "global" | "domain" | "project" | "session";
 
 export interface MemoryCandidate {
   key: string;
   type: MemoryType;
   value: string;
   scope: MemoryScope;
-  tripId?: string;
+  projectId?: string;
   confidence: number;
   authority: "explicit" | "inferred";
   domain?: string;
@@ -168,22 +168,14 @@ const EXTRACTION_RULES: ExtractionRule[] = [
 // Scope detection
 // ---------------------------------------------------------------------------
 
-const TRIP_SCOPE_PATTERNS = [
-  /\b(?:for this trip|this time|just for now|on this trip|this booking|this reservation)\b/i,
-];
-
-// These patterns detect project/session scope but still map to "trip" in the DB
-// since the schema currently only supports global/trip. The domain tag preserves context.
 const PROJECT_SCOPE_PATTERNS = [
+  /\b(?:for this trip|this time|just for now|on this trip|this booking|this reservation)\b/i,
   /\b(?:for this project|in this repo|in this codebase|for this feature|for this task|this sprint)\b/i,
 ];
 
 function detectScope(text: string): MemoryScope {
-  for (const pattern of TRIP_SCOPE_PATTERNS) {
-    if (pattern.test(text)) return "trip";
-  }
   for (const pattern of PROJECT_SCOPE_PATTERNS) {
-    if (pattern.test(text)) return "trip"; // maps to trip scope until schema supports more
+    if (pattern.test(text)) return "project";
   }
   return "global";
 }
@@ -300,7 +292,7 @@ function detectDomainFromText(text: string): string | undefined {
 export async function extractMemory(
   text: string,
   eventId: string,
-  tripId?: string
+  projectId?: string
 ): Promise<MemoryCandidate[]> {
   const candidates: MemoryCandidate[] = [];
   const sentences = splitSentences(text);
@@ -311,12 +303,11 @@ export async function extractMemory(
       if (!matched) continue;
 
       const detectedScope = detectScope(sentence);
-      // Fall back to global if "this trip" was detected but no tripId is set,
-      // otherwise the item would be orphaned (scope=trip, trip_id=null) and
-      // never retrieved by the context compiler.
+      // Fall back to global if project scope was detected but no projectId
+      // is set, otherwise the item would be orphaned and never retrieved.
       const scope: MemoryScope =
-        detectedScope === "trip" && !tripId ? "global" : detectedScope;
-      const resolvedTripId = scope === "trip" ? tripId : undefined;
+        detectedScope === "project" && !projectId ? "global" : detectedScope;
+      const resolvedProjectId = scope === "project" ? projectId : undefined;
 
       // Detect domain from the sentence or use the rule's domain
       const domain = rule.domain || detectDomainFromText(sentence);
@@ -326,7 +317,7 @@ export async function extractMemory(
         type: rule.type,
         value: extractValue(sentence),
         scope,
-        tripId: resolvedTripId,
+        projectId: resolvedProjectId,
         confidence: rule.confidence,
         authority: rule.confidence >= 0.8 ? "explicit" : "inferred",
         domain,
@@ -347,7 +338,7 @@ export async function extractMemory(
 
   // Entity pass: pull out structured entities and promote them to facts/goals/constraints
   const entities = extractEntities(text);
-  const entityScope = tripId ? "trip" : "global";
+  const entityScope: MemoryScope = projectId ? "project" : "global";
   for (const entity of entities) {
     let entityType: MemoryType;
     let key: string;
@@ -391,7 +382,7 @@ export async function extractMemory(
       type: entityType,
       value: entity.normalized,
       scope: entityScope,
-      tripId: entityScope === "trip" ? tripId : undefined,
+      projectId: entityScope === "project" ? projectId : undefined,
       confidence: 0.88,
       authority: "explicit",
       domain,

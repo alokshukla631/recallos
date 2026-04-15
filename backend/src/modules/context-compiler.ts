@@ -48,22 +48,22 @@ export interface CompiledContext {
 
 /**
  * Fetches active memory items respecting the scope hierarchy:
- *   global + domain + trip/project (if tripId given) + session
+ *   global + domain + trip/project (if projectId given) + session
  * All global and domain-scoped items are always included.
- * Trip/project-scoped items are included only when a tripId is provided.
+ * Project-scoped items are included only when a projectId is provided.
  * Session-scoped items are ephemeral and always included (they expire naturally).
  */
-function getActiveMemoryItems(tripId?: string): MemoryItem[] {
-  if (tripId) {
+function getActiveMemoryItems(projectId?: string): MemoryItem[] {
+  if (projectId) {
     return queryAll(
       `SELECT * FROM memory_items
        WHERE status = 'active'
          AND (
            scope IN ('global', 'domain', 'session')
-           OR ((scope = 'trip' OR scope = 'project') AND trip_id = ?)
+           OR ((scope = 'project') AND project_id = ?)
          )
        ORDER BY created_at DESC`,
-      [tripId]
+      [projectId]
     ) as unknown as MemoryItem[];
   }
 
@@ -207,9 +207,9 @@ function detectDomains(items: MemoryItem[], message: string): { primary: string;
 export async function compileContext(
   conversationId: string,
   currentMessage: string,
-  tripId?: string
+  projectId?: string
 ): Promise<CompiledContext> {
-  const allItems = getActiveMemoryItems(tripId);
+  const allItems = getActiveMemoryItems(projectId);
 
   const scoreMap = scoreAllBm25(allItems, currentMessage);
 

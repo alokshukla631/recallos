@@ -44,16 +44,16 @@ interface Message {
 interface Conversation {
   id: string;
   title: string | null;
-  trip_id: string | null;
+  project_id: string | null;
   created_at: string;
   updated_at: string;
   message_count: number;
 }
 
-interface Trip {
+interface Project {
   id: string;
   name: string;
-  destination: string | null;
+  description: string | null;
   status: string;
 }
 
@@ -76,8 +76,8 @@ interface SearchResult {
 function Chat() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [selectedProvider, setSelectedProvider] = useState("");
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [selectedTripId, setSelectedTripId] = useState<string>("");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -96,7 +96,7 @@ function Chat() {
   useEffect(() => {
     fetchProviders();
     fetchConversations();
-    fetchTrips();
+    fetchProjects();
   }, []);
 
   // Handle "Start new conversation" from command palette (/chat?new=1)
@@ -106,7 +106,7 @@ function Chat() {
       setConversationId(null);
       setExpandedContexts(new Set());
       setInput("");
-      setSelectedTripId("");
+      setSelectedProjectId("");
       textareaRef.current?.focus();
       searchParams.delete("new");
       setSearchParams(searchParams, { replace: true });
@@ -148,14 +148,14 @@ function Chat() {
     }
   }, []);
 
-  async function fetchTrips() {
+  async function fetchProjects() {
     try {
-      const res = await fetch("/api/trips");
+      const res = await fetch("/api/projects");
       if (!res.ok) return;
-      const data: Trip[] = await res.json();
-      setTrips(data);
+      const data: Project[] = await res.json();
+      setProjects(data);
     } catch {
-      setTrips([]);
+      setProjects([]);
     }
   }
 
@@ -194,10 +194,10 @@ function Chat() {
       setMessages(msgs);
       setConversationId(id);
       setExpandedContexts(new Set());
-      // Sync the trip selector to the conversation's trip
+      // Sync the project selector to the conversation's project
       const conv = conversations.find((c) => c.id === id);
       if (conv) {
-        setSelectedTripId(conv.trip_id ?? "");
+        setSelectedProjectId(conv.project_id ?? "");
       }
     } catch {
       // ignore
@@ -209,7 +209,7 @@ function Chat() {
     setConversationId(null);
     setExpandedContexts(new Set());
     setInput("");
-    setSelectedTripId("");
+    setSelectedProjectId("");
     textareaRef.current?.focus();
   }
 
@@ -350,7 +350,7 @@ function Chat() {
           message: text,
           provider: selectedProvider,
           conversation_id: conversationId || undefined,
-          trip_id: selectedTripId || undefined,
+          project_id: selectedProjectId || undefined,
         }),
       });
 
@@ -549,23 +549,23 @@ function Chat() {
           <h2>Chat</h2>
           {hasProviders && (
             <div className="chat-header-controls">
-              {trips.length > 0 && (
+              {projects.length > 0 && (
                 <div className="provider-select">
-                  <label>Trip</label>
+                  <label>Project</label>
                   <select
-                    value={selectedTripId}
-                    onChange={(e) => setSelectedTripId(e.target.value)}
+                    value={selectedProjectId}
+                    onChange={(e) => setSelectedProjectId(e.target.value)}
                     disabled={loading || (messages.length > 0 && !!conversationId)}
                     title={
                       messages.length > 0 && conversationId
-                        ? "Trip is locked after the conversation starts"
-                        : "Scope this chat to a trip"
+                        ? "Project is locked after the conversation starts"
+                        : "Scope this chat to a project"
                     }
                   >
-                    <option value="">No trip (global)</option>
-                    {trips.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
+                    <option value="">No project (global)</option>
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
                       </option>
                     ))}
                   </select>
