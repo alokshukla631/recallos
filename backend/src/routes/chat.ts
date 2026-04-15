@@ -35,13 +35,9 @@ router.post("/", async (req: Request, res: Response) => {
       return;
     }
 
-    const timer = new PerfTimer();
-    const convId = conversation_id || uuidv4();
-
-    // Step 0: Ensure the conversation row exists (creates on first message)
-    ensureConversation(convId, message, trip_id);
-
-    // Step 1: Get API key for the provider
+    // Step 0: Validate provider key BEFORE creating any DB state.
+    // Previously ensureConversation ran first, so a missing key left an
+    // orphan conversation row with zero events.
     const providerRow = queryOne(
       "SELECT api_key FROM provider_settings WHERE provider = ?",
       [provider]
@@ -53,6 +49,12 @@ router.post("/", async (req: Request, res: Response) => {
       });
       return;
     }
+
+    const timer = new PerfTimer();
+    const convId = conversation_id || uuidv4();
+
+    // Step 1: Ensure the conversation row exists (creates on first message)
+    ensureConversation(convId, message, trip_id);
 
     // Step 2: Store user event
     timer.begin("store_event");
@@ -165,11 +167,9 @@ router.post("/stream", async (req: Request, res: Response) => {
   };
 
   try {
-    const timer = new PerfTimer();
-    const convId = conversation_id || uuidv4();
-
-    ensureConversation(convId, message, trip_id);
-
+    // Validate provider key BEFORE creating any DB state.
+    // Previously ensureConversation ran first, so a missing key left an
+    // orphan conversation row with zero events.
     const providerRow = queryOne(
       "SELECT api_key FROM provider_settings WHERE provider = ?",
       [provider]
@@ -182,6 +182,11 @@ router.post("/stream", async (req: Request, res: Response) => {
       res.end();
       return;
     }
+
+    const timer = new PerfTimer();
+    const convId = conversation_id || uuidv4();
+
+    ensureConversation(convId, message, trip_id);
 
     send("conversation", { conversation_id: convId });
 
