@@ -81,8 +81,12 @@ const KNOWN_TECHNOLOGIES = [
   "Material UI", "Chakra UI", "Storybook",
 ];
 
+// Use (?!\w) instead of \b at the end because \b doesn't work after
+// non-word characters like + or # (C++, C#). \b requires a transition
+// between \w and \W, but + and # are already \W so \b never fires
+// when followed by punctuation or whitespace.
 const TECH_REGEX = new RegExp(
-  `\\b(${KNOWN_TECHNOLOGIES.join("|")})\\b`,
+  `\\b(${KNOWN_TECHNOLOGIES.join("|")})(?!\\w)`,
   "gi"
 );
 
