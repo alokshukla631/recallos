@@ -90,7 +90,7 @@ RecallOS sits between you and the AI model. When you send a message:
 - **Merge** - Combine two memory items: source gets superseded, tags are copied to target, confidence takes the max. Accessible from the detail modal or API
 - **Version diff** - Word-level comparison between version history entries. Added words highlighted green, removed words shown in red with strikethrough
 - **Trash and restore** - Soft-deleted items can be listed and restored back to active status from the Trash page, CLI, or API
-- **BM25 + recency + link boost** - Full BM25 with IDF, term frequency saturation, length normalization, lightweight stemming. Recency decay (7-day half-life). Cross-domain link boosting for related items.
+- **BM25 + recency + domain + link boost** - Full BM25 with IDF, term frequency saturation, length normalization, lightweight stemming. Recency decay (7-day half-life). Domain-aware scoring: same-domain items get a boost, cross-domain items have recency dampened so they only appear with strong keyword overlap. Cross-domain link boosting for related items.
 - **Memory relationships** - Link items with typed relations (related_to, depends_on, conflicts_with, refines, derived_from) with configurable strength
 - **Confidence decay** - Items not reconfirmed gradually lose confidence (30-day half-life). Items below threshold are auto-staled.
 - **Session expiration** - Session-scoped memory items expire after configurable TTL (default 24h). Cleanup runs hourly.
@@ -302,6 +302,7 @@ Milestone 1 proved the core thesis: the model does reasoning, RecallOS provides 
 - Fixed MCP delete_memory hard-deleting items instead of using soft-delete/trash semantics
 - Fixed Settings decay preview always showing "memory is healthy" (caused by the decay defaults bug)
 - Reduced scraper noise with confidence discounting and minimum message length filter
+- Added domain-aware scoring to context compiler so cross-domain items do not ride into context on recency alone
 
 What's next:
 - Local embedding search (vector similarity alongside BM25)
