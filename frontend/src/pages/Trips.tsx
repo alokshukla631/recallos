@@ -131,7 +131,11 @@ function Trips() {
   function formatDate(date: string | null) {
     if (!date) return "—";
     try {
-      return new Date(date).toLocaleDateString();
+      // Parse as local date to avoid UTC midnight rolling back a day
+      // in negative-UTC-offset timezones (e.g. "2026-07-10" parsed as
+      // UTC midnight becomes July 9 in UTC-5).
+      const [y, m, d] = date.split("-").map(Number);
+      return new Date(y, m - 1, d).toLocaleDateString();
     } catch {
       return date;
     }

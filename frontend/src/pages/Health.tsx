@@ -116,7 +116,7 @@ function Health() {
       const res = await fetch("/api/memory/conflicts?status=pending");
       if (!res.ok) return;
       const data = await res.json();
-      setConflictCount(Array.isArray(data) ? data.length : 0);
+      setConflictCount(data.pending_count ?? (Array.isArray(data) ? data.length : 0));
     } catch {
       // ignore
     }
@@ -127,7 +127,7 @@ function Health() {
       const res = await fetch("/api/memory?limit=500&status=active");
       if (!res.ok) return;
       const data = await res.json();
-      const items: Array<{ created_at: string }> = data.items || [];
+      const items: Array<{ created_at: string }> = Array.isArray(data) ? data : (data.items || []);
       const now = Date.now();
       const buckets = {
         "< 1 hour": 0,

@@ -129,7 +129,7 @@ function Dashboard() {
 
   async function fetchHealth() {
     try {
-      const res = await fetch("/health");
+      const res = await fetch("/api/health");
       if (!res.ok) return;
       setHealth(await res.json());
     } catch {

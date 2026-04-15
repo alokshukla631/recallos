@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import "./Chat.css";
 
 interface Provider {
@@ -91,12 +91,27 @@ function Chat() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     fetchProviders();
     fetchConversations();
     fetchTrips();
   }, []);
+
+  // Handle "Start new conversation" from command palette (/chat?new=1)
+  useEffect(() => {
+    if (searchParams.get("new") === "1") {
+      setMessages([]);
+      setConversationId(null);
+      setExpandedContexts(new Set());
+      setInput("");
+      setSelectedTripId("");
+      textareaRef.current?.focus();
+      searchParams.delete("new");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

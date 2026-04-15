@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { Bell } from "lucide-react";
 import "./NotificationBell.css";
 
@@ -12,6 +13,7 @@ interface Notification {
 }
 
 function NotificationBell() {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(() => {
@@ -154,7 +156,17 @@ function NotificationBell() {
           ) : (
             <div className="notif-list">
               {visible.map((n) => (
-                <div key={n.id} className={`notif-item notif-${n.type}`}>
+                <div
+                  key={n.id}
+                  className={`notif-item notif-${n.type}${n.link ? " clickable" : ""}`}
+                  onClick={() => {
+                    if (n.link) {
+                      navigate(n.link);
+                      setOpen(false);
+                    }
+                  }}
+                  style={n.link ? { cursor: "pointer" } : undefined}
+                >
                   <div className="notif-item-content">
                     <span className="notif-item-title">{n.title}</span>
                     <span className="notif-item-message">{n.message}</span>

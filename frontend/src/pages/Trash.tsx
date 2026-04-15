@@ -65,7 +65,10 @@ function Trash() {
   }
 
   function timeAgo(d: string) {
-    const diff = Date.now() - new Date(d).getTime();
+    // Backend timestamps are UTC but may lack a trailing Z. Force UTC
+    // interpretation so the diff is never negative in local timezones.
+    const normalized = d.includes("Z") || d.includes("+") ? d : d.replace(" ", "T") + "Z";
+    const diff = Date.now() - new Date(normalized).getTime();
     const mins = Math.floor(diff / 60000);
     if (mins < 60) return `${mins}m ago`;
     const hours = Math.floor(mins / 60);
