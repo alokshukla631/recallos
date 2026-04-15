@@ -10,7 +10,7 @@
 
 import fs from "fs";
 import path from "path";
-import { extractMemory } from "./memory-extractor.js";
+import { extractMemory, type MemoryCandidate } from "./memory-extractor.js";
 import { reconcileMemory } from "./memory-reconciler.js";
 import { logAudit } from "./audit.js";
 import { queryOne, runSql } from "../db/index.js";
@@ -566,6 +566,23 @@ function simpleHash(str: string): string {
  *
  * Deduplicates across runs using a persistent state file.
  */
+
+// Minimum message length to extract memory from. Short messages like
+// "yes", "fix it", "continue" rarely contain real preferences.
+const MIN_SCRAPE_MSG_LENGTH = 40;
+
+// Confidence discount for scraped content. Scraped user messages are
+// less reliable than direct chat because the user may be describing
+// what they are building rather than expressing personal preferences.
+const SCRAPE_CONFIDENCE_FACTOR = 0.6;
+
+function discountScrapedCandidates(candidates: MemoryCandidate[]): MemoryCandidate[] {
+  return candidates.map((c) => ({
+    ...c,
+    confidence: Math.round(c.confidence * SCRAPE_CONFIDENCE_FACTOR * 100) / 100,
+  }));
+}
+
 export async function scrapeAll(): Promise<ScrapeResult[]> {
   const results: ScrapeResult[] = [];
   const state = loadState();
@@ -601,9 +618,10 @@ export async function scrapeAll(): Promise<ScrapeResult[]> {
         );
         if (existing) continue;
 
+        if (msg.content.length < MIN_SCRAPE_MSG_LENGTH) continue;
         ccResult.messagesNew++;
         const eventId = "scrape-cc-" + uuidv4().slice(0, 8);
-        const candidates = await extractMemory(msg.content, eventId);
+        const candidates = discountScrapedCandidates(await extractMemory(msg.content, eventId));
         if (candidates.length > 0) {
           const result = await reconcileMemory(candidates, eventId);
           ccResult.memoryExtracted += result.added.length;
@@ -642,9 +660,10 @@ export async function scrapeAll(): Promise<ScrapeResult[]> {
       );
       if (existing) continue;
 
+      if (msg.content.length < MIN_SCRAPE_MSG_LENGTH) continue;
       cursorResult.messagesNew++;
       const eventId = "scrape-cursor-" + uuidv4().slice(0, 8);
-      const candidates = await extractMemory(msg.content, eventId);
+      const candidates = discountScrapedCandidates(await extractMemory(msg.content, eventId));
       if (candidates.length > 0) {
         const result = await reconcileMemory(candidates, eventId);
         cursorResult.memoryExtracted += result.added.length;
@@ -680,9 +699,10 @@ export async function scrapeAll(): Promise<ScrapeResult[]> {
         );
         if (existing) continue;
 
+        if (msg.content.length < MIN_SCRAPE_MSG_LENGTH) continue;
         chatgptResult.messagesNew++;
         const eventId = "scrape-chatgpt-" + uuidv4().slice(0, 8);
-        const candidates = await extractMemory(msg.content, eventId);
+        const candidates = discountScrapedCandidates(await extractMemory(msg.content, eventId));
         if (candidates.length > 0) {
           const result = await reconcileMemory(candidates, eventId);
           chatgptResult.memoryExtracted += result.added.length;
@@ -717,9 +737,10 @@ export async function scrapeAll(): Promise<ScrapeResult[]> {
       );
       if (existing) continue;
 
+      if (msg.content.length < MIN_SCRAPE_MSG_LENGTH) continue;
       copilotResult.messagesNew++;
       const eventId = "scrape-copilot-" + uuidv4().slice(0, 8);
-      const candidates = await extractMemory(msg.content, eventId);
+      const candidates = discountScrapedCandidates(await extractMemory(msg.content, eventId));
       if (candidates.length > 0) {
         const result = await reconcileMemory(candidates, eventId);
         copilotResult.memoryExtracted += result.added.length;
@@ -753,9 +774,10 @@ export async function scrapeAll(): Promise<ScrapeResult[]> {
       );
       if (existing) continue;
 
+      if (msg.content.length < MIN_SCRAPE_MSG_LENGTH) continue;
       windsurfResult.messagesNew++;
       const eventId = "scrape-windsurf-" + uuidv4().slice(0, 8);
-      const candidates = await extractMemory(msg.content, eventId);
+      const candidates = discountScrapedCandidates(await extractMemory(msg.content, eventId));
       if (candidates.length > 0) {
         const result = await reconcileMemory(candidates, eventId);
         windsurfResult.memoryExtracted += result.added.length;
