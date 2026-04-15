@@ -285,6 +285,23 @@ Milestone 1 proved the core thesis: the model does reasoning, RecallOS provides 
 - Fixed context snapshot compare route being shadowed by the parametric snapshots/:id route
 - Fixed audit log CHECK constraint that rejected 'pinned', 'unpinned', and 'restored' actions
 - Fixed amount extraction regex where $2000 was incorrectly parsed as $200
+- Fixed C++ and C# not being extracted as coding-language entities (regex word boundary issue)
+- Fixed failed chat requests leaving orphan conversation rows in the database
+- Fixed Trips page showing dates one day early due to UTC midnight timezone conversion
+- Fixed Dashboard health bar not loading in Vite dev mode (wrong fetch path)
+- Fixed Health page misreading API response shapes (zero conflicts and active items)
+- Fixed Trash page showing negative relative deletion times
+- Fixed notification bell items not being clickable even when they include links
+- Fixed command palette "Start new conversation" not actually resetting the chat view
+- Fixed decay preview returning zero candidates when called without explicit query params
+- Fixed OpenAPI docs listing only OpenAI and Anthropic (added Gemini and Ollama)
+- Fixed Settings stats and clear-data using legacy conflict table instead of memory_conflicts/memory_versions
+- Fixed MCP config generator pointing at nonexistent .ts file in production builds
+- Fixed TypeScript SDK response types being out of sync with the live API
+- Fixed MCP-created memories storing dangling source_event_id values
+- Fixed MCP delete_memory hard-deleting items instead of using soft-delete/trash semantics
+- Fixed Settings decay preview always showing "memory is healthy" (caused by the decay defaults bug)
+- Reduced scraper noise with confidence discounting and minimum message length filter
 
 What's next:
 - Local embedding search (vector similarity alongside BM25)
