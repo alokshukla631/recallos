@@ -20,8 +20,10 @@ export interface TraceEntry {
   type: string;
   value: string;
   scope: string;
+  domain: string | null;
   bm25_score: number;
   recency_boost: number;
+  domain_boost: number;
   final_score: number;
   decision: "included" | "omitted";
   reason: string;
@@ -150,6 +152,20 @@ const DOMAIN_PATTERNS: Record<string, RegExp> = {
 };
 
 /**
+ * Detects domains from the user's message text alone.
+ * Called BEFORE scoring so domain-aware boosts can be applied.
+ */
+function detectMessageDomains(message: string): Set<string> {
+  const detected = new Set<string>();
+  for (const [domain, pattern] of Object.entries(DOMAIN_PATTERNS)) {
+    if (pattern.test(message)) {
+      detected.add(domain);
+    }
+  }
+  return detected;
+}
+
+/**
  * Detects all relevant domains from included memory items and the current message.
  * Returns the primary domain and the full list of detected domains.
  */
@@ -197,19 +213,49 @@ export async function compileContext(
 
   const scoreMap = scoreAllBm25(allItems, currentMessage);
 
+  // Detect the message domain BEFORE scoring so we can boost same-domain
+  // items and dampen cross-domain recency. Without this, recent items from
+  // unrelated domains (e.g. coding memories when asking about a trip) ride
+  // in on recency alone and pollute the context.
+  const messageDomains = detectMessageDomains(currentMessage);
+
   const RELEVANCE_THRESHOLD = 0.1;
-  const LINK_BOOST = 0.08; // Boost for items linked to high-scoring items
+  const LINK_BOOST = 0.08;          // Boost for items linked to high-scoring items
+  const DOMAIN_MATCH_BOOST = 0.1;   // Boost for items matching the message domain
+  const DOMAIN_MISMATCH_FACTOR = 0.3; // Recency multiplier for cross-domain items
+
   const included: MemoryItem[] = [];
   const omitted: MemoryItem[] = [];
   const rationale: Record<string, string> = {};
   const trace: TraceEntry[] = [];
 
+  // Helper: compute domain-aware recency for an item
+  function domainAwareRecency(item: MemoryItem): { recency: number; domainBoost: number } {
+    let recency = recencyBoost(item);
+    let domainBoost = 0;
+
+    // Only apply domain logic when the message has a detectable domain
+    // and the item has a domain tag. Items with domain=null are general
+    // purpose and keep their normal scores.
+    if (messageDomains.size > 0 && item.domain) {
+      if (messageDomains.has(item.domain)) {
+        domainBoost = DOMAIN_MATCH_BOOST;
+      } else {
+        // Dampen recency for cross-domain items so they do not ride into
+        // context on recency alone when the conversation topic changed.
+        recency *= DOMAIN_MISMATCH_FACTOR;
+      }
+    }
+
+    return { recency, domainBoost };
+  }
+
   // First pass: find items that score above threshold (these are "anchor" items)
   const anchorIds = new Set<string>();
   for (const item of allItems) {
     const bm25Score = scoreMap.get(item.id) ?? 0;
-    const recency = recencyBoost(item);
-    if (bm25Score + recency >= RELEVANCE_THRESHOLD || item.type === "override" || item.type === "constraint") {
+    const { recency, domainBoost } = domainAwareRecency(item);
+    if (bm25Score + recency + domainBoost >= RELEVANCE_THRESHOLD || item.type === "override" || item.type === "constraint") {
       anchorIds.add(item.id);
     }
   }
@@ -225,9 +271,9 @@ export async function compileContext(
 
   for (const item of allItems) {
     const bm25Score = scoreMap.get(item.id) ?? 0;
-    const recency = recencyBoost(item);
+    const { recency, domainBoost } = domainAwareRecency(item);
     const linkBoost = linkedToAnchors.has(item.id) && !anchorIds.has(item.id) ? LINK_BOOST : 0;
-    const finalScore = bm25Score + recency + linkBoost;
+    const finalScore = bm25Score + recency + linkBoost + domainBoost;
     const alwaysInclude = item.type === "override" || item.type === "constraint" || item.pinned === 1;
 
     if (finalScore >= RELEVANCE_THRESHOLD || alwaysInclude) {
@@ -236,16 +282,18 @@ export async function compileContext(
         ? "Pinned by user"
         : alwaysInclude && finalScore < RELEVANCE_THRESHOLD
         ? `Always included (type=${item.type})`
-        : `Score ${finalScore.toFixed(3)} above threshold (bm25=${bm25Score.toFixed(3)}, recency=${recency.toFixed(3)})`;
-      rationale[item.id] = `Included: score=${finalScore.toFixed(2)}, type=${item.type}`;
+        : `Score ${finalScore.toFixed(3)} above threshold (bm25=${bm25Score.toFixed(3)}, recency=${recency.toFixed(3)}, domain=${domainBoost.toFixed(3)})`;
+      rationale[item.id] = `Included: score=${finalScore.toFixed(2)}, type=${item.type}, domain=${item.domain || "general"}`;
       trace.push({
         memory_item_id: item.id,
         key: item.key,
         type: item.type,
         value: item.value,
         scope: item.scope,
+        domain: item.domain,
         bm25_score: parseFloat(bm25Score.toFixed(4)),
         recency_boost: parseFloat(recency.toFixed(4)),
+        domain_boost: parseFloat(domainBoost.toFixed(4)),
         final_score: parseFloat(finalScore.toFixed(4)),
         decision: "included",
         reason,
@@ -259,11 +307,13 @@ export async function compileContext(
         type: item.type,
         value: item.value,
         scope: item.scope,
+        domain: item.domain,
         bm25_score: parseFloat(bm25Score.toFixed(4)),
         recency_boost: parseFloat(recency.toFixed(4)),
+        domain_boost: parseFloat(domainBoost.toFixed(4)),
         final_score: parseFloat(finalScore.toFixed(4)),
         decision: "omitted",
-        reason: `Score ${finalScore.toFixed(3)} below threshold (bm25=${bm25Score.toFixed(3)}, recency=${recency.toFixed(3)})`,
+        reason: `Score ${finalScore.toFixed(3)} below threshold (bm25=${bm25Score.toFixed(3)}, recency=${recency.toFixed(3)}, domain=${domainBoost.toFixed(3)})`,
       });
     }
   }
