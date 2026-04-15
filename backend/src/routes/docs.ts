@@ -44,7 +44,7 @@ const API_SPEC = {
                 required: ["message", "provider"],
                 properties: {
                   message: { type: "string" },
-                  provider: { type: "string", enum: ["openai", "anthropic"] },
+                  provider: { type: "string", enum: ["openai", "anthropic", "gemini", "ollama"] },
                   conversation_id: { type: "string" },
                   trip_id: { type: "string" },
                 },
@@ -70,7 +70,7 @@ const API_SPEC = {
                 required: ["message", "provider"],
                 properties: {
                   message: { type: "string" },
-                  provider: { type: "string" },
+                  provider: { type: "string", enum: ["openai", "anthropic", "gemini", "ollama"] },
                   conversation_id: { type: "string" },
                   trip_id: { type: "string" },
                 },

@@ -1210,10 +1210,13 @@ router.post("/:id/revert/:versionId", (req: Request, res: Response) => {
 // GET /decay - preview which items would be marked stale by decay rules
 router.get("/decay", (req: Request, res: Response) => {
   try {
-    const maxAgeDays = parseInt(req.query.max_age_days as string) || undefined;
-    const maxStaleDays = parseInt(req.query.max_stale_days as string) || undefined;
-    const minImportance = parseInt(req.query.min_importance as string) || undefined;
-    const candidates = findDecayCandidates({ maxAgeDays, maxStaleDays, minImportance });
+    // Only include params that were actually provided. Passing undefined
+    // values would overwrite the defaults in findDecayCandidates.
+    const config: Record<string, number> = {};
+    if (req.query.max_age_days) config.maxAgeDays = parseInt(req.query.max_age_days as string);
+    if (req.query.max_stale_days) config.maxStaleDays = parseInt(req.query.max_stale_days as string);
+    if (req.query.min_importance) config.minImportance = parseInt(req.query.min_importance as string);
+    const candidates = findDecayCandidates(config);
     res.json({ count: candidates.length, candidates });
   } catch (err) {
     console.error("GET /api/memory/decay error:", err);
@@ -1225,11 +1228,12 @@ router.get("/decay", (req: Request, res: Response) => {
 router.post("/decay", (req: Request, res: Response) => {
   try {
     const { max_age_days, max_stale_days, min_importance } = req.body || {};
-    const result = applyDecay({
-      maxAgeDays: max_age_days,
-      maxStaleDays: max_stale_days,
-      minImportance: min_importance,
-    });
+    // Only include params that were actually provided to avoid overwriting defaults.
+    const decayConfig: Record<string, number> = {};
+    if (max_age_days != null) decayConfig.maxAgeDays = max_age_days;
+    if (max_stale_days != null) decayConfig.maxStaleDays = max_stale_days;
+    if (min_importance != null) decayConfig.minImportance = min_importance;
+    const result = applyDecay(decayConfig);
     if (result.marked > 0) {
       fireWebhook("decay_applied", { marked: result.marked, ids: result.candidates.map((c) => c.id) });
     }

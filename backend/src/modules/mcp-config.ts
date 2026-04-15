@@ -21,9 +21,10 @@ export interface McpConfigEntry {
  * Resolves relative to this file's location (backend/src/mcp-server.ts).
  */
 function getMcpServerPath(): string {
-  // In production this would point to the built JS. For development,
-  // point at the TS source and run with tsx.
-  return path.resolve(__dirname, "..", "mcp-server.ts");
+  // Detect whether running from compiled JS (dist/) or TS source (src/).
+  const isDev = __filename.endsWith(".ts");
+  const ext = isDev ? ".ts" : ".js";
+  return path.resolve(__dirname, "..", `mcp-server${ext}`);
 }
 
 /**
@@ -39,10 +40,11 @@ function getDbPath(): string {
 export function generateMcpConfig(dbPath?: string): McpConfigEntry {
   const serverPath = getMcpServerPath();
   const resolvedDb = dbPath || getDbPath();
+  const isDev = __filename.endsWith(".ts");
 
   return {
-    command: "npx",
-    args: ["tsx", serverPath],
+    command: isDev ? "npx" : "node",
+    args: isDev ? ["tsx", serverPath] : [serverPath],
     env: {
       DB_PATH: resolvedDb,
     },
