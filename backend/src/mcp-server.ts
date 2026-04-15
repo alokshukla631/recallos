@@ -13,7 +13,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import path from "path";
 
-import { initDatabase, queryAll, queryOne, getDb, saveToFile } from "./db/index.js";
+import { initDatabase, queryAll, queryOne, runSql, getDb, saveToFile } from "./db/index.js";
 import { extractMemory } from "./modules/memory-extractor.js";
 import { reconcileMemory } from "./modules/memory-reconciler.js";
 import { compileContext } from "./modules/context-compiler.js";
@@ -321,8 +321,12 @@ async function main() {
       trip_id: z.string().optional().describe("Optional trip ID to scope the memory to"),
     },
     async ({ text, trip_id }) => {
-      // extractMemory needs an eventId; use a placeholder for MCP-originated extractions
+      // Create a real event row so source_event_id is not dangling
       const mcpEventId = "mcp-" + Date.now().toString(36);
+      runSql(
+        "INSERT INTO events (id, conversation_id, role, content, provider, created_at) VALUES (?, ?, 'user', ?, 'mcp', datetime('now'))",
+        [mcpEventId, "mcp-session", text]
+      );
       const candidates = await extractMemory(text, mcpEventId, trip_id);
       if (candidates.length === 0) {
         return {
@@ -385,7 +389,12 @@ async function main() {
         authority: "explicit" as const,
       };
 
+      // Create a real event row so source_event_id is not dangling
       const mcpEventId = "mcp-" + Date.now().toString(36);
+      runSql(
+        "INSERT INTO events (id, conversation_id, role, content, provider, created_at) VALUES (?, ?, 'user', ?, 'mcp', datetime('now'))",
+        [mcpEventId, "mcp-session", `${key}: ${value}`]
+      );
       const result = await reconcileMemory([candidate], mcpEventId);
       const item = result.added[0] || result.updated[0];
 
@@ -483,8 +492,12 @@ async function main() {
       }
 
       logAudit(memory_id, "deleted", reason || "Deleted via MCP");
-      const database = getDb();
-      database.run("DELETE FROM memory_items WHERE id = ?", [memory_id]);
+      // Soft-delete to match REST/UI behavior. Hard-delete would bypass
+      // trash/restore semantics and permanently destroy the item.
+      runSql(
+        "UPDATE memory_items SET status = 'deleted', deleted_at = datetime('now') WHERE id = ?",
+        [memory_id]
+      );
       saveToFile();
 
       return {
