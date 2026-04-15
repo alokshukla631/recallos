@@ -23,7 +23,10 @@ export interface MemoryItem {
   superseded_by: string | null;
   last_confirmed_at: string | null;
   created_at: string;
-  updated_at: string;
+  authority: string | null;
+  valid_from: string | null;
+  valid_to: string | null;
+  pinned: boolean;
 }
 
 export interface Trip {
@@ -40,7 +43,7 @@ export interface AuditEntry {
   id: string;
   memory_item_id: string;
   action: string;
-  detail: string | null;
+  details: string | null;
   created_at: string;
   memory_key?: string;
   memory_value?: string;
