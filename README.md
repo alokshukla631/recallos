@@ -58,7 +58,7 @@ This runs 5 end-to-end scenarios that test memory extraction, duplicate detectio
 RecallOS sits between you and the AI model. When you send a message:
 
 1. **Extract** - Multi-domain extraction pulls structured memory from your message (preferences, constraints, goals, facts, overrides) across 8 domains: travel, coding, work, health, finance, learning, writing, and communication. Entity extraction catches dates, destinations, amounts, durations, technologies, and programming languages.
-2. **Reconcile** - New memory is compared against existing memory. Duplicates are re-confirmed (boosting confidence). Conflicts are resolved using a scope-aware precedence system (session > project > trip > domain > global). Superseded items are marked stale.
+2. **Reconcile** - New memory is compared against existing memory. Duplicates are re-confirmed (boosting confidence). Conflicts are resolved using a scope-aware precedence system (session > project > domain > global). Superseded items are marked stale.
 3. **Compile** - BM25 ranking plus recency decay scores every active memory item. Items linked to high-scoring anchors get a cross-domain boost. Only relevant items are included. Constraints and overrides are always included.
 4. **Deliver** - The compiled context is injected into the system prompt alongside your conversation history, then sent to whichever AI provider you selected.
 5. **Store** - The full exchange is stored locally with a context snapshot for debugging.
@@ -67,9 +67,9 @@ RecallOS sits between you and the AI model. When you send a message:
 
 ### Pages
 
-- **Dashboard** - Overview stats grid with active memories, conversations, trips, links, and 7-day activity. System status bar with version, uptime, and DB size. GitHub-style activity heatmap (12-week contribution grid). 30-day activity trend chart. Charts for memory type, domain, scope, and confidence distribution. Retention chart. Activity sparkline. Insights panel with duplicate groups and suggestions. Quick actions. Notification bell in sidebar with alerts for conflicts, decay candidates, and duplicates.
-- **Chat** - Unified chat UI with conversation sidebar, streaming responses (SSE), provider selector, and trip selector. Memory badges show what was extracted and reconciled per message. Pipeline timing breakdown per response. Context panel shows what memory was injected.
-- **Trips** - Create and manage trips. Each trip scopes its own conversations and memory items.
+- **Dashboard** - Overview stats grid with active memories, conversations, projects, links, and 7-day activity. System status bar with version, uptime, and DB size. GitHub-style activity heatmap (12-week contribution grid). 30-day activity trend chart. Charts for memory type, domain, scope, and confidence distribution. Retention chart. Activity sparkline. Insights panel with duplicate groups and suggestions. Quick actions. Notification bell in sidebar with alerts for conflicts, decay candidates, and duplicates.
+- **Chat** - Unified chat UI with conversation sidebar, streaming responses (SSE), provider selector, and project selector. Memory badges show what was extracted and reconciled per message. Pipeline timing breakdown per response. Context panel shows what memory was injected.
+- **Projects** - Create and manage projects. Each project scopes its own conversations and memory items.
 - **Memory** - Browse, search, and filter all stored memory items. Type, scope, domain, and status filter dropdowns. Domain filter for all 9 detected domains. Tag-based filtering with clickable chips. Session stats panel with cleanup. Inline edit and soft-delete. Multi-select with shift-click range selection, batch operations (pin, unpin, reconfirm, tag, export, delete). Client-side sorting and pagination. Search history dropdown. Conflict detection panel. Markdown export button. Import JSON.
 - **Links** - Explore relationships between memory items. Search filter to find items by key, value, or type. Click an item to see all incoming/outgoing links. Linked items highlighted in sidebar. Create new links with typed relations. Navigate between linked items.
 - **Graph** - Canvas-based force-directed graph visualization. Nodes colored by type or domain. Search to find and highlight nodes. Filter by type, toggle same-key implicit links. Drag, pan, zoom, and click to inspect. Info panel shows connections.
@@ -85,7 +85,7 @@ RecallOS sits between you and the AI model. When you send a message:
 
 - **Multi-domain extraction** - Regex-based rules for 8 domains. Each extracted item is tagged with its detected domain.
 - **Entity extraction** - Dates (ISO, relative, month-day), destinations (300+ cities/countries), amounts (multi-currency), durations, 60+ technologies, programming languages
-- **Hierarchical scoping** - 5 scope levels: global, domain, trip, project, session. Narrower scopes override broader ones.
+- **Hierarchical scoping** - 4 scope levels: global, domain, project, session. Narrower scopes override broader ones.
 - **Memory reconciliation** - Scope-aware precedence, duplicate detection with re-confirmation, conflict detection and resolution (keep new, keep old, or merge), audit trail
 - **Merge** - Combine two memory items: source gets superseded, tags are copied to target, confidence takes the max. Accessible from the detail modal or API
 - **Version diff** - Word-level comparison between version history entries. Added words highlighted green, removed words shown in red with strikethrough
@@ -106,7 +106,7 @@ RecallOS sits between you and the AI model. When you send a message:
 - **Audit log** - Every memory operation is tracked (created, superseded, reconfirmed, pinned, unpinned, deleted, restored, imported)
 - **Tags** - User-defined tags for free-form categorization with batch tagging
 - **Keyboard shortcuts** - ? for help, Ctrl+K for command palette, Ctrl+1-5 for page navigation, Ctrl+T for theme toggle, Escape to clear selection
-- **Command palette** - Fuzzy-searchable command list (Ctrl+K) with navigation, global search across memory/conversations/trips, bulk actions (scrape all sources, preview decay, session cleanup, download JSON/Markdown exports), quick add memory, and theme toggle. Quick Add Memory mode extracts memory from natural language statements. Status feedback for bulk operations
+- **Command palette** - Fuzzy-searchable command list (Ctrl+K) with navigation, global search across memory/conversations/projects, bulk actions (scrape all sources, preview decay, session cleanup, download JSON/Markdown exports), quick add memory, and theme toggle. Quick Add Memory mode extracts memory from natural language statements. Status feedback for bulk operations
 - **Agent state API** - Plans with steps, checkpoints for resumable agents
 
 ### Cross-tool continuity
@@ -122,10 +122,10 @@ RecallOS sits between you and the AI model. When you send a message:
 
 ### Developer tools
 
-- **REST API** - Full CRUD for memory, trips, chat, passport, context, agents, scraper, and settings
+- **REST API** - Full CRUD for memory, projects, chat, passport, context, agents, scraper, and settings
 - **Python SDK** - Sync and async clients (`RecallOS`, `AsyncRecallOS`) using httpx. Covers all API endpoints. Install with `pip install -e sdk-python/`
-- **TypeScript SDK** - Zero-dependency client for Node 18+, Deno, Bun, and browsers. Covers all API endpoints including memory, trips, chat, context, tags, links, conflicts, decay, merge, restore, and import.
-- **CLI** - `recallos` command-line tool with global search, memory, trips, passport, chat, providers (add/remove/default), scraper, session management, MCP config, trash, restore, settings (stats, analytics, quality, clear-data, prompt management)
+- **TypeScript SDK** - Zero-dependency client for Node 18+, Deno, Bun, and browsers. Covers all API endpoints including memory, projects, chat, context, tags, links, conflicts, decay, merge, restore, and import.
+- **CLI** - `recallos` command-line tool with global search, memory, projects, passport, chat, providers (add/remove/default), scraper, session management, MCP config, trash, restore, settings (stats, analytics, quality, clear-data, prompt management)
 - **OpenAPI spec** - Served at `/api/docs/openapi.json` with interactive Swagger UI at `/api/docs/`
 - **Docker** - Multi-stage Dockerfile and docker-compose.yml for one-command deployment
 - **Benchmark endpoint** - `POST /api/context/benchmark` runs the pipeline without calling a provider, returns timing data
@@ -166,7 +166,7 @@ Or add this to your Claude Desktop config:
 }
 ```
 
-The MCP server exposes your memory as tools (search, add, compile context), resources (preferences, constraints, trips), and prompts (with_my_context, trip_planning, memory_summary).
+The MCP server exposes your memory as tools (search, add, compile context), resources (preferences, constraints, projects), and prompts (with_my_context, project_planning, memory_summary).
 
 ## Python SDK
 
@@ -248,7 +248,7 @@ recallos/
       mcp-server.ts # MCP server entry point
   frontend/
     src/
-      pages/        # Dashboard, Chat, Trips, Memory, Timeline, Links, Graph,
+      pages/        # Dashboard, Chat, Projects, Memory, Timeline, Links, Graph,
                     #   Analytics, Health, Trash, Scraper, ContextDebug, Settings
   cli/              # CLI tool
   sdk-ts/           # TypeScript SDK (zero-dependency)
@@ -266,7 +266,9 @@ Milestone 1 proved the core thesis: the model does reasoning, RecallOS provides 
 
 ### Recent changes
 
-- Added global search across memory, conversations, and trips (`GET /api/search`, CLI, SDKs, command palette)
+- Renamed trips to projects across entire codebase (database migration, API, frontend, CLI, SDKs, MCP server). Scope hierarchy simplified to session > project > domain > global
+- Added domain-aware context scoring: message domain detection before scoring, same-domain boost (+0.1), cross-domain recency damping (x0.3)
+- Added global search across memory, conversations, and projects (`GET /api/search`, CLI, SDKs, command palette)
 - Added Analytics page with quality score (A-F grade), one-click fix buttons for recommendations, issues, weekly growth chart, status donut, confidence by type, most confirmed/linked rankings
 - Added memory quality score API endpoint (`GET /api/memory/stats/quality`) with grade, breakdown, and recommendations
 - Added memory analytics API endpoint (`GET /api/memory/stats/analytics`)
@@ -287,7 +289,7 @@ Milestone 1 proved the core thesis: the model does reasoning, RecallOS provides 
 - Fixed amount extraction regex where $2000 was incorrectly parsed as $200
 - Fixed C++ and C# not being extracted as coding-language entities (regex word boundary issue)
 - Fixed failed chat requests leaving orphan conversation rows in the database
-- Fixed Trips page showing dates one day early due to UTC midnight timezone conversion
+- Fixed Projects page showing dates one day early due to UTC midnight timezone conversion
 - Fixed Dashboard health bar not loading in Vite dev mode (wrong fetch path)
 - Fixed Health page misreading API response shapes (zero conflicts and active items)
 - Fixed Trash page showing negative relative deletion times
