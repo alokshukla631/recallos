@@ -80,6 +80,20 @@ export function updateConversationTitle(id: string, title: string): void {
 }
 
 export function deleteConversation(id: string): void {
+  // Children of events must be removed first, otherwise the events DELETE
+  // fails under `PRAGMA foreign_keys = ON`.
+  //   - memory_items.source_event_id REFERENCES events(id)   (no cascade)
+  //   - context_snapshots.event_id REFERENCES events(id)     (no cascade)
+  //   - event_embeddings.event_id REFERENCES events(id) ON DELETE CASCADE
+  // Same cleanup shape used in chat.ts rollback (commit 4fea49a, fix #24).
+  runSql(
+    "DELETE FROM memory_items WHERE source_event_id IN (SELECT id FROM events WHERE conversation_id = ?)",
+    [id]
+  );
+  runSql(
+    "DELETE FROM context_snapshots WHERE event_id IN (SELECT id FROM events WHERE conversation_id = ?)",
+    [id]
+  );
   runSql("DELETE FROM events WHERE conversation_id = ?", [id]);
   runSql("DELETE FROM conversations WHERE id = ?", [id]);
 }
