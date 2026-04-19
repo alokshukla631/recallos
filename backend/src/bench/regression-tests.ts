@@ -1,5 +1,5 @@
 /**
- * Regression tests for bugs #24, #33, #34, #35, #36, #37, #38, #39.
+ * Regression tests for bugs #24, #33, #34, #35, #36, #37, #38, #39, #40.
  *
  * Each test spins up a fresh in-memory SQLite database, exercises the specific
  * code path that was broken, and asserts correct post-fix behaviour.
@@ -517,12 +517,77 @@ async function test39_deleteConversationCascades(): Promise<void> {
   );
 }
 
+// ─── #40: new chat still works even if a previous delete failed ──────────────
+
+async function test40_newChatAfterFailedDelete(): Promise<void> {
+  console.log("\n=== #40 — new chat creation is unaffected by pre-existing orphans ===");
+  await freshDb();
+
+  // Simulate the state the user saw: old conversation + events + memory_items
+  // still around because a previous DELETE failed pre-fix.
+  const oldConvId = uuidv4();
+  insertConversation(oldConvId);
+  const oldEventId = insertEvent(oldConvId, "user", "I'm vegetarian");
+  const oldCandidates = await extractMemory("I'm vegetarian", oldEventId);
+  await reconcileMemory(oldCandidates, oldEventId);
+
+  const oldItems = queryAll(
+    "SELECT id FROM memory_items WHERE source_event_id = ?", [oldEventId]
+  );
+  assert(
+    "orphan memory_items exist from prior failed delete",
+    oldItems.length > 0,
+    `count=${oldItems.length}`
+  );
+
+  // Now simulate a brand-new chat: fresh UUID, new event, new extraction.
+  const newConvId = uuidv4();
+  insertConversation(newConvId);
+
+  let threw: unknown;
+  let newEventId = "";
+  try {
+    newEventId = insertEvent(newConvId, "user", "Remind me to call mom tomorrow");
+    const cands = await extractMemory("Remind me to call mom tomorrow", newEventId);
+    await reconcileMemory(cands, newEventId);
+  } catch (err) {
+    threw = err;
+  }
+
+  assert(
+    "new chat creation does not throw despite orphan rows",
+    threw === undefined,
+    threw instanceof Error ? threw.message : String(threw)
+  );
+  assert(
+    "new event persisted",
+    queryOne("SELECT id FROM events WHERE id = ?", [newEventId]) !== undefined
+  );
+  assert(
+    "new conversation persisted",
+    queryOne("SELECT id FROM conversations WHERE id = ?", [newConvId]) !== undefined
+  );
+
+  // And now delete the old conversation the right way — it must succeed.
+  let deleteThrew: unknown;
+  try {
+    deleteConversation(oldConvId);
+  } catch (err) {
+    deleteThrew = err;
+  }
+  assert(
+    "deleting the prior stuck conversation now succeeds",
+    deleteThrew === undefined,
+    deleteThrew instanceof Error ? deleteThrew.message : String(deleteThrew)
+  );
+}
+
 // ─── Runner ───────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
   console.log("RecallOS — Bug Regression Tests");
   console.log("================================");
-  console.log("Covers: #24 #33 #34 #35 #36 #37 #38 #39\n");
+  console.log("Covers: #24 #33 #34 #35 #36 #37 #38 #39 #40\n");
 
   await test24_rollbackCleansMemory();
   await test33_nullEventIdNoFkViolation();
@@ -532,6 +597,7 @@ async function main(): Promise<void> {
   await test37_mergeTypeValidation();
   await test38_batchPinAudit();
   await test39_deleteConversationCascades();
+  await test40_newChatAfterFailedDelete();
 
   console.log("\n================================");
   console.log(`Results: ${passed} passed, ${failed} failed`);
