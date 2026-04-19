@@ -66,9 +66,10 @@ app.get("/api/search", (req, res) => {
       [pattern, pattern]
     );
 
-    // Search conversations
+    // Search conversations — note: conversations table has no provider column;
+    // provider info lives on events rows.
     const conversations = queryAll(
-      `SELECT c.id, c.provider, c.created_at,
+      `SELECT c.id, c.title, c.created_at,
               (SELECT COUNT(*) FROM events WHERE conversation_id = c.id) as message_count
        FROM conversations c
        WHERE c.id IN (
