@@ -35,6 +35,27 @@ const EXTRACTION_RULES: ExtractionRule[] = [
     confidence: 0.9,
   },
 
+  // Medical / dietary / lifestyle constraints (MUST be before generic fact rules
+  // so "I have celiac disease" lands as constraint, not fact — constraints are
+  // always injected into context regardless of recency or BM25 score)
+  {
+    patterns: [
+      // Diagnosed conditions and food intolerances
+      /\b(?:i have (?:celiac|coeliac|diabetes|ibs|crohn|lactose intolerance|nut allergy|peanut allergy|shellfish allergy|gluten (allergy|sensitivity)|a (nut|peanut|shellfish|dairy|egg) allergy))\b/i,
+      // Dietary identity labels
+      /\b(?:i'?m (?:celiac|coeliac|diabetic|lactose intolerant|nut allergic|pescatarian|vegan|vegetarian|gluten[- ]free))\b/i,
+      // What the user can't / won't eat
+      /\b(?:i (?:don'?t|can'?t|cannot|won'?t) eat (?:meat|pork|beef|chicken|fish|seafood|shellfish|nuts|dairy|gluten|wheat|eggs?|soy))\b/i,
+      /\b(?:i'?m not (?:allowed|supposed) to eat)\b/i,
+      /\b(?:i (?:am|'m) (?:on|following|doing) a? (?:keto|paleo|vegan|vegetarian|gluten[- ]free|dairy[- ]free|low[- ]carb|intermittent fasting|mediterranean) diet)\b/i,
+      // Explicit dietary requirements
+      /\b(?:i need (?:vegan|vegetarian|halal|kosher|gluten[- ]free|dairy[- ]free|nut[- ]free) (options?|food|meals?|alternatives?))\b/i,
+    ],
+    type: "constraint",
+    confidence: 0.92,
+    domain: "health",
+  },
+
   // Constraints (hard limits across any domain)
   {
     patterns: [
@@ -123,10 +144,11 @@ const EXTRACTION_RULES: ExtractionRule[] = [
     domain: "work",
   },
 
-  // Facts - Health / Dietary
+  // Facts - Health / Dietary (generic health facts not covered by the
+  // specific medical/dietary constraint rule above)
   {
     patterns: [
-      /\b(?:I'm (?:allergic|intolerant|diabetic|vegan|vegetarian|lactose)|I (?:don't|can't) eat|dietary|my (?:allergy|allergies|condition|medication|doctor)|gluten.free|nut.free)\b/i,
+      /\b(?:my (?:condition|medication|prescription|doctor|therapist|specialist)|I (?:take|am on) (?:medication|meds)|my (?:blood pressure|cholesterol|BMI|weight goal))\b/i,
     ],
     type: "fact",
     confidence: 0.85,
