@@ -48,10 +48,15 @@ npm run dev:frontend  # http://localhost:5173
 ### Run the benchmark suite
 
 ```bash
-npm run bench
+npm run bench          # 5 structured memory scenarios
+npm run bench:verbatim # 60 verbatim retrieval assertions
+npm run bench:eval     # LongMemEval-compatible eval (40 cases, 6 categories)
+npm run bench:all      # all three suites in sequence
 ```
 
-This runs 5 end-to-end scenarios that test memory extraction, duplicate detection, entity extraction, context compilation, and precedence rules. No API keys needed.
+No API keys needed. The eval suite measures Recall@5/10, NDCG, and MRR across
+single_session_preference, assistant_recall, temporal_history, episodic_search,
+and noisy_haystack categories.
 
 ## How it works
 
@@ -59,9 +64,37 @@ RecallOS sits between you and the AI model. When you send a message:
 
 1. **Extract** - Multi-domain extraction pulls structured memory from your message (preferences, constraints, goals, facts, overrides) across 8 domains: travel, coding, work, health, finance, learning, writing, and communication. Entity extraction catches dates, destinations, amounts, durations, technologies, and programming languages.
 2. **Reconcile** - New memory is compared against existing memory. Duplicates are re-confirmed (boosting confidence). Conflicts are resolved using a scope-aware precedence system (session > project > domain > global). Superseded items are marked stale.
-3. **Compile** - BM25 ranking plus recency decay scores every active memory item. Items linked to high-scoring anchors get a cross-domain boost. Only relevant items are included. Constraints and overrides are always included.
+3. **Compile** - Two parallel lanes are merged into a single context block:
+   - **Structured lane (authority)** — BM25 + recency decay + domain boost + cross-link boost scores every active memory item. Constraints and overrides are always included.
+   - **Verbatim lane (evidence)** — the raw event log is searched with a five-signal scoring pipeline (see below) and the top-N past conversation snippets are appended as `[PAST CONVERSATION EVIDENCE]`.
 4. **Deliver** - The compiled context is injected into the system prompt alongside your conversation history, then sent to whichever AI provider you selected.
 5. **Store** - The full exchange is stored locally with a context snapshot for debugging.
+
+### Hybrid retrieval — five scoring signals
+
+Every raw conversation event is scored against the current query by summing five additive signals:
+
+| Signal | Max weight | Notes |
+|---|---|---|
+| **BM25** (lexical) | 1.00 | Normalised across candidate set; question words removed from stoplist |
+| **Temporal proximity** | 0.40 | Gaussian decay centred on time anchor ("last week", "yesterday", etc.) |
+| **Preference evidence** | 0.25 | Boost for "I usually / I prefer / I tend to…" phrasing |
+| **Role boost** | 0.30 | Assistant turns boosted on assistant-recall queries |
+| **Semantic cosine** | 0.35 | OpenAI `text-embedding-3-small` cosine, cached in `event_embeddings`; gracefully absent when no key is configured |
+
+Query type is classified automatically (assistant_recall, temporal_history, preference_profile, episodic_search, planning, balanced) and the snippet budget (2–5) and `isAssistantQuery` flag are set accordingly.
+
+**Eval results** (BM25 + boosts only, no API key):
+```
+Category                    R@5    R@10   NDCG@5
+single_session_preference  1.000  1.000  1.000
+assistant_recall           1.000  1.000  0.845
+temporal_history           1.000  1.000  0.786
+episodic_search            1.000  1.000  1.000
+noisy_haystack             1.000  1.000  0.649
+Overall                    0.975  1.000  0.865   Grade: A+
+LongMemEval baseline                    ~0.40
+```
 
 ## What's built
 
@@ -75,7 +108,7 @@ RecallOS sits between you and the AI model. When you send a message:
 - **Graph** - Canvas-based force-directed graph visualization. Nodes colored by type or domain. Search to find and highlight nodes. Filter by type, toggle same-key implicit links. Drag, pan, zoom, and click to inspect. Info panel shows connections.
 - **Timeline** - Chronological audit history with 12-week activity heatmap. Filter by action type with clickable chips. Search entries by key or details.
 - **Scraper** - View available log sources (Claude Code, Cursor, GitHub Copilot, ChatGPT, Windsurf) with status indicators, descriptions, and paths. Stats bar with source counts. Trigger scrapes to extract memory from external AI tool conversations. Per-source extraction badges and session scrape history.
-- **Context Debug** - Inspect context snapshots with full trace: BM25 score, recency boost, final score, and inclusion decision for every memory item.
+- **Context Debug** - Inspect context snapshots with full trace: BM25 score, recency boost, final score, and inclusion decision for every memory item. Live Evidence Lane search panel: type any query and see verbatim snippets scored by all five retrieval signals.
 - **Analytics** - Advanced memory analytics page with quality score (A-F grade ring), issue detection, prioritized recommendations with one-click fix buttons (reconfirm, cleanup stale, confirm old), weekly growth bar chart, status breakdown donut, average confidence by type with progress bars, most confirmed keys, most linked items, pinned by domain, memory age span, and context snapshot count.
 - **Health** - Memory health score with breakdown. Duplicate detection with one-click merge. Stale candidate detection with bulk cleanup. Importance distribution (top and bottom items). Conflict count warning. Memory age distribution bar chart. Refresh button with last-checked timestamp.
 - **Trash** - View recently deleted memory items and restore them individually or all at once. Search filter, sort by deleted time/key/type, and filtered item count.
@@ -90,6 +123,7 @@ RecallOS sits between you and the AI model. When you send a message:
 - **Merge** - Combine two memory items: source gets superseded, tags are copied to target, confidence takes the max. Accessible from the detail modal or API
 - **Version diff** - Word-level comparison between version history entries. Added words highlighted green, removed words shown in red with strikethrough
 - **Trash and restore** - Soft-deleted items can be listed and restored back to active status from the Trash page, CLI, or API
+- **Hybrid retrieval** — Two-lane pipeline: structured memory (authority) + verbatim event search (evidence). Five scoring signals: BM25, temporal proximity, preference-evidence boost, role boost, and semantic cosine similarity (OpenAI `text-embedding-3-small`, cached). Query classifier routes between lanes and sets snippet budget. Eval: 0.975 Recall@5 vs ~0.40 LongMemEval baseline.
 - **BM25 + recency + domain + link boost** - Full BM25 with IDF, term frequency saturation, length normalization, lightweight stemming. Recency decay (7-day half-life). Domain-aware scoring: same-domain items get a boost, cross-domain items have recency dampened so they only appear with strong keyword overlap. Cross-domain link boosting for related items.
 - **Memory relationships** - Link items with typed relations (related_to, depends_on, conflicts_with, refines, derived_from) with configurable strength
 - **Confidence decay** - Items not reconfirmed gradually lose confidence (30-day half-life). Items below threshold are auto-staled.
@@ -117,7 +151,7 @@ RecallOS sits between you and the AI model. When you send a message:
   - **GitHub Copilot** - Reads Copilot Chat conversations from VS Code globalStorage
   - **ChatGPT** - Reads `conversations.json` exports (from Settings > Export data)
   - **Windsurf** - Reads SQLite conversation data from Windsurf state
-- **MCP server** - Connect any MCP-compatible AI tool (Claude Desktop, Cursor, VS Code) to your memory. 9 tools, 6 resources, 3 prompts.
+- **MCP server** - Connect any MCP-compatible AI tool (Claude Desktop, Cursor, VS Code) to your memory. 10 tools (including `search_verbatim` for evidence-lane access), 6 resources, 3 prompts.
 - **MCP auto-config** - Generate and auto-install config for Claude Desktop. Supports Windows, macOS, and Linux.
 
 ### Developer tools
@@ -166,7 +200,9 @@ Or add this to your Claude Desktop config:
 }
 ```
 
-The MCP server exposes your memory as tools (search, add, compile context), resources (preferences, constraints, projects), and prompts (with_my_context, project_planning, memory_summary).
+The MCP server exposes your memory as tools (search, add, compile context, search verbatim past conversations), resources (preferences, constraints, projects), and prompts (with_my_context, project_planning, memory_summary).
+
+**Available MCP tools:** `search_memory`, `get_context`, `get_context_packet`, `record_memory`, `add_memory`, `list_memory`, `list_projects`, `search_verbatim`, `delete_memory` (10 total)
 
 ## Python SDK
 
@@ -307,10 +343,10 @@ Milestone 1 proved the core thesis: the model does reasoning, RecallOS provides 
 - Added domain-aware scoring to context compiler so cross-domain items do not ride into context on recency alone
 
 What's next:
-- Local embedding search (vector similarity alongside BM25)
 - Memory sharing and collaboration (multi-user support)
 - MCP client connections (pull context from calendars, documents, code repos)
 - Background refiner with a local model for smarter extraction
+- Embedding fine-tuning on personal conversation history for improved recall
 
 See the [docs](docs/) folder for the full vision and roadmap.
 
