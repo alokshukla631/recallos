@@ -1,5 +1,5 @@
 /**
- * Regression tests for bugs #24, #33, #34, #35, #36, #37, #38.
+ * Regression tests for bugs #24, #33, #34, #35, #36, #37, #38, #39.
  *
  * Each test spins up a fresh in-memory SQLite database, exercises the specific
  * code path that was broken, and asserts correct post-fix behaviour.
@@ -16,6 +16,7 @@ import { extractMemory } from "../modules/memory-extractor.js";
 import { reconcileMemory } from "../modules/memory-reconciler.js";
 import { searchVerbatim } from "../modules/verbatim-retriever.js";
 import { logAudit } from "../modules/audit.js";
+import { deleteConversation } from "../modules/conversations.js";
 
 // ─── Assertion harness ────────────────────────────────────────────────────────
 
@@ -443,12 +444,85 @@ async function test38_batchPinAudit(): Promise<void> {
   assert("item.pinned = 0 after batch unpin", unpinnedRow?.pinned === 0);
 }
 
+// ─── #39: deleteConversation cascades through memory_items + context_snapshots ─
+
+async function test39_deleteConversationCascades(): Promise<void> {
+  console.log("\n=== #39 — deleteConversation cleans FK children first ===");
+  await freshDb();
+
+  const convId = uuidv4();
+  insertConversation(convId);
+
+  // Produce an event + extracted memory_items (the usual chat shape)
+  const eventId = insertEvent(
+    convId, "user",
+    "I'm vegetarian and I prefer dark mode"
+  );
+  const candidates = await extractMemory(
+    "I'm vegetarian and I prefer dark mode",
+    eventId
+  );
+  await reconcileMemory(candidates, eventId);
+
+  // And a context_snapshot referencing the event (saveSnapshot shape)
+  const snapshotId = uuidv4();
+  runSql(
+    `INSERT INTO context_snapshots
+       (id, event_id, provider, compiled_context_json, included_memory_ids,
+        omitted_memory_ids, rationale_json, prompt_preview, created_at)
+     VALUES (?, ?, 'test', '{}', '[]', '[]', '{}', '', datetime('now'))`,
+    [snapshotId, eventId]
+  );
+
+  const preMemItems = queryAll(
+    "SELECT id FROM memory_items WHERE source_event_id = ?", [eventId]
+  );
+  const preSnaps = queryAll(
+    "SELECT id FROM context_snapshots WHERE event_id = ?", [eventId]
+  );
+  assert(
+    "memory_items + context_snapshots exist before delete",
+    preMemItems.length > 0 && preSnaps.length === 1,
+    `items=${preMemItems.length} snaps=${preSnaps.length}`
+  );
+
+  let threw: unknown;
+  try {
+    deleteConversation(convId);
+  } catch (err) {
+    threw = err;
+  }
+
+  assert(
+    "deleteConversation does not throw FK error",
+    threw === undefined,
+    threw instanceof Error ? threw.message : String(threw)
+  );
+
+  assert(
+    "memory_items gone after delete",
+    queryAll("SELECT id FROM memory_items WHERE source_event_id = ?", [eventId]).length === 0
+  );
+  assert(
+    "context_snapshots gone after delete",
+    queryAll("SELECT id FROM context_snapshots WHERE event_id = ?", [eventId]).length === 0
+  );
+  assert(
+    "events gone after delete",
+    queryAll("SELECT id FROM events WHERE conversation_id = ?", [convId]).length === 0
+  );
+  assert(
+    "conversation row gone after delete",
+    queryOne("SELECT id FROM conversations WHERE id = ?", [convId]) === undefined
+  );
+}
+
 // ─── Runner ───────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
   console.log("RecallOS — Bug Regression Tests");
   console.log("================================");
-  console.log("Covers: #24 #33 #34 #35 #36 #37 #38\n");
+  console.log("Covers: #24 #33 #34 #35 #36 #37 #38 #39\n");
 
   await test24_rollbackCleansMemory();
   await test33_nullEventIdNoFkViolation();
@@ -457,6 +531,7 @@ async function main(): Promise<void> {
   await test36_roleBoostMixedQuery();
   await test37_mergeTypeValidation();
   await test38_batchPinAudit();
+  await test39_deleteConversationCascades();
 
   console.log("\n================================");
   console.log(`Results: ${passed} passed, ${failed} failed`);
