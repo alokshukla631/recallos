@@ -217,13 +217,23 @@ function Chat() {
     e.stopPropagation();
     if (!confirm("Delete this conversation? This cannot be undone.")) return;
     try {
-      await fetch(`/api/chat/conversations/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/chat/conversations/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        // Surface the failure instead of silently resetting local state.
+        // Previously a 500 (e.g. FK constraint error) left the UI in a
+        // confusing state: local state reset as if delete succeeded, but
+        // the conversation stayed in the sidebar on refresh.
+        const errData = await res.json().catch(() => ({}));
+        alert(`Could not delete conversation: ${errData.error || res.statusText}`);
+        return;
+      }
       if (conversationId === id) {
         startNewConversation();
       }
       fetchConversations();
-    } catch {
-      // ignore
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Network error";
+      alert(`Could not delete conversation: ${msg}`);
     }
   }
 
