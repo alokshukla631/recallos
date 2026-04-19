@@ -381,12 +381,14 @@ router.get("/stats/analytics", (_req: Request, res: Response) => {
        GROUP BY week ORDER BY week ASC`
     );
 
-    // Top 10 most confirmed keys
+    // Top 10 most confirmed keys (join to memory_items to resolve the key name;
+    // memory_audit_log has memory_item_id, not a memory_key column)
     const mostConfirmed = queryAll(
-      `SELECT memory_key as key, COUNT(*) as confirmations
-       FROM memory_audit_log
-       WHERE action = 'reconfirmed' AND memory_key IS NOT NULL
-       GROUP BY memory_key ORDER BY confirmations DESC LIMIT 10`
+      `SELECT mi.key AS key, COUNT(*) AS confirmations
+       FROM memory_audit_log al
+       LEFT JOIN memory_items mi ON mi.id = al.memory_item_id
+       WHERE al.action = 'reconfirmed' AND mi.key IS NOT NULL
+       GROUP BY mi.key ORDER BY confirmations DESC LIMIT 10`
     );
 
     // Items by status
@@ -952,10 +954,11 @@ router.post("/bulk", async (req: Request, res: Response) => {
 
     for (const text of statements) {
       if (typeof text !== "string" || text.trim().length < 5) continue;
-      const eventId = "bulk-" + Date.now().toString(36);
-      const candidates = await extractMemory(text.trim(), eventId, project_id);
+      // Pass null as source_event_id — bulk text has no backing event row,
+      // so a synthetic ID would violate the FK constraint on memory_items.
+      const candidates = await extractMemory(text.trim(), "", project_id);
       if (candidates.length > 0) {
-        const result = await reconcileMemory(candidates, eventId);
+        const result = await reconcileMemory(candidates, null);
         totalExtracted += candidates.length;
         totalAdded += result.added.length;
         totalDuplicates += result.duplicates.length;
@@ -997,9 +1000,11 @@ router.post("/batch", (req: Request, res: Response) => {
       switch (action) {
         case "pin":
           runSql("UPDATE memory_items SET pinned = 1 WHERE id = ?", [id]);
+          logAudit(id, "pinned", "Batch pin");
           break;
         case "unpin":
           runSql("UPDATE memory_items SET pinned = 0 WHERE id = ?", [id]);
+          logAudit(id, "unpinned", "Batch unpin");
           break;
         case "delete":
           runSql("UPDATE memory_items SET status = 'stale' WHERE id = ?", [id]);
@@ -1359,6 +1364,27 @@ router.post("/merge", (req: Request, res: Response) => {
       return;
     }
 
+    // Validate merge compatibility — merging items of different types produces
+    // incoherent memory (e.g. mixing a preference with a constraint).
+    if (source.type !== target.type) {
+      res.status(400).json({
+        error: `Cannot merge items of different types: "${source.type}" vs "${target.type}"`,
+      });
+      return;
+    }
+
+    // Collect non-fatal warnings for scope/domain mismatches so the caller
+    // can decide whether to proceed.
+    const mergeWarnings: string[] = [];
+    if (source.scope !== target.scope) {
+      mergeWarnings.push(`scope mismatch: "${source.scope}" vs "${target.scope}"`);
+    }
+    if (source.domain !== target.domain) {
+      mergeWarnings.push(
+        `domain mismatch: "${source.domain || "none"}" vs "${target.domain || "none"}"`
+      );
+    }
+
     // Update target with merged value (or keep target value if not provided)
     const finalValue = merged_value || `${target.value}; ${source.value}`;
     const finalConfidence = Math.max(source.confidence, target.confidence);
@@ -1385,7 +1411,10 @@ router.post("/merge", (req: Request, res: Response) => {
     fireWebhook("merged", { source_id, target_id, kept_id: target_id });
 
     const updated = queryOne("SELECT * FROM memory_items WHERE id = ?", [target_id]);
-    res.json(updated);
+    res.json({
+      ...(updated as object),
+      merge_warnings: mergeWarnings,
+    });
   } catch (err) {
     console.error("POST /api/memory/merge error:", err);
     res.status(500).json({ error: "Internal server error" });
