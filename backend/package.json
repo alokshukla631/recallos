@@ -9,7 +9,8 @@
     "start": "node dist/index.js",
     "bench": "tsx src/bench/scenarios.ts",
     "bench:verbatim": "tsx src/bench/verbatim-scenarios.ts",
-    "bench:all": "npm run bench && npm run bench:verbatim",
+    "bench:eval": "tsx src/bench/hybrid-eval.ts",
+    "bench:all": "npm run bench && npm run bench:verbatim && npm run bench:eval",
     "mcp": "tsx src/mcp-server.ts"
   },
   "dependencies": {
