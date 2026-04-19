@@ -440,12 +440,20 @@ export async function compileContext(
     classification.type === "planning"          ? 3 :
     2; // balanced
 
+  // isAssistantQuery is true both for pure assistant_recall queries AND for
+  // temporal_history queries that also carry an assistant_recall signal
+  // (e.g. "what did you recommend last week?").  Without this, the role boost
+  // that surfaces assistant turns is silently dropped on the latter.
+  const isAssistantQuery =
+    classification.type === "assistant_recall" ||
+    classification.signals.includes("assistant_recall");
+
   const verbatimSnippets = await searchVerbatim(currentMessage, {
     maxResults:             snippetBudget,
     excludeConversationId:  conversationId,
     projectId,
     temporalAnchor:         classification.temporalAnchor,
-    isAssistantQuery:       classification.type === "assistant_recall",
+    isAssistantQuery,
   });
 
   // Append verbatim section to context text when there are results.
