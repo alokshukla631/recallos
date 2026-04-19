@@ -14,7 +14,7 @@ import { extractMemory, type MemoryCandidate } from "./memory-extractor.js";
 import { reconcileMemory } from "./memory-reconciler.js";
 import { logAudit } from "./audit.js";
 import { queryOne, runSql } from "../db/index.js";
-import { v4 as uuidv4 } from "uuid";
+// uuid import removed — scraper no longer generates synthetic event IDs
 
 // ---------------------------------------------------------------------------
 // Types
@@ -620,10 +620,11 @@ export async function scrapeAll(): Promise<ScrapeResult[]> {
 
         if (msg.content.length < MIN_SCRAPE_MSG_LENGTH) continue;
         ccResult.messagesNew++;
-        const eventId = "scrape-cc-" + uuidv4().slice(0, 8);
-        const candidates = discountScrapedCandidates(await extractMemory(msg.content, eventId));
+        // Pass null as source_event_id — scraped messages have no event row
+        // in the RecallOS DB, so a synthetic ID would violate the FK constraint.
+        const candidates = discountScrapedCandidates(await extractMemory(msg.content, ""));
         if (candidates.length > 0) {
-          const result = await reconcileMemory(candidates, eventId);
+          const result = await reconcileMemory(candidates, null);
           ccResult.memoryExtracted += result.added.length;
         }
       }
@@ -662,10 +663,9 @@ export async function scrapeAll(): Promise<ScrapeResult[]> {
 
       if (msg.content.length < MIN_SCRAPE_MSG_LENGTH) continue;
       cursorResult.messagesNew++;
-      const eventId = "scrape-cursor-" + uuidv4().slice(0, 8);
-      const candidates = discountScrapedCandidates(await extractMemory(msg.content, eventId));
+      const candidates = discountScrapedCandidates(await extractMemory(msg.content, ""));
       if (candidates.length > 0) {
-        const result = await reconcileMemory(candidates, eventId);
+        const result = await reconcileMemory(candidates, null);
         cursorResult.memoryExtracted += result.added.length;
       }
     }
@@ -701,10 +701,9 @@ export async function scrapeAll(): Promise<ScrapeResult[]> {
 
         if (msg.content.length < MIN_SCRAPE_MSG_LENGTH) continue;
         chatgptResult.messagesNew++;
-        const eventId = "scrape-chatgpt-" + uuidv4().slice(0, 8);
-        const candidates = discountScrapedCandidates(await extractMemory(msg.content, eventId));
+        const candidates = discountScrapedCandidates(await extractMemory(msg.content, ""));
         if (candidates.length > 0) {
-          const result = await reconcileMemory(candidates, eventId);
+          const result = await reconcileMemory(candidates, null);
           chatgptResult.memoryExtracted += result.added.length;
         }
       }
@@ -739,10 +738,9 @@ export async function scrapeAll(): Promise<ScrapeResult[]> {
 
       if (msg.content.length < MIN_SCRAPE_MSG_LENGTH) continue;
       copilotResult.messagesNew++;
-      const eventId = "scrape-copilot-" + uuidv4().slice(0, 8);
-      const candidates = discountScrapedCandidates(await extractMemory(msg.content, eventId));
+      const candidates = discountScrapedCandidates(await extractMemory(msg.content, ""));
       if (candidates.length > 0) {
-        const result = await reconcileMemory(candidates, eventId);
+        const result = await reconcileMemory(candidates, null);
         copilotResult.memoryExtracted += result.added.length;
       }
     }
@@ -776,10 +774,9 @@ export async function scrapeAll(): Promise<ScrapeResult[]> {
 
       if (msg.content.length < MIN_SCRAPE_MSG_LENGTH) continue;
       windsurfResult.messagesNew++;
-      const eventId = "scrape-windsurf-" + uuidv4().slice(0, 8);
-      const candidates = discountScrapedCandidates(await extractMemory(msg.content, eventId));
+      const candidates = discountScrapedCandidates(await extractMemory(msg.content, ""));
       if (candidates.length > 0) {
-        const result = await reconcileMemory(candidates, eventId);
+        const result = await reconcileMemory(candidates, null);
         windsurfResult.memoryExtracted += result.added.length;
       }
     }

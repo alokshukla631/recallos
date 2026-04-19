@@ -166,7 +166,7 @@ function findExistingByKey(key: string, scope: string, projectId?: string): Memo
   ) as unknown as MemoryItem | undefined;
 }
 
-function insertMemoryItem(candidate: MemoryCandidate, eventId: string): MemoryItem {
+function insertMemoryItem(candidate: MemoryCandidate, eventId: string | null): MemoryItem {
   const id = uuidv4();
   const now = new Date().toISOString();
 
@@ -206,7 +206,7 @@ function recordConflict(
 
 export async function reconcileMemory(
   candidates: MemoryCandidate[],
-  eventId: string
+  eventId: string | null
 ): Promise<ReconcileResult> {
   const added: MemoryItem[] = [];
   const updated: MemoryItem[] = [];
