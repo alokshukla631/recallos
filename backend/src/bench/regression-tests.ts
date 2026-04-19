@@ -356,6 +356,41 @@ async function test37_mergeTypeValidation(): Promise<void> {
   const domItem = queryOne("SELECT * FROM memory_items WHERE id = ?", [domPrefId]) as any;
   const scopeWarning = src.scope !== domItem.scope;
   assert("scope mismatch produces warning, not block", scopeWarning);
+
+  // Superseded source must be unpinned — otherwise a pinned source survives
+  // as pinned=1 even after being marked superseded, polluting context.
+  const pinnedSrcId = uuidv4();
+  const targetId2   = uuidv4();
+  runSql(
+    `INSERT INTO memory_items (id, key, type, value, scope, confidence, pinned, status, created_at)
+     VALUES (?, 'diet', 'preference', 'pinned source pref', 'global', 0.9, 1, 'active', datetime('now'))`,
+    [pinnedSrcId]
+  );
+  runSql(
+    `INSERT INTO memory_items (id, key, type, value, scope, confidence, pinned, status, created_at)
+     VALUES (?, 'diet', 'preference', 'target pref', 'global', 0.8, 0, 'active', datetime('now'))`,
+    [targetId2]
+  );
+
+  // Simulate the fixed merge supersede step (sets pinned = 0 on source)
+  runSql(
+    "UPDATE memory_items SET status = 'superseded', superseded_by = ?, pinned = 0 WHERE id = ?",
+    [targetId2, pinnedSrcId]
+  );
+
+  const afterMerge = queryOne(
+    "SELECT pinned, status FROM memory_items WHERE id = ?",
+    [pinnedSrcId]
+  ) as any;
+  assert(
+    "superseded source is unpinned after merge",
+    afterMerge?.pinned === 0,
+    `pinned=${afterMerge?.pinned}`
+  );
+  assert(
+    "superseded source has status=superseded",
+    afterMerge?.status === "superseded"
+  );
 }
 
 // ─── #38: batch pin/unpin writes audit log ───────────────────────────────────

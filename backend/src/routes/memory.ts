@@ -1394,9 +1394,11 @@ router.post("/merge", (req: Request, res: Response) => {
       [finalValue, finalConfidence, target_id]
     );
 
-    // Mark source as superseded by target
+    // Mark source as superseded by target and unpin it.
+    // Leaving a superseded item pinned would keep it in every context packet
+    // indefinitely and corrupt the exported passport state.
     runSql(
-      "UPDATE memory_items SET status = 'superseded', superseded_by = ? WHERE id = ?",
+      "UPDATE memory_items SET status = 'superseded', superseded_by = ?, pinned = 0 WHERE id = ?",
       [target_id, source_id]
     );
 
