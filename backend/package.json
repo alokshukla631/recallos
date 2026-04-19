@@ -10,7 +10,8 @@
     "bench": "tsx src/bench/scenarios.ts",
     "bench:verbatim": "tsx src/bench/verbatim-scenarios.ts",
     "bench:eval": "tsx src/bench/hybrid-eval.ts",
-    "bench:all": "npm run bench && npm run bench:verbatim && npm run bench:eval",
+    "bench:regression": "tsx src/bench/regression-tests.ts",
+    "bench:all": "npm run bench && npm run bench:verbatim && npm run bench:eval && npm run bench:regression",
     "mcp": "tsx src/mcp-server.ts"
   },
   "dependencies": {
