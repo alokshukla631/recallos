@@ -253,6 +253,14 @@ export async function compileContext(
   const LINK_BOOST = 0.08;          // Boost for items linked to high-scoring items
   const DOMAIN_MATCH_BOOST = 0.1;   // Boost for items matching the message domain
   const DOMAIN_MISMATCH_FACTOR = 0.3; // Recency multiplier for cross-domain items
+  // High-confidence preferences survive recency decay (relevance > recency policy).
+  // A global/domain preference with confidence ≥ 0.85 gets a floor of
+  //   confidence × 0.12   →  0.85 → 0.102, 0.95 → 0.114
+  // so it stays just above RELEVANCE_THRESHOLD even when BM25 is zero and the
+  // item is months old.  Lower-confidence / session-scoped prefs still need
+  // BM25 or recency to earn inclusion.
+  const CONFIDENCE_FLOOR_FACTOR = 0.12;
+  const CONFIDENCE_FLOOR_MIN    = 0.85;
 
   const included: MemoryItem[] = [];
   const omitted: MemoryItem[] = [];
@@ -303,7 +311,17 @@ export async function compileContext(
     const bm25Score = scoreMap.get(item.id) ?? 0;
     const { recency, domainBoost } = domainAwareRecency(item);
     const linkBoost = linkedToAnchors.has(item.id) && !anchorIds.has(item.id) ? LINK_BOOST : 0;
-    const finalScore = bm25Score + recency + linkBoost + domainBoost;
+
+    // Confidence floor: well-established global/domain preferences keep a
+    // minimum score so they are not evicted purely due to recency decay.
+    const confFloor =
+      item.type === "preference" &&
+      item.confidence >= CONFIDENCE_FLOOR_MIN &&
+      (item.scope === "global" || item.scope === "domain")
+        ? item.confidence * CONFIDENCE_FLOOR_FACTOR
+        : 0;
+
+    const finalScore = bm25Score + recency + linkBoost + domainBoost + confFloor;
     const alwaysInclude = item.type === "override" || item.type === "constraint" || item.pinned === 1;
 
     if (finalScore >= RELEVANCE_THRESHOLD || alwaysInclude) {
@@ -312,7 +330,7 @@ export async function compileContext(
         ? "Pinned by user"
         : alwaysInclude && finalScore < RELEVANCE_THRESHOLD
         ? `Always included (type=${item.type})`
-        : `Score ${finalScore.toFixed(3)} above threshold (bm25=${bm25Score.toFixed(3)}, recency=${recency.toFixed(3)}, domain=${domainBoost.toFixed(3)})`;
+        : `Score ${finalScore.toFixed(3)} above threshold (bm25=${bm25Score.toFixed(3)}, recency=${recency.toFixed(3)}, domain=${domainBoost.toFixed(3)}${confFloor > 0 ? `, conf_floor=${confFloor.toFixed(3)}` : ""})`;
       rationale[item.id] = `Included: score=${finalScore.toFixed(2)}, type=${item.type}, domain=${item.domain || "general"}`;
       trace.push({
         memory_item_id: item.id,
@@ -343,7 +361,7 @@ export async function compileContext(
         domain_boost: parseFloat(domainBoost.toFixed(4)),
         final_score: parseFloat(finalScore.toFixed(4)),
         decision: "omitted",
-        reason: `Score ${finalScore.toFixed(3)} below threshold (bm25=${bm25Score.toFixed(3)}, recency=${recency.toFixed(3)}, domain=${domainBoost.toFixed(3)})`,
+        reason: `Score ${finalScore.toFixed(3)} below threshold (bm25=${bm25Score.toFixed(3)}, recency=${recency.toFixed(3)}, domain=${domainBoost.toFixed(3)}${confFloor > 0 ? `, conf_floor=${confFloor.toFixed(3)}` : ""})`,
       });
     }
   }
