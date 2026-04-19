@@ -2,6 +2,10 @@ import { queryAll, runSql } from "../db/index.js";
 import { bm25Rank } from "./ranking.js";
 import { findRelated } from "./links.js";
 import type { MemoryItem } from "./memory-reconciler.js";
+import { classifyQuery } from "./query-classifier.js";
+import type { QueryClassification, QueryType } from "./query-classifier.js";
+import { searchVerbatim } from "./verbatim-retriever.js";
+import type { VerbatimSnippet } from "./verbatim-retriever.js";
 
 export interface ContextPacket {
   domain: string;
@@ -12,6 +16,27 @@ export interface ContextPacket {
   overrides: MemoryItem[];
   facts: MemoryItem[];
   ambiguities: string[];
+  // Verbatim retrieval lane (Phase 1 hybrid upgrade)
+  verbatimSnippets?: VerbatimSnippet[];
+  queryType?: QueryType;
+}
+
+/**
+ * Scoring trace entry for a verbatim snippet.
+ * Mirrors TraceEntry for structured memory but covers the evidence layer.
+ */
+export interface VerbatimTrace {
+  event_id: string;
+  conversation_id: string;
+  role: string;
+  content_preview: string;   // first 120 chars
+  created_at: string;
+  bm25_score: number;
+  temporal_boost: number;
+  preference_boost: number;
+  role_boost: number;
+  final_score: number;
+  reason: string;
 }
 
 export interface TraceEntry {
@@ -43,6 +68,9 @@ export interface CompiledContext {
   omittedIds: string[];
   rationale: Record<string, string>;
   trace: TraceEntry[];
+  // Verbatim retrieval results (Phase 1 hybrid upgrade)
+  verbatimTrace?: VerbatimTrace[];
+  queryClassification?: QueryClassification;
   tokenEstimate: TokenEstimate;
 }
 
@@ -380,7 +408,7 @@ export async function compileContext(
     "Use this context when answering. If uncertain or if context conflicts with the user's latest instruction, ask a clarifying question."
   );
 
-  const contextText = lines.join("\n");
+  const structuredContextText = lines.join("\n");
 
   // Auto-reconfirm: update last_confirmed_at for all included items.
   // This feeds back into the decay system - frequently used items stay fresh.
@@ -393,25 +421,93 @@ export async function compileContext(
     );
   }
 
-  // Token estimation: rough heuristic (1 token ~= 4 chars for English)
-  const CONTEXT_BUDGET = 4096; // typical system prompt budget in tokens
-  const charCount = contextText.length;
-  const wordCount = contextText.split(/\s+/).filter(Boolean).length;
+  // ─── Verbatim retrieval lane ───────────────────────────────────────────────
+  // Classify the query to determine retrieval strategy and snippet budget.
+  const classification = classifyQuery(currentMessage);
+
+  // Number of verbatim snippets to include scales with verbatim weight:
+  //   assistant_recall / temporal_history → up to 5
+  //   episodic_search                     → up to 4
+  //   preference_profile / planning       → up to 3
+  //   balanced                            → up to 2
+  const snippetBudget =
+    classification.type === "assistant_recall"  ? 5 :
+    classification.type === "temporal_history"  ? 5 :
+    classification.type === "episodic_search"   ? 4 :
+    classification.type === "preference_profile"? 3 :
+    classification.type === "planning"          ? 3 :
+    2; // balanced
+
+  const verbatimSnippets = searchVerbatim(currentMessage, {
+    maxResults:             snippetBudget,
+    excludeConversationId:  conversationId,
+    projectId,
+    temporalAnchor:         classification.temporalAnchor,
+    isAssistantQuery:       classification.type === "assistant_recall",
+  });
+
+  // Append verbatim section to context text when there are results.
+  let contextText = structuredContextText;
+  if (verbatimSnippets.length > 0) {
+    const evidenceLines: string[] = [
+      "",
+      "[PAST CONVERSATION EVIDENCE]",
+    ];
+    for (const snippet of verbatimSnippets) {
+      const d = new Date(snippet.created_at);
+      const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      evidenceLines.push(`-- ${dateStr}, ${snippet.role} --`);
+      evidenceLines.push(snippet.context_window);
+      evidenceLines.push("");
+    }
+    evidenceLines.push(
+      "Note: The structured context above is the authority source.",
+      "Use past conversations as supporting evidence for episodic recall,",
+      "subtle preferences, and prior assistant recommendations."
+    );
+    contextText = structuredContextText + "\n" + evidenceLines.join("\n");
+  }
+
+  // Build verbatim trace (mirrors TraceEntry for the evidence layer)
+  const verbatimTrace: VerbatimTrace[] = verbatimSnippets.map((s) => ({
+    event_id:         s.event_id,
+    conversation_id:  s.conversation_id,
+    role:             s.role,
+    content_preview:  s.content.slice(0, 120),
+    created_at:       s.created_at,
+    bm25_score:       s.bm25_score,
+    temporal_boost:   s.temporal_boost,
+    preference_boost: s.preference_boost,
+    role_boost:       s.role_boost,
+    final_score:      s.final_score,
+    reason:           s.score_reason,
+  }));
+
+  // ─── Token estimation (from final contextText including verbatim) ──────────
+  const CONTEXT_BUDGET = 4096;
+  const charCount       = contextText.length;
+  const wordCount       = contextText.split(/\s+/).filter(Boolean).length;
   const estimatedTokens = Math.ceil(charCount / 4);
   const tokenEstimate: TokenEstimate = {
-    char_count: charCount,
-    word_count: wordCount,
+    char_count:       charCount,
+    word_count:       wordCount,
     estimated_tokens: estimatedTokens,
-    budget_pct: Math.round((estimatedTokens / CONTEXT_BUDGET) * 100),
+    budget_pct:       Math.round((estimatedTokens / CONTEXT_BUDGET) * 100),
   };
 
   return {
-    contextPacket,
+    contextPacket: {
+      ...contextPacket,
+      verbatimSnippets,
+      queryType: classification.type,
+    },
     contextText,
     includedIds: included.map((i) => i.id),
-    omittedIds: omitted.map((i) => i.id),
+    omittedIds:  omitted.map((i) => i.id),
     rationale,
     trace,
+    verbatimTrace,
+    queryClassification: classification,
     tokenEstimate,
   };
 }

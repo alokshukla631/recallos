@@ -21,6 +21,8 @@ const STOPWORDS = new Set([
   "me", "my", "of", "on", "or", "our", "she", "that", "the", "their",
   "them", "they", "this", "to", "was", "we", "were", "will", "with", "you",
   "your", "would", "could", "should", "do", "did", "does", "been", "being",
+  // Question words — high-frequency in queries but semantically empty
+  "what", "when", "where", "who", "which", "how", "why", "whom", "whose",
 ]);
 
 export interface Document {

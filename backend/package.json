@@ -8,6 +8,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "bench": "tsx src/bench/scenarios.ts",
+    "bench:verbatim": "tsx src/bench/verbatim-scenarios.ts",
+    "bench:all": "npm run bench && npm run bench:verbatim",
     "mcp": "tsx src/mcp-server.ts"
   },
   "dependencies": {

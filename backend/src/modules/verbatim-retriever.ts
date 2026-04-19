@@ -1,0 +1,287 @@
+/**
+ * Verbatim retriever: the episodic-memory lane of the hybrid system.
+ *
+ * Searches raw conversation events (the immutable event log in the `events`
+ * table) to surface prior turns that are relevant to the current query.
+ *
+ * This is NOT a replacement for structured memory. It is the evidence layer:
+ *
+ *   Structured memory = authority (preferences, constraints, facts, overrides)
+ *   Verbatim retrieval = evidence  (exact wording, assistant recommendations,
+ *                                    subtle preferences, temporal recall)
+ *
+ * Scoring pipeline per event:
+ *   1. BM25 lexical similarity against the query (normalised 0-1)
+ *   2. Temporal proximity boost when the query has a time anchor
+ *   3. Preference-evidence boost for events with "I usually/prefer/tend to…"
+ *   4. Role boost for assistant messages on assistant-recall queries
+ *
+ * All four signals are additive. The sum drives ranking and the returned
+ * VerbatimSnippet carries a full scoring trace for observability.
+ */
+
+import { queryAll } from "../db/index.js";
+import { bm25Rank } from "./ranking.js";
+import type { TemporalAnchor } from "./query-classifier.js";
+
+// ─── Public types ─────────────────────────────────────────────────────────────
+
+export interface VerbatimSnippet {
+  id: string;                         // "snip_<eventId>" (stable, derived)
+  event_id: string;
+  conversation_id: string;
+  project_id: string | null;
+  role: "user" | "assistant" | "system";
+  content: string;                    // verbatim text of the matched event
+  context_window: string;             // ±1 surrounding turns for context
+  created_at: string;
+
+  // Scoring trace (all four signals + final)
+  bm25_score: number;
+  temporal_boost: number;
+  preference_boost: number;
+  role_boost: number;
+  final_score: number;
+  score_reason: string;               // human-readable explanation
+}
+
+export interface RetrievalOptions {
+  maxResults?: number;                 // default 5
+  excludeConversationId?: string;      // exclude the current in-flight conversation
+  projectId?: string;                  // restrict to events in a project
+  temporalAnchor?: TemporalAnchor;     // from query classifier
+  isAssistantQuery?: boolean;          // true → boost assistant-role events
+  maxEventAgeDays?: number;            // ignore events older than N days (0 = no limit)
+}
+
+// ─── Preference-evidence patterns ────────────────────────────────────────────
+// These fire a synthetic boost so subtle preference statements that were
+// not captured by the structured extractor are still surfaced.
+
+const PREFERENCE_EVIDENCE: RegExp[] = [
+  /\b(i usually|i tend to|i always|i prefer|i like|i love)\b/i,
+  /\b(i hate|i dislike|i don'?t like|i never|i avoid|i won'?t)\b/i,
+  /\b(my (favorite|go-to|preferred|typical|usual|default))\b/i,
+  /\b(personally,?|for me,?|in my case,?|in my experience)\b/i,
+  /\b(i always go for|i typically|i generally)\b/i,
+  /\b(i'?m (allergic|intolerant|vegetarian|vegan|gluten[- ]free))\b/i,
+];
+
+function preferenceBoostFor(content: string): number {
+  let boost = 0;
+  for (const p of PREFERENCE_EVIDENCE) {
+    if (p.test(content)) boost += 0.07;
+  }
+  return Math.min(0.25, boost);
+}
+
+// ─── Temporal proximity boost ─────────────────────────────────────────────────
+
+/**
+ * Gaussian proximity boost peaking at 0.4 when the event is exactly at the
+ * anchor date.  Decays within the window, then falls exponentially outside.
+ */
+function temporalBoostFor(eventDate: Date, anchor: TemporalAnchor): number {
+  const diffMs   = Math.abs(eventDate.getTime() - anchor.anchorDate.getTime());
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+  if (diffDays <= anchor.windowDays) {
+    const t = diffDays / Math.max(anchor.windowDays, 1);
+    return 0.4 * Math.exp(-2 * t * t); // 0.4 at anchor → ~0.054 at edge
+  }
+
+  const excess = diffDays - anchor.windowDays;
+  return 0.054 * Math.exp(-excess / Math.max(anchor.windowDays, 1));
+}
+
+// ─── Role boost ───────────────────────────────────────────────────────────────
+
+function roleBoostFor(role: string, isAssistantQuery: boolean): number {
+  // For assistant recall queries, boost assistant turns significantly so they
+  // surface above the user turns that asked the question.
+  if (isAssistantQuery && role === "assistant") return 0.30;
+  if (!isAssistantQuery && role === "user") return 0.05;
+  return 0;
+}
+
+// ─── Context window builder ───────────────────────────────────────────────────
+
+interface RawEvent {
+  id: string;
+  conversation_id: string;
+  project_id: string | null;
+  role: string;
+  content: string;
+  created_at: string;
+}
+
+/**
+ * For the top-N scored events, fetch ±1 surrounding turns in each conversation
+ * and build a formatted context window string.
+ *
+ * Groups by conversation_id to make at most one DB query per unique conversation
+ * among the top results.
+ */
+function buildContextWindows(topEvents: RawEvent[]): Map<string, string> {
+  const result = new Map<string, string>();
+  if (topEvents.length === 0) return result;
+
+  // Group by conversation
+  const byConv = new Map<string, RawEvent[]>();
+  for (const e of topEvents) {
+    const list = byConv.get(e.conversation_id) ?? [];
+    list.push(e);
+    byConv.set(e.conversation_id, list);
+  }
+
+  for (const [convId, convTopEvents] of byConv) {
+    const allConvEvents = queryAll(
+      `SELECT id, role, content FROM events
+       WHERE conversation_id = ?
+       ORDER BY created_at ASC
+       LIMIT 200`,
+      [convId]
+    ) as Array<{ id: string; role: string; content: string }>;
+
+    const idToIdx = new Map(allConvEvents.map((e, i) => [e.id, i]));
+
+    for (const topEvent of convTopEvents) {
+      const idx = idToIdx.get(topEvent.id);
+      if (idx === undefined) {
+        result.set(topEvent.id, clip(topEvent.content, 400));
+        continue;
+      }
+
+      const start  = Math.max(0, idx - 1);
+      const end    = Math.min(allConvEvents.length - 1, idx + 1);
+      const window = allConvEvents.slice(start, end + 1);
+
+      const windowText = window
+        .map((e) => {
+          const label = e.role === "user" ? "User" : e.role === "assistant" ? "Assistant" : "System";
+          return `${label}: ${clip(e.content, 350)}`;
+        })
+        .join("\n");
+
+      result.set(topEvent.id, windowText);
+    }
+  }
+
+  return result;
+}
+
+function clip(text: string, maxLen: number): string {
+  return text.length <= maxLen ? text : text.slice(0, maxLen - 1) + "…";
+}
+
+// ─── Main search function ─────────────────────────────────────────────────────
+
+/**
+ * Search conversation events for verbatim snippets relevant to a query.
+ *
+ * Returns up to `maxResults` VerbatimSnippet objects sorted by final_score
+ * descending.  Only events with final_score > 0.01 are returned.
+ */
+export function searchVerbatim(
+  query: string,
+  options: RetrievalOptions = {}
+): VerbatimSnippet[] {
+  const {
+    maxResults       = 5,
+    excludeConversationId,
+    projectId,
+    temporalAnchor,
+    isAssistantQuery = false,
+    maxEventAgeDays  = 0,
+  } = options;
+
+  // Build SQL conditions
+  const conditions: string[] = ["role IN ('user', 'assistant')"];
+  const params: unknown[] = [];
+
+  if (excludeConversationId) {
+    conditions.push("conversation_id != ?");
+    params.push(excludeConversationId);
+  }
+  if (projectId) {
+    conditions.push("project_id = ?");
+    params.push(projectId);
+  }
+  if (maxEventAgeDays > 0) {
+    conditions.push("created_at >= datetime('now', ?)");
+    params.push(`-${maxEventAgeDays} days`);
+  }
+
+  const events = queryAll(
+    `SELECT id, conversation_id, project_id, role, content, created_at
+     FROM events
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY created_at DESC
+     LIMIT 500`,
+    params
+  ) as unknown as RawEvent[];
+
+  if (events.length === 0) return [];
+
+  // BM25 scoring
+  const docs       = events.map((e) => ({ id: e.id, text: e.content }));
+  const bm25Raw    = bm25Rank(query, docs);
+  const maxBm25    = Math.max(...bm25Raw.map((r) => r.score), 1e-9);
+  const bm25Norm   = new Map(bm25Raw.map((r) => [r.id, r.score / maxBm25]));
+
+  // Score every event
+  type ScoredEntry = { event: RawEvent; snippet: Omit<VerbatimSnippet, "context_window"> };
+  const scored: ScoredEntry[] = [];
+
+  for (const event of events) {
+    const bm25        = bm25Norm.get(event.id) ?? 0;
+    const temporal    = temporalAnchor
+      ? temporalBoostFor(new Date(event.created_at), temporalAnchor)
+      : 0;
+    const preference  = preferenceBoostFor(event.content);
+    const role        = roleBoostFor(event.role, isAssistantQuery);
+    const final       = bm25 + temporal + preference + role;
+
+    const parts: string[] = [];
+    if (bm25       > 0.01) parts.push(`bm25=${bm25.toFixed(3)}`);
+    if (temporal   > 0.01) parts.push(`temporal=${temporal.toFixed(3)}`);
+    if (preference > 0.01) parts.push(`pref=${preference.toFixed(3)}`);
+    if (role       > 0.01) parts.push(`role=${role.toFixed(3)}`);
+
+    scored.push({
+      event,
+      snippet: {
+        id:              `snip_${event.id}`,
+        event_id:        event.id,
+        conversation_id: event.conversation_id,
+        project_id:      event.project_id,
+        role:            event.role as VerbatimSnippet["role"],
+        content:         event.content,
+        created_at:      event.created_at,
+        bm25_score:      parseFloat(bm25.toFixed(4)),
+        temporal_boost:  parseFloat(temporal.toFixed(4)),
+        preference_boost:parseFloat(preference.toFixed(4)),
+        role_boost:      parseFloat(role.toFixed(4)),
+        final_score:     parseFloat(final.toFixed(4)),
+        score_reason:    parts.length
+          ? `total=${final.toFixed(3)} (${parts.join(", ")})`
+          : `total=${final.toFixed(3)} (no signal)`,
+      },
+    });
+  }
+
+  // Sort descending by final score, keep only meaningful results
+  scored.sort((a, b) => b.snippet.final_score - a.snippet.final_score);
+  const top = scored.filter((s) => s.snippet.final_score > 0.01).slice(0, maxResults);
+
+  if (top.length === 0) return [];
+
+  // Build context windows for top results (batched per conversation)
+  const topEvents     = top.map((s) => s.event);
+  const contextWindows = buildContextWindows(topEvents);
+
+  return top.map((s) => ({
+    ...s.snippet,
+    context_window: contextWindows.get(s.event.id) ?? clip(s.event.content, 400),
+  }));
+}

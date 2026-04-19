@@ -332,6 +332,35 @@ const API_SPEC = {
         responses: { "200": { description: "Install result" } },
       },
     },
+    "/api/context/verbatim": {
+      post: {
+        summary: "Verbatim search over raw conversation events (evidence lane)",
+        description: "Searches the immutable event log using BM25 + temporal proximity + preference-evidence + role boosts. Returns scored snippets with full scoring trace. Part of the Phase 1 hybrid memory upgrade.",
+        tags: ["Context"],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["query"],
+                properties: {
+                  query:                    { type: "string", description: "The search query" },
+                  max_results:              { type: "integer", default: 5, description: "Max snippets to return (max 20)" },
+                  project_id:               { type: "string", description: "Restrict to events in this project" },
+                  exclude_conversation_id:  { type: "string", description: "Exclude events from this conversation (e.g. the current one)" },
+                  max_event_age_days:       { type: "integer", default: 0, description: "Ignore events older than N days (0 = no limit)" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "{ query, classification, snippets: VerbatimSnippet[], count }",
+          },
+        },
+      },
+    },
     "/api/context/snapshots": {
       get: {
         summary: "List context compilation snapshots",

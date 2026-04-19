@@ -3,6 +3,8 @@ import { queryAll, queryOne } from "../db/index.js";
 import { extractMemory } from "../modules/memory-extractor.js";
 import { compileContext } from "../modules/context-compiler.js";
 import { PerfTimer } from "../modules/perf.js";
+import { classifyQuery } from "../modules/query-classifier.js";
+import { searchVerbatim } from "../modules/verbatim-retriever.js";
 
 const router = Router();
 
@@ -155,6 +157,46 @@ router.post("/benchmark", async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error("POST /api/context/benchmark error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /verbatim - direct verbatim search over conversation events
+// Exposes the evidence lane for testing, debugging, and direct querying.
+router.post("/verbatim", (req: Request, res: Response) => {
+  try {
+    const {
+      query,
+      max_results    = 5,
+      project_id,
+      exclude_conversation_id,
+      max_event_age_days = 0,
+    } = req.body;
+
+    if (!query || typeof query !== "string") {
+      res.status(400).json({ error: "query (string) is required" });
+      return;
+    }
+
+    const classification = classifyQuery(query);
+
+    const snippets = searchVerbatim(query, {
+      maxResults:            Math.min(Number(max_results) || 5, 20),
+      excludeConversationId: exclude_conversation_id,
+      projectId:             project_id,
+      temporalAnchor:        classification.temporalAnchor,
+      isAssistantQuery:      classification.type === "assistant_recall",
+      maxEventAgeDays:       Number(max_event_age_days) || 0,
+    });
+
+    res.json({
+      query,
+      classification,
+      snippets,
+      count: snippets.length,
+    });
+  } catch (err) {
+    console.error("POST /api/context/verbatim error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
