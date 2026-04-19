@@ -67,14 +67,31 @@ export interface RetrievalOptions {
 // ─── Preference-evidence patterns ────────────────────────────────────────────
 // These fire a synthetic boost so subtle preference statements that were
 // not captured by the structured extractor are still surfaced.
+//
+// Patterns are grouped by category for clarity.  Each match adds 0.07 to the
+// boost, capped at 0.25.  Broader coverage means fewer preference events are
+// missed when BM25 vocabulary doesn't directly match the query.
 
 const PREFERENCE_EVIDENCE: RegExp[] = [
+  // Explicit preference language
   /\b(i usually|i tend to|i always|i prefer|i like|i love)\b/i,
   /\b(i hate|i dislike|i don'?t like|i never|i avoid|i won'?t)\b/i,
   /\b(my (favorite|go-to|preferred|typical|usual|default))\b/i,
   /\b(personally,?|for me,?|in my case,?|in my experience)\b/i,
   /\b(i always go for|i typically|i generally)\b/i,
-  /\b(i'?m (allergic|intolerant|vegetarian|vegan|gluten[- ]free))\b/i,
+
+  // Dietary / medical identity (implicit constraint language)
+  /\b(i'?m (allergic|intolerant|vegetarian|vegan|gluten[- ]free|celiac|diabetic|lactose intolerant|nut allergic|pescatarian))\b/i,
+  /\b(i have (celiac|diabetes|ibs|crohn|lactose intolerance|nut allergy|peanut allergy|shellfish allergy|gluten (allergy|sensitivity)))\b/i,
+  /\b(i don'?t eat|i can'?t eat|i cannot eat|i avoid eating)\b/i,
+  /\b(i need (vegan|vegetarian|halal|kosher|gluten[- ]free|dairy[- ]free|nut[- ]free) (options?|food|meals?))\b/i,
+  /\b(i follow a (vegan|vegetarian|keto|paleo|halal|kosher|gluten[- ]free|dairy[- ]free|mediterranean) diet)\b/i,
+
+  // Lifestyle / style preferences
+  /\b(i'?m a? ?(morning|night|early|late) (person|riser|worker|owl))\b/i,
+  /\b(i (work|focus|think|learn|write|code|read) (best|better|well) (with|when|if|by))\b/i,
+  /\b(i('m| am) not a (fan of|big fan of|into|keen on))\b/i,
+  /\b(that('?s| is) (too|not) (loud|spicy|hot|cold|fast|slow|big|small|expensive|cheap) for me)\b/i,
 ];
 
 function preferenceBoostFor(content: string): number {
@@ -83,6 +100,78 @@ function preferenceBoostFor(content: string): number {
     if (p.test(content)) boost += 0.07;
   }
   return Math.min(0.25, boost);
+}
+
+// ─── Preference query expansion ───────────────────────────────────────────────
+// When a query is about preferences, BM25 can miss relevant events due to
+// vocabulary gaps (e.g. query "dietary restrictions" vs event "I'm celiac").
+// For such queries we expand the BM25 input with domain synonyms so the
+// lexical scorer can find events even when exact terms don't appear in the
+// query.
+//
+// Expansion only widens recall — BM25 still weights the original terms more
+// heavily, so precision is not harmed.
+
+const PREFERENCE_QUERY_EXPANSIONS: Array<{ anchor: RegExp; extra: string[] }> = [
+  {
+    anchor: /\b(diet(ary)?|food|eat(ing)?|meal|menu|restaurant|cuisine|allergen)\b/i,
+    extra: [
+      "gluten", "celiac", "lactose", "vegan", "vegetarian", "allergy",
+      "intolerant", "kosher", "halal", "keto", "paleo", "dairy",
+      "meat", "pork", "shellfish", "nuts", "pescatarian", "gluten-free",
+    ],
+  },
+  {
+    anchor: /\b(exercise|workout|fitness|gym|sport|training|physical activity|active)\b/i,
+    extra: ["run", "jog", "swim", "yoga", "weights", "cardio", "cycling", "pilates", "hiit"],
+  },
+  {
+    anchor: /\b(music|audio|listen|playlist|song|sound)\b/i,
+    extra: ["genre", "artist", "band", "album", "classical", "jazz", "rock", "pop", "hip-hop"],
+  },
+  {
+    anchor: /\b(sleep|rest|schedule|bedtime|routine|morning|night)\b/i,
+    extra: ["morning", "night", "early", "late", "nap", "alarm", "bedtime", "wake"],
+  },
+  {
+    anchor: /\b(communicat|tone|writing|style|voice|format|output)\b/i,
+    extra: ["formal", "casual", "concise", "detailed", "bullet", "brief", "verbose", "plain"],
+  },
+  {
+    anchor: /\b(preference|prefer|like|want|usual|typical|default)\b/i,
+    // Generic preference query — pull in dietary + lifestyle terms so that
+    // "what do I usually prefer?" surfaces events with implicit preferences.
+    extra: [
+      "celiac", "vegan", "vegetarian", "gluten", "allergy", "intolerant",
+      "prefer", "usually", "tend to", "typically", "always", "avoid",
+    ],
+  },
+];
+
+/**
+ * Expands the BM25 query with domain synonyms for preference-type queries.
+ * Purely additive — the original query terms retain full BM25 weight.
+ * Returns the original query unchanged for non-preference queries.
+ */
+function expandPreferenceQuery(query: string): string {
+  // Only expand when the query looks like a preference / lifestyle question.
+  // Skip assistant-recall and purely temporal queries — those need precise
+  // lexical matching, not broad vocabulary expansion.
+  const looksLikePreference =
+    /\b(prefer|like|usual|dietary|food|eat|allergen|exercise|workout|restriction|habit|style|default|tendency)\b/i.test(query) &&
+    !/\b(what did you|you (said|recommended|suggested|told me)|do you remember)\b/i.test(query);
+
+  if (!looksLikePreference) return query;
+
+  const extras = new Set<string>();
+  for (const { anchor, extra } of PREFERENCE_QUERY_EXPANSIONS) {
+    if (anchor.test(query)) {
+      for (const term of extra) extras.add(term);
+    }
+  }
+
+  if (extras.size === 0) return query;
+  return `${query} ${[...extras].join(" ")}`;
 }
 
 // ─── Temporal proximity boost ─────────────────────────────────────────────────
@@ -239,8 +328,12 @@ export async function searchVerbatim(
   if (events.length === 0) return [];
 
   // ─── Signal 1: BM25 lexical similarity ──────────────────────────────────────
+  // For preference-profile queries, expand the BM25 query with domain synonyms
+  // so vocabulary-gap events (e.g. "I'm celiac" for query "dietary restrictions")
+  // still receive a non-zero lexical score.
+  const bm25Query  = expandPreferenceQuery(query);
   const docs       = events.map((e) => ({ id: e.id, text: e.content }));
-  const bm25Raw    = bm25Rank(query, docs);
+  const bm25Raw    = bm25Rank(bm25Query, docs);
   const maxBm25    = Math.max(...bm25Raw.map((r) => r.score), 1e-9);
   const bm25Norm   = new Map(bm25Raw.map((r) => [r.id, r.score / maxBm25]));
 
