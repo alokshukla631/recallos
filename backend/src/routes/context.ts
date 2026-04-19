@@ -163,7 +163,8 @@ router.post("/benchmark", async (req: Request, res: Response) => {
 
 // POST /verbatim - direct verbatim search over conversation events
 // Exposes the evidence lane for testing, debugging, and direct querying.
-router.post("/verbatim", (req: Request, res: Response) => {
+// Async because searchVerbatim optionally calls the OpenAI embeddings API.
+router.post("/verbatim", async (req: Request, res: Response) => {
   try {
     const {
       query,
@@ -180,7 +181,7 @@ router.post("/verbatim", (req: Request, res: Response) => {
 
     const classification = classifyQuery(query);
 
-    const snippets = searchVerbatim(query, {
+    const snippets = await searchVerbatim(query, {
       maxResults:            Math.min(Number(max_results) || 5, 20),
       excludeConversationId: exclude_conversation_id,
       projectId:             project_id,

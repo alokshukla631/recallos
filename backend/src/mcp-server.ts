@@ -19,6 +19,8 @@ import { reconcileMemory } from "./modules/memory-reconciler.js";
 import { compileContext } from "./modules/context-compiler.js";
 import { bm25Rank } from "./modules/ranking.js";
 import { logAudit } from "./modules/audit.js";
+import { classifyQuery } from "./modules/query-classifier.js";
+import { searchVerbatim } from "./modules/verbatim-retriever.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -471,6 +473,80 @@ async function main() {
               : "No projects found.",
           },
         ],
+      };
+    }
+  );
+
+  // Search raw conversation history for verbatim evidence
+  server.tool(
+    "search_verbatim",
+    [
+      "Search the user's raw conversation history for verbatim evidence relevant to a query.",
+      "Returns scored conversation snippets from past turns, each with ±1 surrounding context.",
+      "Best for: recalling what was said in a prior session, finding prior assistant recommendations,",
+      "uncovering subtle preferences expressed in conversation but not yet extracted to structured memory,",
+      "and temporal recall ('what did we discuss last week about X?').",
+      "Complements get_context (structured memory) — use both for comprehensive retrieval.",
+    ].join(" "),
+    {
+      query: z.string().describe(
+        "The query to search past conversations for (e.g. 'laptop recommendation', 'vegetarian restaurants Tokyo')"
+      ),
+      max_results: z.number().optional().describe(
+        "Maximum number of snippets to return (default 5, max 20)"
+      ),
+      project_id: z.string().optional().describe(
+        "Restrict search to events in a specific project"
+      ),
+      exclude_conversation_id: z.string().optional().describe(
+        "Exclude a specific conversation from results (e.g. the current in-flight conversation)"
+      ),
+      max_event_age_days: z.number().optional().describe(
+        "Only search events newer than N days. 0 (default) means no age limit."
+      ),
+    },
+    async ({ query, max_results, project_id, exclude_conversation_id, max_event_age_days }) => {
+      const classification = classifyQuery(query);
+      const snippets = await searchVerbatim(query, {
+        maxResults:            Math.min(Number(max_results) || 5, 20),
+        excludeConversationId: exclude_conversation_id,
+        projectId:             project_id,
+        temporalAnchor:        classification.temporalAnchor,
+        isAssistantQuery:      classification.type === "assistant_recall",
+        maxEventAgeDays:       Number(max_event_age_days) || 0,
+      });
+
+      if (snippets.length === 0) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `No relevant conversation history found for: "${query}"`,
+          }],
+        };
+      }
+
+      // Format as readable text with score traces
+      const lines: string[] = [
+        `Found ${snippets.length} snippet(s) for query: "${query}"`,
+        `Query type: ${classification.type}`,
+        "",
+      ];
+
+      for (let i = 0; i < snippets.length; i++) {
+        const s = snippets[i];
+        const d = new Date(s.created_at);
+        const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        lines.push(`--- Snippet ${i + 1} [${dateStr}, ${s.role}] (score: ${s.final_score.toFixed(3)}) ---`);
+        lines.push(s.context_window);
+        lines.push(`Scoring: ${s.score_reason}`);
+        lines.push("");
+      }
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: lines.join("\n"),
+        }],
       };
     }
   );

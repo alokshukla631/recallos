@@ -335,7 +335,17 @@ const API_SPEC = {
     "/api/context/verbatim": {
       post: {
         summary: "Verbatim search over raw conversation events (evidence lane)",
-        description: "Searches the immutable event log using BM25 + temporal proximity + preference-evidence + role boosts. Returns scored snippets with full scoring trace. Part of the Phase 1 hybrid memory upgrade.",
+        description: [
+          "Searches the immutable event log using the five-signal hybrid pipeline:",
+          "(1) BM25 lexical similarity (normalised 0–1),",
+          "(2) temporal proximity boost (Gaussian around anchor date, peak 0.4),",
+          "(3) preference-evidence boost for 'I usually/prefer/tend to…' language (up to 0.25),",
+          "(4) role boost for assistant turns on assistant-recall queries (0.30),",
+          "(5) semantic cosine similarity via OpenAI text-embedding-3-small (up to 0.35,",
+          "gracefully absent when no OpenAI key is configured).",
+          "Returns scored VerbatimSnippet objects with full scoring trace.",
+          "Phase 2 of the hybrid memory upgrade.",
+        ].join(" "),
         tags: ["Context"],
         requestBody: {
           content: {
@@ -356,7 +366,13 @@ const API_SPEC = {
         },
         responses: {
           "200": {
-            description: "{ query, classification, snippets: VerbatimSnippet[], count }",
+            description: [
+              "{ query, classification, snippets: VerbatimSnippet[], count }.",
+              "Each VerbatimSnippet carries: id, event_id, conversation_id, project_id,",
+              "role, content, context_window (±1 surrounding turns), created_at,",
+              "bm25_score, temporal_boost, preference_boost, role_boost, semantic_score,",
+              "final_score, score_reason.",
+            ].join(" "),
           },
         },
       },

@@ -26,6 +26,7 @@ import { v4 as uuidv4 } from "uuid";
 import { initDatabase, runSql } from "../db/index.js";
 import { classifyQuery } from "../modules/query-classifier.js";
 import { searchVerbatim } from "../modules/verbatim-retriever.js";
+import { cosineSimilarity, semanticBoostFor } from "../modules/embedding-store.js";
 import { storeEvent } from "../modules/event-store.js";
 import { extractMemory } from "../modules/memory-extractor.js";
 import { reconcileMemory } from "../modules/memory-reconciler.js";
@@ -175,7 +176,7 @@ async function testAssistantRecall(dbFile: string): Promise<void> {
   insertEventAt(pastConv, "user",      "Any good restaurant recommendations in Shibuya?", 3);
   insertEventAt(pastConv, "assistant", "Try Ichiran ramen or a sushi counter in Tsukiji.", 3);
 
-  const snippets = searchVerbatim("which laptop did you recommend for development?", {
+  const snippets = await searchVerbatim("which laptop did you recommend for development?", {
     isAssistantQuery:      true,
     maxResults:            3,
     excludeConversationId: currentConv,  // exclude current conv, keep past
@@ -232,7 +233,7 @@ async function testPreferenceEvidenceBoost(dbFile: string): Promise<void> {
   insertEventAt(convId, "user",      "What's the visa situation for France?",            7);
   insertEventAt(convId, "assistant", "US citizens get 90 days in the Schengen zone.",    7);
 
-  const snippets = searchVerbatim("what kind of seat do I like on flights?", {
+  const snippets = await searchVerbatim("what kind of seat do I like on flights?", {
     maxResults: 5,
   });
 
@@ -280,7 +281,7 @@ async function testTemporalProximityBoost(dbFile: string): Promise<void> {
   );
   assert("temporal anchor is set", classification.temporalAnchor !== undefined);
 
-  const snippets = searchVerbatim("budget Japan trip", {
+  const snippets = await searchVerbatim("budget Japan trip", {
     maxResults: 3,
     temporalAnchor: classification.temporalAnchor,
   });
@@ -334,7 +335,7 @@ async function testNoisyHistory(dbFile: string): Promise<void> {
   insertEventAt(convC, "user",      "I want to learn how to make ramen at home.",       6);
   insertEventAt(convC, "assistant", "Start with a tonkotsu broth base.",                6);
 
-  const snippets = searchVerbatim(
+  const snippets = await searchVerbatim(
     "what database do I prefer for my development projects?",
     { maxResults: 5 }
   );
@@ -528,6 +529,121 @@ async function testQueryClassifierWeights(): Promise<void> {
   }
 }
 
+/**
+ * Phase 2: Semantic scoring — fallback and unit tests.
+ *
+ * Since the bench runs without a live OpenAI API key, all embeddings
+ * will be absent and semantic_score must be 0.  The test verifies:
+ *
+ *   1. cosineSimilarity() is numerically correct for known vectors.
+ *   2. semanticBoostFor() applies the expected threshold and cap.
+ *   3. VerbatimSnippet objects always carry semantic_score (no key → 0).
+ *   4. Adding the semantic_score field doesn't break final_score ordering.
+ */
+async function testSemanticScoreFallback(dbFile: string): Promise<void> {
+  console.log("\n=== Semantic Score Fallback (no API key) ===");
+
+  await initDatabase(dbFile);
+
+  // ── Unit: cosineSimilarity ──────────────────────────────────────────────────
+  const a = [1, 0, 0];
+  const b = [0, 1, 0];
+  const c = [1, 0, 0];
+
+  assert(
+    "cosine([1,0,0], [0,1,0]) = 0 (orthogonal)",
+    cosineSimilarity(a, b) === 0,
+    `got ${cosineSimilarity(a, b)}`
+  );
+  assert(
+    "cosine([1,0,0], [1,0,0]) = 1 (identical)",
+    cosineSimilarity(a, c) === 1,
+    `got ${cosineSimilarity(a, c)}`
+  );
+  assert(
+    "cosine of empty vectors = 0",
+    cosineSimilarity([], []) === 0
+  );
+
+  // ── Unit: semanticBoostFor ──────────────────────────────────────────────────
+  assert(
+    "semanticBoostFor(0.0) = 0 (below threshold)",
+    semanticBoostFor(0.0) === 0,
+    `got ${semanticBoostFor(0.0)}`
+  );
+  assert(
+    "semanticBoostFor(0.3) = 0 (at threshold)",
+    semanticBoostFor(0.3) === 0,
+    `got ${semanticBoostFor(0.3)}`
+  );
+  assert(
+    "semanticBoostFor(0.5) > 0 (above threshold)",
+    semanticBoostFor(0.5) > 0,
+    `got ${semanticBoostFor(0.5)}`
+  );
+  assert(
+    "semanticBoostFor(0.5) = 0.1 (mid-range)",
+    Math.abs(semanticBoostFor(0.5) - 0.10) < 0.001,
+    `got ${semanticBoostFor(0.5)}`
+  );
+  assert(
+    "semanticBoostFor(1.0) = 0.35 (cap)",
+    Math.abs(semanticBoostFor(1.0) - 0.35) < 0.001,
+    `got ${semanticBoostFor(1.0)}`
+  );
+
+  // ── Integration: semantic_score = 0 when no API key ─────────────────────────
+  const convId = uuidv4();
+  const otherConv = uuidv4();
+  insertConversation(convId);
+  insertConversation(otherConv);
+
+  insertEventAt(otherConv, "user",      "I usually prefer window seats on flights.", 3);
+  insertEventAt(otherConv, "assistant", "Noted, I'll always prioritise window seats for you.", 3);
+  insertEventAt(otherConv, "user",      "Also, I am vegetarian so no meat dishes please.", 3);
+
+  // No provider_settings row → getOpenAiApiKey() returns null → semantic_score=0
+  const snippets = await searchVerbatim("what are my travel preferences?", {
+    maxResults:           5,
+    excludeConversationId: convId,
+  });
+
+  assert(
+    "snippets returned despite no OpenAI key",
+    snippets.length > 0,
+    `got ${snippets.length} snippets`
+  );
+
+  const allHaveSemanticField = snippets.every((s) => typeof s.semantic_score === "number");
+  assert(
+    "all snippets have numeric semantic_score field",
+    allHaveSemanticField
+  );
+
+  const allZeroSemantic = snippets.every((s) => s.semantic_score === 0);
+  assert(
+    "semantic_score is 0 for all snippets when no API key",
+    allZeroSemantic,
+    `scores: ${snippets.map((s) => s.semantic_score).join(", ")}`
+  );
+
+  // final_score must still be > 0 (driven by BM25 + preference boost)
+  const allPositiveFinal = snippets.every((s) => s.final_score > 0);
+  assert(
+    "final_score is still positive without semantic signal",
+    allPositiveFinal,
+    `final scores: ${snippets.map((s) => s.final_score.toFixed(3)).join(", ")}`
+  );
+
+  // score_reason must NOT mention semantic when signal is 0
+  const noSemanticInReason = snippets.every((s) => !s.score_reason.includes("semantic=0.000"));
+  assert(
+    "score_reason omits semantic=0.000 entries",
+    noSemanticInReason,
+    `reasons: ${snippets.map((s) => s.score_reason).join(" | ")}`
+  );
+}
+
 // ─── Runner ───────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -548,6 +664,7 @@ async function main(): Promise<void> {
     testNoisyHistory,
     testStructuredOverrideBeat,
     testMixedRetrieval,
+    testSemanticScoreFallback,
   ]) {
     const dbFile = path.join(tmpDir, `${uuidv4()}.db`);
     await test(dbFile);

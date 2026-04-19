@@ -344,6 +344,20 @@ export async function initDatabase(filePath: string): Promise<Database> {
     )
   `);
 
+  // ---------------------------------------------------------------------------
+  // event_embeddings - cached vector embeddings for semantic similarity search
+  // Added in Phase 2 of the hybrid memory upgrade.
+  // Embeddings are generated on-demand and cached to avoid redundant API calls.
+  // ---------------------------------------------------------------------------
+  db.run(`
+    CREATE TABLE IF NOT EXISTS event_embeddings (
+      event_id TEXT PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+      model TEXT NOT NULL,
+      embedding TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
   // Persist to disk
   saveToFile();
   if (fs.existsSync(dbPath)) {

@@ -24,6 +24,7 @@ export interface ContextPacket {
 /**
  * Scoring trace entry for a verbatim snippet.
  * Mirrors TraceEntry for structured memory but covers the evidence layer.
+ * Includes all five scoring signals (semantic_score is 0 when no OpenAI key).
  */
 export interface VerbatimTrace {
   event_id: string;
@@ -35,6 +36,7 @@ export interface VerbatimTrace {
   temporal_boost: number;
   preference_boost: number;
   role_boost: number;
+  semantic_score: number;    // cosine similarity boost (Phase 2; 0 when unavailable)
   final_score: number;
   reason: string;
 }
@@ -438,7 +440,7 @@ export async function compileContext(
     classification.type === "planning"          ? 3 :
     2; // balanced
 
-  const verbatimSnippets = searchVerbatim(currentMessage, {
+  const verbatimSnippets = await searchVerbatim(currentMessage, {
     maxResults:             snippetBudget,
     excludeConversationId:  conversationId,
     projectId,
@@ -479,6 +481,7 @@ export async function compileContext(
     temporal_boost:   s.temporal_boost,
     preference_boost: s.preference_boost,
     role_boost:       s.role_boost,
+    semantic_score:   s.semantic_score,
     final_score:      s.final_score,
     reason:           s.score_reason,
   }));
