@@ -4,10 +4,14 @@ import path from "path";
 
 let db: Database | null = null;
 let dbPath: string = "";
+type SqlFactory = Awaited<ReturnType<typeof initSqlJs>>;
+let sqlFactory: SqlFactory | null = null;
+let lastLoadMtime = 0;
 
 export async function initDatabase(filePath: string): Promise<Database> {
   dbPath = filePath;
   const SQL = await initSqlJs();
+  sqlFactory = SQL;
 
   // Load existing database file if it exists
   if (fs.existsSync(filePath)) {
@@ -342,6 +346,9 @@ export async function initDatabase(filePath: string): Promise<Database> {
 
   // Persist to disk
   saveToFile();
+  if (fs.existsSync(dbPath)) {
+    lastLoadMtime = fs.statSync(dbPath).mtimeMs;
+  }
 
   return db;
 }
@@ -369,9 +376,29 @@ export function saveToFile(): void {
 }
 
 /**
+ * Reload the in-memory database from disk if the file has been updated by
+ * another process (e.g. MCP server writing while REST server is running).
+ * Called automatically before every read so both processes stay in sync.
+ */
+function reloadIfStale(): void {
+  if (!sqlFactory || !dbPath || !fs.existsSync(dbPath)) return;
+  try {
+    const mtime = fs.statSync(dbPath).mtimeMs;
+    if (mtime <= lastLoadMtime) return;
+    const buffer = fs.readFileSync(dbPath);
+    db = new sqlFactory.Database(buffer);
+    db.run("PRAGMA foreign_keys = ON;");
+    lastLoadMtime = mtime;
+  } catch {
+    // Keep using existing in-memory copy if reload fails
+  }
+}
+
+/**
  * Helper: run a query and return all matching rows as objects.
  */
 export function queryAll(sql: string, params: unknown[] = []): Record<string, unknown>[] {
+  reloadIfStale();
   const database = getDb();
   const stmt = database.prepare(sql);
   stmt.bind(params as any[]);

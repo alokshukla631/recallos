@@ -27,6 +27,8 @@ function getSystemPrompt(): string {
 
 // POST / - the full chat pipeline
 router.post("/", async (req: Request, res: Response) => {
+  let convId = "";
+  let isNewConversation = false;
   try {
     const { message, provider, conversation_id, project_id } = req.body;
 
@@ -51,7 +53,8 @@ router.post("/", async (req: Request, res: Response) => {
     }
 
     const timer = new PerfTimer();
-    const convId = conversation_id || uuidv4();
+    convId = conversation_id || uuidv4();
+    isNewConversation = !conversation_id;
 
     // Step 1: Ensure the conversation row exists (creates on first message)
     ensureConversation(convId, message, project_id);
@@ -140,6 +143,13 @@ router.post("/", async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error("POST /api/chat error:", err);
+    // Clean up the orphan conversation if we created it in this request
+    if (isNewConversation && convId) {
+      try {
+        runSql("DELETE FROM events WHERE conversation_id = ?", [convId]);
+        runSql("DELETE FROM conversations WHERE id = ?", [convId]);
+      } catch { /* ignore cleanup errors */ }
+    }
     const message = err instanceof Error ? err.message : "Internal server error";
     res.status(500).json({ error: message });
   }
@@ -166,6 +176,7 @@ router.post("/stream", async (req: Request, res: Response) => {
     res.write(`data: ${JSON.stringify(data)}\n\n`);
   };
 
+  let convId = "";
   try {
     // Validate provider key BEFORE creating any DB state.
     // Previously ensureConversation ran first, so a missing key left an
@@ -184,7 +195,7 @@ router.post("/stream", async (req: Request, res: Response) => {
     }
 
     const timer = new PerfTimer();
-    const convId = conversation_id || uuidv4();
+    convId = conversation_id || uuidv4();
 
     ensureConversation(convId, message, project_id);
 
@@ -283,6 +294,13 @@ router.post("/stream", async (req: Request, res: Response) => {
     res.end();
   } catch (err) {
     console.error("POST /api/chat/stream error:", err);
+    // Clean up the orphan conversation if we created it in this request
+    if (!conversation_id && convId) {
+      try {
+        runSql("DELETE FROM events WHERE conversation_id = ?", [convId]);
+        runSql("DELETE FROM conversations WHERE id = ?", [convId]);
+      } catch { /* ignore cleanup errors */ }
+    }
     const errMessage = err instanceof Error ? err.message : "Internal server error";
     try {
       send("error", { error: errMessage });

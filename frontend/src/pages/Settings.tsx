@@ -882,7 +882,7 @@ function Settings() {
                   { label: "Tags", key: "memory_tags" },
                   { label: "Audit Entries", key: "memory_audit_log" },
                   { label: "Context Snapshots", key: "context_snapshots" },
-                  { label: "Conflicts", key: "conflicts" },
+                  { label: "Conflicts", key: "memory_conflicts" },
                   { label: "Webhooks", key: "webhooks" },
                 ].map((item) => (
                   <div key={item.key} className="db-stat-item">
