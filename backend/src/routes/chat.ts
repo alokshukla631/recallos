@@ -143,9 +143,15 @@ router.post("/", async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error("POST /api/chat error:", err);
-    // Clean up the orphan conversation if we created it in this request
+    // Clean up the orphan conversation if we created it in this request.
+    // Delete memory items first (they reference events via source_event_id FK),
+    // then events, then the conversation row.
     if (isNewConversation && convId) {
       try {
+        runSql(
+          "DELETE FROM memory_items WHERE source_event_id IN (SELECT id FROM events WHERE conversation_id = ?)",
+          [convId]
+        );
         runSql("DELETE FROM events WHERE conversation_id = ?", [convId]);
         runSql("DELETE FROM conversations WHERE id = ?", [convId]);
       } catch { /* ignore cleanup errors */ }
@@ -294,9 +300,15 @@ router.post("/stream", async (req: Request, res: Response) => {
     res.end();
   } catch (err) {
     console.error("POST /api/chat/stream error:", err);
-    // Clean up the orphan conversation if we created it in this request
+    // Clean up the orphan conversation if we created it in this request.
+    // Delete memory items first (they reference events via source_event_id FK),
+    // then events, then the conversation row.
     if (!conversation_id && convId) {
       try {
+        runSql(
+          "DELETE FROM memory_items WHERE source_event_id IN (SELECT id FROM events WHERE conversation_id = ?)",
+          [convId]
+        );
         runSql("DELETE FROM events WHERE conversation_id = ?", [convId]);
         runSql("DELETE FROM conversations WHERE id = ?", [convId]);
       } catch { /* ignore cleanup errors */ }
