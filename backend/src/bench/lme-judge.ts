@@ -58,8 +58,11 @@ Predicted answer: ${predicted}
 Return your grade as JSON.`;
 }
 
-function parseJudgeOutput(raw: string): JudgeResult {
-  // Be lenient: pull the first {...} out of whatever the model emitted.
+/**
+ * Pull the first {...} JSON object out of whatever the model emitted and
+ * reduce it to a binary correctness score. Exported for unit tests.
+ */
+export function parseJudgeOutput(raw: string): JudgeResult {
   const match = raw.match(/\{[\s\S]*?\}/);
   if (!match) return { correct: 0, raw };
   try {
