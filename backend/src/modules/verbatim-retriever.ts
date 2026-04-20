@@ -193,13 +193,16 @@ const PREFERENCE_QUERY_EXPANSIONS: Array<{ anchor: RegExp; extra: string[] }> = 
       "banana bread", "red velvet", "cheesecake", "apple pie",
     ],
   },
-  // Musical instruments / gear.
+  // Musical instruments / gear — keep orchestral + folk instruments in the
+  // anchor too, not just guitar-adjacent ones. "violin / cello / flute" etc.
+  // are common in LongMemEval single-session-user practice-time questions.
   {
-    anchor: /\b(guitars?|bass|drums?|piano|keyboards?|synth|amp(lifier)?s?|pedals?|instruments?|band|music store)\b/i,
+    anchor: /\b(guitars?|bass|drums?|piano|keyboards?|synth|amp(lifier)?s?|pedals?|instruments?|band|music store|violins?|cellos?|flutes?|saxophones?|trumpets?|ukuleles?|mandolins?|harps?|oboes?|clarinets?|practicing|rehears(e|ing|al))\b/i,
     extra: [
       "fender", "gibson", "stratocaster", "telecaster", "les paul", "martin",
       "taylor", "yamaha", "roland", "marshall", "vox", "humbucker", "single coil",
       "acoustic", "electric", "pickup", "neck", "fretboard", "tuning",
+      "bow", "strings", "reed", "orchestra", "ensemble", "scale", "etude",
     ],
   },
 ];
@@ -214,7 +217,7 @@ function expandPreferenceQuery(query: string): string {
   // Skip assistant-recall and purely temporal queries — those need precise
   // lexical matching, not broad vocabulary expansion.
   const looksLikePreference =
-    /\b(prefer|like|usual|dietary|food|eat|allergen|exercise|workouts?|restrictions?|habits?|styles?|default|tendenc(y|ies)|recommend|suggest|tips?|setups?|equipment|accessor|complement|gear|build upon|upgrades?|similar|comparable|interest(ed|ing)?|serve|look for|build on|previous|enhance)\b/i.test(query) &&
+    /\b(prefer|like|usual|dietary|food|eat|allergen|exercise|workouts?|restrictions?|habits?|styles?|default|tendenc(y|ies)|recommend|suggest|tips?|setups?|equipment|accessor|complement|gear|build upon|upgrades?|similar|comparable|interest(ed|ing)?|serve|look for|build on|previous|enhance|practic(e|ing)|dedicate)\b/i.test(query) &&
     !/\b(what did you|you (said|recommended|suggested|told me)|do you remember)\b/i.test(query);
 
   if (!looksLikePreference) return query;
