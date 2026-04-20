@@ -44,8 +44,17 @@ function activeModelLabel(): string {
  * Maximum number of new embeddings to generate per retrieval call.
  * Guards against first-run latency spikes when there are many uncached events.
  * Already-cached events are never affected by this cap.
+ *
+ * Override with EMBEDDING_MAX_NEW_PER_CALL for benchmarks that want to embed
+ * the full candidate pool (set to e.g. 1000 for LongMemEval haystacks).
+ * Read at call time so tests can flip it between runs.
  */
-const MAX_NEW_PER_CALL = 100;
+function maxNewPerCall(): number {
+  const raw = process.env.EMBEDDING_MAX_NEW_PER_CALL;
+  if (!raw) return 100;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : 100;
+}
 
 // ─── Cosine similarity ────────────────────────────────────────────────────────
 
@@ -200,7 +209,7 @@ export async function getEmbeddingsForEvents(
 
   const uncached = events
     .filter((e) => !cached.has(e.id))
-    .slice(0, MAX_NEW_PER_CALL);
+    .slice(0, maxNewPerCall());
 
   if (uncached.length > 0) {
     try {
