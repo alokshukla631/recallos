@@ -13,7 +13,8 @@
     "bench:regression": "tsx src/bench/regression-tests.ts",
     "bench:context": "tsx src/bench/context-relevance.ts",
     "bench:modules": "tsx src/bench/module-tests.ts",
-    "bench:all": "npm run bench && npm run bench:verbatim && npm run bench:eval && npm run bench:regression && npm run bench:context && npm run bench:modules",
+    "bench:e2e": "tsx src/bench/e2e-tests.ts",
+    "bench:all": "npm run bench && npm run bench:verbatim && npm run bench:eval && npm run bench:regression && npm run bench:context && npm run bench:modules && npm run bench:e2e",
     "mcp": "tsx src/mcp-server.ts"
   },
   "dependencies": {
