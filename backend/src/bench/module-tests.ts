@@ -715,10 +715,213 @@ async function testVersioning(): Promise<void> {
   assert("revert rejects a version belonging to a different item",
     badRevert2 === false);
 }
-async function testDuplicates(): Promise<void>       { console.log("\n=== duplicates ==="); console.log("  (not yet implemented)"); }
-async function testImportance(): Promise<void>       { console.log("\n=== importance ==="); console.log("  (not yet implemented)"); }
-async function testDecay(): Promise<void>            { console.log("\n=== decay ==="); console.log("  (not yet implemented)"); }
-async function testConfidenceDecay(): Promise<void>  { console.log("\n=== confidence-decay ==="); console.log("  (not yet implemented)"); }
+// ─── duplicates ───────────────────────────────────────────────────────────────
+
+async function testDuplicates(): Promise<void> {
+  console.log("\n=== duplicates ===");
+  await freshDb();
+
+  // Two items with same key+type and heavily overlapping value tokens.
+  // Note: `tokenize` drops stopwords (I, is, my, on) and stems (seats→seat,
+  // flights→flight, driving→driv). Craft values so >=60% of content tokens
+  // overlap between at least one pair inside the same-key group.
+  insertMemory("seat_preference", "preference", "prefer window seat flights");
+  insertMemory("seat_preference", "preference", "prefer window seat always flights");
+  insertMemory("seat_preference", "preference", "actually like aisle seat"); // low overlap
+
+  // Cross-key but highly overlapping content (needs Jaccard >= 0.75).
+  // Combined tokens = tokenize(`${key} ${value}`) so underscores split the key.
+  insertMemory("transport_choice", "preference",
+    "prefer driving instead taking public transit work each day");
+  insertMemory("commute_choice",   "preference",
+    "prefer driving instead taking public transit work each day");
+
+  // A completely unrelated item
+  insertMemory("tone_style", "fact", "casual writing tone");
+
+  const groups = findDuplicates(0.6);
+  assert("finds at least one duplicate group",
+    groups.length >= 1,
+    `got ${groups.length} groups`);
+
+  const sameKeyGroup = groups.find(g => g.key === "seat_preference");
+  assert("same-key+type items grouped together",
+    sameKeyGroup !== undefined);
+  assert("same-key group similarity above threshold",
+    !sameKeyGroup || sameKeyGroup.similarity >= 0.6,
+    `sim=${sameKeyGroup?.similarity}`);
+
+  const crossKeyGroup = groups.find(g =>
+    g.key.includes("transport_choice") && g.key.includes("commute_choice"));
+  assert("cross-key high-overlap pair detected",
+    crossKeyGroup !== undefined,
+    `keys: ${groups.map(g => g.key).join(" | ")}`);
+
+  // Threshold enforcement: raising threshold to 1.0 drops everything
+  const strict = findDuplicates(1.01);
+  assert("threshold > 1 yields no groups",
+    strict.length === 0);
+}
+
+// ─── importance ───────────────────────────────────────────────────────────────
+
+async function testImportance(): Promise<void> {
+  console.log("\n=== importance ===");
+  await freshDb();
+
+  // Fresh, unconfirmed, low-confidence item → low score
+  const low = insertMemory("x", "fact", "v", {
+    confidence: 0.4, createdDaysAgo: 0, lastConfirmedDaysAgo: null,
+  });
+  const fLow = computeImportance(low);
+  assert("low-confidence fresh item scores under 50",
+    fLow.total < 50, `got ${fLow.total}`);
+
+  // High-confidence, recently confirmed, linked, tagged, aged → high score
+  const high = insertMemory("seat", "preference", "window seat", {
+    confidence: 0.95, createdDaysAgo: 80, lastConfirmedDaysAgo: 1,
+  });
+  const other = insertMemory("airline", "preference", "United");
+  createLink(high, other, "related_to", 0.8);
+  addTag(high, "travel");
+  addTag(high, "important");
+
+  const fHigh = computeImportance(high);
+  assert("high-value item scores above 60",
+    fHigh.total >= 60, `got ${fHigh.total}`);
+  assert("confidence factor scales with confidence field",
+    fHigh.confidence_score >= fLow.confidence_score);
+  assert("link factor > 0 for linked item",
+    fHigh.link_score > 0);
+  assert("tag factor > 0 for tagged item",
+    fHigh.tag_score > 0);
+  assert("age bonus for old item",
+    fHigh.age_bonus > 0);
+
+  // Missing id → all zeros, no throw
+  const missing = computeImportance("fake-id");
+  assert("missing id returns zeros",
+    missing.total === 0 &&
+    missing.confidence_score === 0 &&
+    missing.link_score === 0);
+
+  // rankByImportance returns high above low
+  const ranked = rankByImportance(5);
+  const highRank = ranked.findIndex(r => r.id === high);
+  const lowRank  = ranked.findIndex(r => r.id === low);
+  assert("rankByImportance ranks high > low",
+    highRank >= 0 && lowRank >= 0 && highRank < lowRank,
+    `high@${highRank} low@${lowRank}`);
+}
+
+// ─── decay ────────────────────────────────────────────────────────────────────
+
+async function testDecay(): Promise<void> {
+  console.log("\n=== decay ===");
+  await freshDb();
+
+  // Very old, never confirmed → candidate under default thresholds
+  const old = insertMemory("old_key", "preference", "old preference", {
+    confidence: 0.6, createdDaysAgo: 200, lastConfirmedDaysAgo: null,
+  });
+
+  // Low-confidence + older (no recency boost) → total importance < 15.
+  // computeImportance: confidence_score = round(conf*30), recency_score starts
+  // at 15 for never-confirmed and drops 3pts/week since creation. 0.2*30=6 and
+  // 30-day-old gives recency=2, total=8 (< default minImportance=15).
+  const lowImp = insertMemory("low", "preference", "low value", {
+    confidence: 0.2, createdDaysAgo: 30, lastConfirmedDaysAgo: null,
+  });
+
+  // Recently confirmed high-value → not a candidate
+  const fresh = insertMemory("fresh", "preference", "fresh value", {
+    confidence: 0.95, createdDaysAgo: 10, lastConfirmedDaysAgo: 1,
+  });
+
+  // Pinned item, also old and stale-looking → exempt
+  const pinned = insertMemory("pinned", "preference", "pinned preference", {
+    confidence: 0.5, createdDaysAgo: 300, lastConfirmedDaysAgo: null, pinned: 1,
+  });
+
+  const candidates = findDecayCandidates();
+  const candIds = new Set(candidates.map(c => c.id));
+
+  assert("old never-confirmed item is a decay candidate",
+    candIds.has(old),
+    `candidates: ${[...candIds].join(",")}`);
+  assert("low-importance item is a decay candidate",
+    candIds.has(lowImp));
+  assert("fresh high-value item NOT a candidate",
+    !candIds.has(fresh));
+  assert("pinned item NOT a candidate (exempt from decay)",
+    !candIds.has(pinned));
+
+  // Apply decay marks the candidates as stale
+  const result = applyDecay();
+  assert("applyDecay returns a marked count matching candidates",
+    result.marked === candidates.length);
+
+  const oldRow = queryOne("SELECT status FROM memory_items WHERE id = ?", [old]) as any;
+  assert("decayed item status = stale",
+    oldRow?.status === "stale",
+    `status=${oldRow?.status}`);
+  const freshRow = queryOne("SELECT status FROM memory_items WHERE id = ?", [fresh]) as any;
+  assert("fresh item status unchanged",
+    freshRow?.status === "active");
+}
+
+// ─── confidence-decay ─────────────────────────────────────────────────────────
+
+async function testConfidenceDecay(): Promise<void> {
+  console.log("\n=== confidence-decay ===");
+  await freshDb();
+
+  // Within grace period → untouched
+  const recent = insertMemory("recent", "preference", "v", {
+    confidence: 0.9, createdDaysAgo: 1, lastConfirmedDaysAgo: 1,
+  });
+
+  // Beyond grace, still high confidence → gets decayed but not stale
+  const aging = insertMemory("aging", "preference", "v", {
+    confidence: 0.9, createdDaysAgo: 50, lastConfirmedDaysAgo: 50,
+  });
+
+  // Very old → should decay to the floor or below-min → stale
+  const veryOld = insertMemory("very_old", "preference", "v", {
+    confidence: 0.8, createdDaysAgo: 400, lastConfirmedDaysAgo: 400,
+  });
+
+  // Override type → exempt
+  const override = insertMemory("ovr", "override", "v", {
+    confidence: 0.9, createdDaysAgo: 200, lastConfirmedDaysAgo: 200,
+  });
+
+  const res = applyConfidenceDecay();
+  assert("some items decayed", res.decayed + res.staled > 0,
+    `decayed=${res.decayed} staled=${res.staled}`);
+
+  const recentRow = queryOne("SELECT confidence, status FROM memory_items WHERE id = ?", [recent]) as any;
+  assert("grace-period item untouched",
+    Math.abs((recentRow?.confidence ?? 0) - 0.9) < 0.01 &&
+    recentRow?.status === "active",
+    `conf=${recentRow?.confidence} status=${recentRow?.status}`);
+
+  const agingRow = queryOne("SELECT confidence, status FROM memory_items WHERE id = ?", [aging]) as any;
+  assert("aging item confidence lowered",
+    (agingRow?.confidence ?? 1) < 0.9 && agingRow?.status === "active",
+    `conf=${agingRow?.confidence} status=${agingRow?.status}`);
+
+  const overrideRow = queryOne("SELECT confidence FROM memory_items WHERE id = ?", [override]) as any;
+  assert("override type exempt from decay",
+    Math.abs((overrideRow?.confidence ?? 0) - 0.9) < 0.01,
+    `conf=${overrideRow?.confidence}`);
+
+  const veryOldRow = queryOne("SELECT status FROM memory_items WHERE id = ?", [veryOld]) as any;
+  assert("very old item either stale or decayed to floor",
+    veryOldRow?.status === "stale" ||
+    (queryOne("SELECT confidence FROM memory_items WHERE id = ?", [veryOld]) as any)?.confidence < 0.5,
+    `status=${veryOldRow?.status}`);
+}
 async function testConflicts(): Promise<void>        { console.log("\n=== conflicts ==="); console.log("  (not yet implemented)"); }
 async function testConversations(): Promise<void>    { console.log("\n=== conversations ==="); console.log("  (not yet implemented)"); }
 async function testProjects(): Promise<void>         { console.log("\n=== projects ==="); console.log("  (not yet implemented)"); }

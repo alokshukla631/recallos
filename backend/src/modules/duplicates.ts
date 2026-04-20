@@ -98,6 +98,10 @@ export function findDuplicates(threshold = 0.6): DuplicateGroup[] {
     byType.set(item.type, group);
   }
 
+  // Cross-key uses a higher precision floor (0.75) to avoid false positives,
+  // but honor stricter caller-supplied thresholds (fix #43).
+  const crossKeyThreshold = Math.max(threshold, 0.75);
+
   for (const [type, typeGroup] of byType) {
     if (typeGroup.length < 2) continue;
 
@@ -112,7 +116,7 @@ export function findDuplicates(threshold = 0.6): DuplicateGroup[] {
         if (tokenSets[i].item.key === tokenSets[j].item.key) continue;
 
         const sim = jaccard(tokenSets[i].tokens, tokenSets[j].tokens);
-        if (sim >= 0.75) { // Higher threshold for cross-key matches
+        if (sim >= crossKeyThreshold) {
           groups.push({
             key: `${tokenSets[i].item.key} / ${tokenSets[j].item.key}`,
             type,
