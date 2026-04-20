@@ -434,9 +434,15 @@ export function queryOne(sql: string, params: unknown[] = []): Record<string, un
 
 /**
  * Helper: run a write statement (INSERT, UPDATE, DELETE).
+ *
+ * Re-applies `PRAGMA foreign_keys = ON` before every write. Without this,
+ * FK enforcement drifts: sql.js silently resets the PRAGMA across certain
+ * internal paths, and the first write after a migration could land an
+ * orphan row before the next `reloadIfStale` puts FK back on. See issue #42.
  */
 export function runSql(sql: string, params: unknown[] = []): void {
   const database = getDb();
+  database.run("PRAGMA foreign_keys = ON;");
   database.run(sql, params as any[]);
   saveToFile();
 }
