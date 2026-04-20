@@ -128,7 +128,8 @@ export function registerWebhook(url: string, events: string[] = ["*"]): WebhookC
  * List all webhooks.
  */
 export function listWebhooks(): WebhookConfig[] {
-  const rows = queryAll("SELECT * FROM webhooks ORDER BY created_at DESC") as any[];
+  // rowid tiebreak for registrations that share a millisecond. Fix #46.
+  const rows = queryAll("SELECT * FROM webhooks ORDER BY created_at DESC, rowid DESC") as any[];
   return rows.map((r) => ({
     ...r,
     events: typeof r.events === "string" ? JSON.parse(r.events) : r.events,
