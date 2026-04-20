@@ -333,9 +333,191 @@ async function testDomainDetector(): Promise<void> {
     detectDomain("random", "purple elephant flies") === null);
 }
 
-// Placeholder stubs (implemented in later commits)
-async function testMemoryExtractor(): Promise<void>  { console.log("\n=== memory-extractor ==="); console.log("  (not yet implemented)"); }
-async function testMemoryReconciler(): Promise<void> { console.log("\n=== memory-reconciler ==="); console.log("  (not yet implemented)"); }
+// ─── memory-extractor ─────────────────────────────────────────────────────────
+
+async function testMemoryExtractor(): Promise<void> {
+  console.log("\n=== memory-extractor ===");
+  await freshDb();
+
+  // Preference: straight "I prefer X"
+  const pref = await extractMemory("I prefer window seats on long flights.", "evt-1");
+  assert("extracts preference from 'I prefer window seats'",
+    pref.some(c => c.type === "preference"),
+    `got: ${JSON.stringify(pref)}`);
+
+  // Medical constraint takes priority over generic fact rule
+  const med = await extractMemory("I have celiac disease.", "evt-2");
+  const celiac = med.find(c => /celiac/i.test(c.value));
+  assert("celiac extracted as constraint, not fact",
+    celiac?.type === "constraint",
+    `got type=${celiac?.type}`);
+  assert("celiac tagged health domain",
+    celiac?.domain === "health",
+    `got domain=${celiac?.domain}`);
+
+  // Override wins first pass
+  const ovr = await extractMemory("Actually, forget what I said about steak.", "evt-3");
+  assert("override triggers on 'forget what I said'",
+    ovr.some(c => c.type === "override"),
+    `got: ${JSON.stringify(ovr)}`);
+
+  // Travel goal + Tokyo destination entity
+  const travel = await extractMemory("I'm planning a trip to Tokyo next month.", "evt-4");
+  assert("travel goal extracted",
+    travel.some(c => c.type === "goal" && c.domain === "travel"));
+  assert("destination entity promoted to goal",
+    travel.some(c => c.value === "Tokyo" && c.type === "goal"));
+
+  // Constraint: budget
+  const budget = await extractMemory("Budget max $3000 for the whole trip.", "evt-5");
+  assert("budget detected as constraint",
+    budget.some(c => c.type === "constraint"));
+
+  // Project-scope hint but no projectId: falls back to global
+  const scoped = await extractMemory("For this trip I want to try new things.", "evt-6");
+  assert("project-scope hint with no projectId → global",
+    scoped.every(c => c.scope !== "project"),
+    `scopes: ${scoped.map(c => c.scope).join(",")}`);
+
+  // Same project-scope hint WITH a projectId → retains project scope
+  const scopedOk = await extractMemory("For this trip I prefer budget hotels.", "evt-7", "proj-1");
+  assert("project-scope hint with projectId → project scope",
+    scopedOk.some(c => c.scope === "project" && c.projectId === "proj-1"),
+    `got: ${JSON.stringify(scopedOk.map(c => ({ s: c.scope, p: c.projectId })))}`);
+
+  // Deduplication within a single extraction pass
+  const dup = await extractMemory(
+    "I prefer window seats. I prefer window seats.",
+    "evt-8"
+  );
+  const windowPrefs = dup.filter(c => /window/i.test(c.value));
+  assert("duplicate sentence does not produce duplicate candidate",
+    windowPrefs.length === 1,
+    `got ${windowPrefs.length}`);
+
+  // Empty input → empty list, no throw
+  const empty = await extractMemory("", "evt-9");
+  assert("empty text → empty candidate list", empty.length === 0);
+
+  // Pure noise → no candidates
+  const noise = await extractMemory("asdf qwerty zxcv", "evt-10");
+  assert("gibberish → no pattern candidates",
+    noise.every(c => c.authority !== "explicit" || c.type !== "preference"),
+    `got: ${JSON.stringify(noise)}`);
+}
+
+// ─── memory-reconciler ────────────────────────────────────────────────────────
+
+/**
+ * Helper: insert a real conversation + event row and return the event id,
+ * so reconcileMemory calls don't violate the source_event_id FK.
+ */
+function seedEvent(content: string): string {
+  const convId = uuidv4();
+  const eventId = uuidv4();
+  runSql(
+    `INSERT OR IGNORE INTO conversations (id, title, created_at, updated_at)
+     VALUES (?, 'mod-test', datetime('now'), datetime('now'))`,
+    [convId]
+  );
+  runSql(
+    `INSERT INTO events (id, conversation_id, role, content, provider, created_at)
+     VALUES (?, ?, 'user', ?, 'test', datetime('now'))`,
+    [eventId, convId, content]
+  );
+  return eventId;
+}
+
+async function testMemoryReconciler(): Promise<void> {
+  console.log("\n=== memory-reconciler ===");
+  await freshDb();
+
+  // 1. First insert: new item added
+  const eA = seedEvent("I prefer window seats on flights.");
+  const first = await extractMemory("I prefer window seats on flights.", eA);
+  const r1    = await reconcileMemory(first, eA);
+  assert("first reconcile inserts new item",
+    r1.added.length >= 1 && r1.duplicates.length === 0);
+
+  // 2. Same sentence again → reconfirmed (duplicate path)
+  const eB = seedEvent("I prefer window seats on flights.");
+  const r2 = await reconcileMemory(
+    await extractMemory("I prefer window seats on flights.", eB),
+    eB
+  );
+  assert("duplicate value reconfirms, not duplicates",
+    r2.duplicates.length >= 1 && r2.added.length === 0,
+    `added=${r2.added.length} dup=${r2.duplicates.length}`);
+
+  // Confidence rises on reconfirm
+  const reconfirmedId = r2.duplicates[0]?.id;
+  if (reconfirmedId) {
+    const row = queryOne("SELECT confidence FROM memory_items WHERE id = ?", [reconfirmedId]) as any;
+    assert("confidence bumped on reconfirm",
+      (row?.confidence ?? 0) > 0.8,
+      `got ${row?.confidence}`);
+  }
+
+  // 3. Different value for same key → supersession, not duplicate.
+  // Use hand-crafted candidates so both land on the same key — the
+  // extractor's key templating would otherwise produce different keys for
+  // "aisle seats on flights" vs "window seats on flights".
+  await freshDb();
+  const eC = seedEvent("I prefer aisle seats.");
+  const r3a = await reconcileMemory(
+    [{
+      key: "seat_preference", type: "preference",
+      value: "aisle seat", scope: "global",
+      confidence: 0.8, authority: "explicit", domain: "travel",
+    }],
+    eC
+  );
+  assert("hand-crafted preference inserts cleanly", r3a.added.length === 1);
+
+  const eD = seedEvent("Actually I now prefer window seats.");
+  const r3b = await reconcileMemory(
+    [{
+      key: "seat_preference", type: "preference",
+      value: "window seat", scope: "global",
+      confidence: 0.8, authority: "explicit", domain: "travel",
+    }],
+    eD
+  );
+  assert("same-key / different-value creates supersession + conflict",
+    r3b.conflicts.length >= 1 && (r3b.updated.length >= 1 || r3b.added.length >= 1),
+    `conflicts=${r3b.conflicts.length} updated=${r3b.updated.length} added=${r3b.added.length}`);
+
+  const supersededRow = queryOne(
+    "SELECT status FROM memory_items WHERE id = ?",
+    [r3a.added[0].id]
+  ) as any;
+  assert("older item marked superseded after the new one lands",
+    supersededRow?.status === "superseded",
+    `status=${supersededRow?.status}`);
+
+  // 4. reconcileMemory with eventId=null does NOT throw (fix #33 regression guard)
+  await freshDb();
+  let threw = false;
+  try {
+    await reconcileMemory(
+      await extractMemory("I prefer aisle seats on flights.", ""),
+      null
+    );
+  } catch { threw = true; }
+  assert("reconcileMemory(candidates, null) does not throw", !threw);
+
+  // Confirm the null-eventId row landed with NULL source_event_id
+  const nullSrcRow = queryOne("SELECT source_event_id FROM memory_items LIMIT 1") as any;
+  assert("null eventId lands as NULL in the column",
+    nullSrcRow?.source_event_id === null,
+    `got ${JSON.stringify(nullSrcRow?.source_event_id)}`);
+
+  // 5. Empty candidate list: returns empty result, no DB writes
+  const empty = await reconcileMemory([], null);
+  assert("empty candidates → no-op",
+    empty.added.length === 0 && empty.updated.length === 0 &&
+    empty.duplicates.length === 0 && empty.conflicts.length === 0);
+}
 async function testAudit(): Promise<void>            { console.log("\n=== audit ==="); console.log("  (not yet implemented)"); }
 async function testTags(): Promise<void>             { console.log("\n=== tags ==="); console.log("  (not yet implemented)"); }
 async function testLinks(): Promise<void>            { console.log("\n=== links ==="); console.log("  (not yet implemented)"); }
