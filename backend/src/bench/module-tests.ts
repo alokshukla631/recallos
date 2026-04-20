@@ -922,12 +922,339 @@ async function testConfidenceDecay(): Promise<void> {
     (queryOne("SELECT confidence FROM memory_items WHERE id = ?", [veryOld]) as any)?.confidence < 0.5,
     `status=${veryOldRow?.status}`);
 }
-async function testConflicts(): Promise<void>        { console.log("\n=== conflicts ==="); console.log("  (not yet implemented)"); }
-async function testConversations(): Promise<void>    { console.log("\n=== conversations ==="); console.log("  (not yet implemented)"); }
-async function testProjects(): Promise<void>         { console.log("\n=== projects ==="); console.log("  (not yet implemented)"); }
-async function testEventStore(): Promise<void>       { console.log("\n=== event-store ==="); console.log("  (not yet implemented)"); }
-async function testContextSnapshot(): Promise<void>  { console.log("\n=== context-snapshot ==="); console.log("  (not yet implemented)"); }
-async function testSessionCleanup(): Promise<void>   { console.log("\n=== session-cleanup ==="); console.log("  (not yet implemented)"); }
+// ─── conflicts ────────────────────────────────────────────────────────────────
+
+async function testConflicts(): Promise<void> {
+  console.log("\n=== conflicts ===");
+  await freshDb();
+  ensureConflictsTable();
+
+  // Two items with same key but different values → conflict
+  const existingId = insertMemory("coffee_pref", "preference", "black no sugar");
+  const newId      = insertMemory("coffee_pref", "preference", "oat milk two sugars");
+
+  const detected = detectConflicts(newId, "coffee_pref", "oat milk two sugars");
+  assert("detectConflicts returns one pending conflict",
+    detected.length === 1, `got ${detected.length}`);
+  assert("conflict links existing and new ids",
+    detected[0]?.existing_id === existingId && detected[0]?.new_id === newId);
+  assert("conflict status is 'pending'",
+    detected[0]?.status === "pending");
+
+  // Pending list should contain exactly the conflict we just detected
+  const pending = getPendingConflicts();
+  assert("getPendingConflicts returns the one real conflict",
+    pending.length === 1 && pending[0].id === detected[0].id,
+    `pending=${pending.length}`);
+
+  // Resolve by keeping new: old item → superseded, conflict resolved_keep_new
+  resolveConflict(detected[0].id, "keep_new");
+
+  const oldStatus = (queryOne("SELECT status FROM memory_items WHERE id = ?", [existingId]) as any)?.status;
+  assert("keep_new supersedes the existing item",
+    oldStatus === "superseded", `status=${oldStatus}`);
+  assert("no pending conflicts after resolution",
+    getPendingConflicts().length === 0);
+
+  // Identical value (case-insensitive / whitespace) → not a conflict.
+  // Use a fresh key so no unrelated rows contribute to the query.
+  await freshDb();
+  ensureConflictsTable();
+  const base = insertMemory("tone_style", "fact", "Casual Tone");
+  const twinId = insertMemory("tone_style", "fact", "  Casual Tone  ");
+  const noDetect = detectConflicts(twinId, "tone_style", "  Casual Tone  ");
+  assert("identical (case/space-insensitive) value is not a conflict",
+    noDetect.length === 0, `got ${noDetect.length}`);
+  // And the row we inserted shouldn't clash with itself either — sanity.
+  void base;
+
+  // Second scenario: merged resolution updates new item's value
+  await freshDb();
+  ensureConflictsTable();
+  const a = insertMemory("diet", "preference", "vegetarian");
+  const b = insertMemory("diet", "preference", "pescatarian");
+  const c2 = detectConflicts(b, "diet", "pescatarian")[0];
+  resolveConflict(c2.id, "merged", "flexitarian");
+  const bRow = queryOne("SELECT value FROM memory_items WHERE id = ?", [b]) as any;
+  const aRow = queryOne("SELECT status FROM memory_items WHERE id = ?", [a]) as any;
+  assert("merged resolution updates new item value",
+    bRow?.value === "flexitarian", `value=${bRow?.value}`);
+  assert("merged resolution supersedes the old item",
+    aRow?.status === "superseded", `status=${aRow?.status}`);
+}
+
+// ─── conversations ────────────────────────────────────────────────────────────
+
+async function testConversations(): Promise<void> {
+  console.log("\n=== conversations ===");
+
+  // generateTitle pure-function checks (no DB required)
+  assert("generateTitle trims to first sentence",
+    generateTitle("Hello world. This is a test.") === "Hello world");
+  assert("generateTitle truncates long first sentence",
+    generateTitle("a".repeat(100)).endsWith("...") &&
+    generateTitle("a".repeat(100)).length <= 48);
+  assert("generateTitle falls back on empty input",
+    generateTitle("   ") === "New conversation");
+
+  await freshDb();
+
+  const c1 = uuidv4();
+  const convo = ensureConversation(c1, "Let's talk about deployment.");
+  assert("ensureConversation creates a new row",
+    convo.id === c1 && convo.title === "Let's talk about deployment");
+
+  // Calling again does NOT change the title, just bumps updated_at
+  const same = ensureConversation(c1, "Something totally different now.");
+  assert("ensureConversation is idempotent on existing id",
+    same.title === "Let's talk about deployment");
+
+  updateConversationTitle(c1, "Deployment Deep Dive");
+  const updated = queryOne("SELECT title FROM conversations WHERE id = ?", [c1]) as any;
+  assert("updateConversationTitle persists new title",
+    updated?.title === "Deployment Deep Dive");
+
+  // Seed a second conversation to verify listConversations ordering
+  const c2 = uuidv4();
+  ensureConversation(c2, "Benchmarks and eval harnesses.");
+  const list = listConversations();
+  assert("listConversations returns all conversations",
+    list.length === 2, `got ${list.length}`);
+
+  // deleteConversation cascades through events + memory + snapshots without
+  // violating the FK chain (regression for #24 / #42).
+  const eventId = uuidv4();
+  runSql(
+    `INSERT INTO events (id, conversation_id, role, content, provider, created_at)
+     VALUES (?, ?, 'user', 'hi', 'test', datetime('now'))`,
+    [eventId, c1]
+  );
+  const memId = insertMemory("x", "fact", "v");
+  runSql("UPDATE memory_items SET source_event_id = ? WHERE id = ?", [eventId, memId]);
+  runSql(
+    `INSERT INTO context_snapshots
+       (id, event_id, provider, compiled_context_json, included_memory_ids, omitted_memory_ids)
+     VALUES (?, ?, 'test', '{}', '[]', '[]')`,
+    [uuidv4(), eventId]
+  );
+
+  deleteConversation(c1);
+  const stillThere = queryOne("SELECT id FROM conversations WHERE id = ?", [c1]) as any;
+  assert("deleteConversation removes the row", stillThere === undefined);
+  const orphanEvent = queryOne("SELECT id FROM events WHERE id = ?", [eventId]) as any;
+  assert("deleteConversation removes the event", orphanEvent === undefined);
+  const orphanMem = queryOne("SELECT id FROM memory_items WHERE id = ?", [memId]) as any;
+  assert("deleteConversation removes linked memory_item", orphanMem === undefined);
+}
+
+// ─── projects ─────────────────────────────────────────────────────────────────
+
+async function testProjects(): Promise<void> {
+  console.log("\n=== projects ===");
+  await freshDb();
+
+  const p = createProject({
+    name: "RecallOS v1",
+    description: "memory layer",
+    status: "active",
+  });
+  assert("createProject returns a row with generated id",
+    p.id.length > 0 && p.name === "RecallOS v1");
+  assert("status defaults honored in create",
+    p.status === "active");
+
+  const fetched = getProject(p.id);
+  assert("getProject returns the created row",
+    fetched?.id === p.id && fetched?.description === "memory layer");
+
+  // Update name + status
+  const updated = updateProject(p.id, { name: "RecallOS v2", status: "completed" });
+  assert("updateProject returns the updated row",
+    updated?.name === "RecallOS v2" && updated?.status === "completed");
+
+  // Update with empty object returns existing row unchanged
+  const noop = updateProject(p.id, {});
+  assert("updateProject no-op returns existing row",
+    noop?.name === "RecallOS v2");
+
+  // Unknown id → undefined
+  assert("updateProject on unknown id returns undefined",
+    updateProject("does-not-exist", { name: "x" }) === undefined);
+
+  // listProjects sorts active first, then planning, then completed
+  createProject({ name: "alpha",   status: "planning"  });
+  createProject({ name: "beta",    status: "active"    });
+  createProject({ name: "gamma",   status: "cancelled" });
+  const list = listProjects();
+  const statuses = list.map(x => x.status);
+  assert("listProjects sorts by status bucket",
+    statuses.indexOf("active") < statuses.indexOf("planning") &&
+    statuses.indexOf("planning") < statuses.indexOf("completed") &&
+    statuses.indexOf("completed") <= statuses.indexOf("cancelled"),
+    `statuses=${JSON.stringify(statuses)}`);
+
+  // deleteProject orphans conversations + memory, doesn't delete them
+  const p2 = createProject({ name: "to-delete", status: "active" });
+  const convId = uuidv4();
+  runSql(
+    `INSERT INTO conversations (id, title, project_id, created_at, updated_at)
+     VALUES (?, 'x', ?, datetime('now'), datetime('now'))`,
+    [convId, p2.id]
+  );
+  const memId = insertMemory("k", "fact", "v", { projectId: p2.id, scope: "project" });
+
+  deleteProject(p2.id);
+  const orphanedConv = queryOne("SELECT project_id FROM conversations WHERE id = ?", [convId]) as any;
+  const orphanedMem  = queryOne("SELECT project_id, scope FROM memory_items WHERE id = ?", [memId]) as any;
+  assert("deleteProject orphans conversations (project_id = NULL)",
+    orphanedConv?.project_id === null);
+  assert("deleteProject orphans memory and resets scope to global",
+    orphanedMem?.project_id === null && orphanedMem?.scope === "global");
+  assert("deleteProject removes the project row",
+    getProject(p2.id) === undefined);
+}
+
+// ─── event-store ──────────────────────────────────────────────────────────────
+
+async function testEventStore(): Promise<void> {
+  console.log("\n=== event-store ===");
+  await freshDb();
+
+  const convId = uuidv4();
+  runSql(
+    `INSERT INTO conversations (id, title, created_at, updated_at)
+     VALUES (?, 'evt-test', datetime('now'), datetime('now'))`,
+    [convId]
+  );
+
+  const e1 = await storeEvent(convId, "user",      "hello there",  "test");
+  assert("storeEvent returns a populated event row",
+    e1.id.length > 0 && e1.conversation_id === convId &&
+    e1.role === "user" && e1.content === "hello there");
+  assert("storeEvent persists provider field",
+    e1.provider === "test");
+
+  const e2 = await storeEvent(convId, "assistant", "hi — how can I help?", "test");
+  const e3 = await storeEvent(convId, "user",      "tell me about memory", "test");
+
+  // getEvents returns all events in ascending time order
+  const all = await getEvents(convId);
+  assert("getEvents returns every event for the conversation",
+    all.length === 3, `got ${all.length}`);
+  assert("getEvents returns rows in ascending created_at order",
+    all[0].id === e1.id && all[1].id === e2.id && all[2].id === e3.id);
+
+  // getEvents with a limit
+  const limited = await getEvents(convId, 2);
+  assert("getEvents honors limit",
+    limited.length === 2);
+
+  // getRecentTurns returns newest N but in ascending order (oldest of the N first)
+  const recent2 = await getRecentTurns(convId, 2);
+  assert("getRecentTurns returns N most-recent events",
+    recent2.length === 2 &&
+    recent2[0].id === e2.id && recent2[1].id === e3.id,
+    `ids=${recent2.map(r => r.id).join(",")}`);
+
+  // Unknown conversation → empty
+  const none = await getEvents("nope");
+  assert("getEvents on unknown conv id returns []",
+    none.length === 0);
+}
+
+// ─── context-snapshot ─────────────────────────────────────────────────────────
+
+async function testContextSnapshot(): Promise<void> {
+  console.log("\n=== context-snapshot ===");
+  await freshDb();
+
+  const eventId = seedEvent("tell me what you remember about me");
+
+  const snap = await saveSnapshot(
+    eventId,
+    "anthropic",
+    { system: "you are helpful", memory: [{ id: "m1", text: "likes window seats" }] },
+    ["m1", "m2"],
+    ["m3"],
+    { reason: "relevance > 0.5" },
+    "Preview of the prompt..."
+  );
+
+  assert("saveSnapshot returns a row with the given event_id",
+    snap.event_id === eventId);
+  assert("saveSnapshot serializes included_memory_ids",
+    JSON.parse(snap.included_memory_ids).length === 2);
+  assert("saveSnapshot serializes omitted_memory_ids",
+    JSON.parse(snap.omitted_memory_ids)[0] === "m3");
+  assert("saveSnapshot serializes rationale_json",
+    JSON.parse(snap.rationale_json ?? "{}").reason === "relevance > 0.5");
+  assert("saveSnapshot stores provider",
+    snap.provider === "anthropic");
+
+  const byId = await getSnapshot(snap.id);
+  assert("getSnapshot returns the saved row by id",
+    byId?.id === snap.id);
+
+  // Second snapshot for same event
+  await saveSnapshot(eventId, "openai", {}, [], [], {});
+  const forEvent = await getSnapshotsForEvent(eventId);
+  assert("getSnapshotsForEvent returns both snapshots",
+    forEvent.length === 2, `got ${forEvent.length}`);
+  // Providers should include both
+  const providers = forEvent.map(s => s.provider).sort();
+  assert("getSnapshotsForEvent returns rows from both providers",
+    providers.join(",") === "anthropic,openai",
+    `providers=${providers.join(",")}`);
+
+  // Unknown event → empty list
+  const emptyList = await getSnapshotsForEvent("no-such-event");
+  assert("getSnapshotsForEvent on unknown event returns []",
+    emptyList.length === 0);
+  assert("getSnapshot on unknown id returns undefined",
+    (await getSnapshot("no-such-snap")) === undefined);
+}
+
+// ─── session-cleanup ──────────────────────────────────────────────────────────
+
+async function testSessionCleanup(): Promise<void> {
+  console.log("\n=== session-cleanup ===");
+  await freshDb();
+
+  // Old session item (48h ago) → should expire at TTL=24h
+  const oldSession = insertMemory("sess_old", "fact", "v", {
+    scope: "session", createdDaysAgo: 2,
+  });
+  // Fresh session item (6h ago) → survives
+  insertMemory("sess_fresh", "fact", "v", {
+    scope: "session", createdDaysAgo: 0.25,
+  });
+  // Global item even if old → NOT a session item, never expires here
+  const globalOld = insertMemory("glob_old", "fact", "v", {
+    scope: "global", createdDaysAgo: 30,
+  });
+
+  const expired = expireSessionMemory(24);
+  assert("expireSessionMemory returns count of expired rows",
+    expired === 1, `got ${expired}`);
+
+  const oldStatus    = (queryOne("SELECT status FROM memory_items WHERE id = ?", [oldSession]) as any)?.status;
+  const globalStatus = (queryOne("SELECT status FROM memory_items WHERE id = ?", [globalOld]) as any)?.status;
+  assert("old session item marked stale",
+    oldStatus === "stale", `status=${oldStatus}`);
+  assert("global item NOT touched by session expiry",
+    globalStatus === "active", `status=${globalStatus}`);
+
+  // Stats reflect the state
+  const stats = getSessionStats();
+  assert("session stats: 1 active, 1 stale",
+    stats.active === 1 && stats.stale === 1,
+    `active=${stats.active} stale=${stats.stale}`);
+
+  // Second call is a no-op
+  const secondPass = expireSessionMemory(24);
+  assert("second expireSessionMemory call is a no-op",
+    secondPass === 0, `got ${secondPass}`);
+}
 async function testPassport(): Promise<void>         { console.log("\n=== passport ==="); console.log("  (not yet implemented)"); }
 async function testSuggestions(): Promise<void>      { console.log("\n=== suggestions ==="); console.log("  (not yet implemented)"); }
 async function testPerf(): Promise<void>             { console.log("\n=== perf ==="); console.log("  (not yet implemented)"); }

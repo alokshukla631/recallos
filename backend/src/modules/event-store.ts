@@ -33,14 +33,16 @@ export async function getEvents(
   conversationId: string,
   limit?: number
 ): Promise<Event[]> {
+  // Secondary ORDER BY rowid tiebreaks events inserted within the same second
+  // (datetime('now') is second-precision). Fix #44.
   if (limit) {
     return queryAll(
-      "SELECT * FROM events WHERE conversation_id = ? ORDER BY created_at ASC LIMIT ?",
+      "SELECT * FROM events WHERE conversation_id = ? ORDER BY created_at ASC, rowid ASC LIMIT ?",
       [conversationId, limit]
     ) as unknown as Event[];
   }
   return queryAll(
-    "SELECT * FROM events WHERE conversation_id = ? ORDER BY created_at ASC",
+    "SELECT * FROM events WHERE conversation_id = ? ORDER BY created_at ASC, rowid ASC",
     [conversationId]
   ) as unknown as Event[];
 }
@@ -49,10 +51,12 @@ export async function getRecentTurns(
   conversationId: string,
   limit: number = 10
 ): Promise<Event[]> {
+  // rowid DESC tiebreak ensures "last N" is deterministic under rapid writes.
+  // Fix #44.
   const rows = queryAll(
     `SELECT * FROM events
      WHERE conversation_id = ?
-     ORDER BY created_at DESC
+     ORDER BY created_at DESC, rowid DESC
      LIMIT ?`,
     [conversationId, limit]
   ) as unknown as Event[];
