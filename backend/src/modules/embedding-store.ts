@@ -19,11 +19,26 @@
 
 import OpenAI from "openai";
 import { queryAll, queryOne, getDb, saveToFile } from "../db/index.js";
+import {
+  LOCAL_EMBEDDING_CACHE_KEY,
+  isLocalEmbeddingEnabled,
+  localEmbedBatch,
+  localEmbedQuery,
+} from "./local-embedder.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 export const EMBEDDING_MODEL = "text-embedding-3-small";
 export const EMBEDDING_DIM   = 1536;
+
+/**
+ * Label the active embedding model for cache rows. Local vectors are 384-dim
+ * and OpenAI vectors are 1536-dim, so mixing them in the cache would corrupt
+ * cosine scores — we key on model name to keep them disjoint.
+ */
+function activeModelLabel(): string {
+  return isLocalEmbeddingEnabled() ? LOCAL_EMBEDDING_CACHE_KEY : EMBEDDING_MODEL;
+}
 
 /**
  * Maximum number of new embeddings to generate per retrieval call.
@@ -98,10 +113,13 @@ interface CachedRow {
 function loadCached(eventIds: string[]): Map<string, number[]> {
   if (eventIds.length === 0) return new Map();
   const placeholders = eventIds.map(() => "?").join(",");
+  const model = activeModelLabel();
+  // Filter by model so 1536-dim OpenAI rows and 384-dim local rows don't
+  // cross-contaminate cosine scoring when a user flips USE_LOCAL_EMBEDDINGS.
   const rows = queryAll(
     `SELECT event_id, embedding FROM event_embeddings
-     WHERE event_id IN (${placeholders})`,
-    eventIds
+     WHERE model = ? AND event_id IN (${placeholders})`,
+    [model, ...eventIds]
   ) as unknown as CachedRow[];
 
   const result = new Map<string, number[]>();
@@ -123,11 +141,12 @@ function saveEmbeddingsBatch(
 ): void {
   if (entries.length === 0) return;
   const database = getDb();
+  const model = activeModelLabel();
   for (const { eventId, vec } of entries) {
     database.run(
       `INSERT OR REPLACE INTO event_embeddings (event_id, model, embedding)
        VALUES (?, ?, ?)`,
-      [eventId, EMBEDDING_MODEL, JSON.stringify(vec)]
+      [eventId, model, JSON.stringify(vec)]
     );
   }
   saveToFile();
@@ -171,7 +190,10 @@ export async function getEmbeddingsForEvents(
   events: Array<{ id: string; content: string }>,
   apiKey: string | null
 ): Promise<Map<string, number[]> | null> {
-  if (!apiKey || events.length === 0) return null;
+  if (events.length === 0) return null;
+
+  const useLocal = isLocalEmbeddingEnabled();
+  if (!useLocal && !apiKey) return null;
 
   const ids    = events.map((e) => e.id);
   const cached = loadCached(ids);
@@ -182,8 +204,10 @@ export async function getEmbeddingsForEvents(
 
   if (uncached.length > 0) {
     try {
-      const texts   = uncached.map((e) => e.content.slice(0, 8192));
-      const vecs    = await generateBatch(texts, apiKey);
+      const texts = uncached.map((e) => e.content.slice(0, 8192));
+      const vecs  = useLocal
+        ? await localEmbedBatch(texts)
+        : await generateBatch(texts, apiKey as string);
       const toSave: Array<{ eventId: string; vec: number[] }> = [];
 
       for (let i = 0; i < uncached.length; i++) {
@@ -212,6 +236,13 @@ export async function embedQuery(
   query: string,
   apiKey: string | null
 ): Promise<number[] | null> {
+  if (isLocalEmbeddingEnabled()) {
+    try {
+      return await localEmbedQuery(query);
+    } catch {
+      return null;
+    }
+  }
   if (!apiKey) return null;
   try {
     const client = new OpenAI({ apiKey });
