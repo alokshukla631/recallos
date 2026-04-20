@@ -146,6 +146,61 @@ const PREFERENCE_QUERY_EXPANSIONS: Array<{ anchor: RegExp; extra: string[] }> = 
       "prefer", "usually", "tend to", "typically", "always", "avoid",
     ],
   },
+  // Photography / camera gear — surface sessions that mention specific brands
+  // or bodies when a follow-up asks about "setup" or "equipment".
+  {
+    anchor: /\b(photo(graph)?y|camera|lens(es)?|shoot(ing)?|snapshot|dslr|mirrorless|setup|equipment|accessor(y|ies))\b/i,
+    extra: [
+      "sony", "canon", "nikon", "fujifilm", "leica", "olympus", "panasonic",
+      "tripod", "gimbal", "filter", "flash", "strap", "bag", "memory card",
+      "aperture", "shutter", "iso", "prime", "zoom", "wide-angle", "telephoto",
+    ],
+  },
+  // Research / academic publications
+  {
+    anchor: /\b(research|paper|publication|conference|journal|study|article|academic)\b/i,
+    extra: [
+      "ai", "artificial intelligence", "deep learning", "machine learning",
+      "medical", "healthcare", "imaging", "neural network", "transformer",
+      "arxiv", "neurips", "icml", "cvpr", "emnlp", "nature", "lancet",
+    ],
+  },
+  // Gardening / homegrown cooking
+  {
+    anchor: /\b(garden|homegrown|grown|grow|harvest|vegetable|herb|produce|cook|dinner|recipe|meal plan|serve|prepare)\b/i,
+    extra: [
+      "tomato", "basil", "mint", "zucchini", "lettuce", "pepper", "cucumber",
+      "squash", "kale", "carrot", "onion", "garlic", "potato", "spinach",
+      "pasta", "salad", "soup", "stew", "roast", "saute", "bake",
+    ],
+  },
+  // Consumer electronics / phone / battery
+  {
+    anchor: /\b(battery|phone|mobile|charger|power bank|smartphone|iphone|android)\b/i,
+    extra: [
+      "portable", "power bank", "charger", "usb-c", "lightning", "wireless",
+      "brightness", "airplane mode", "low power", "background app",
+      "iphone", "samsung", "pixel", "watt", "mah",
+    ],
+  },
+  // Baking / desserts
+  {
+    anchor: /\b(bake|baking|dessert|cake|cookie|pastry|cupcake|muffin|pie|tart|bread|brownie)\b/i,
+    extra: [
+      "lemon", "poppyseed", "chocolate", "vanilla", "cinnamon", "buttercream",
+      "sponge", "frosting", "glaze", "ganache", "meringue", "sourdough",
+      "banana bread", "red velvet", "cheesecake", "apple pie",
+    ],
+  },
+  // Musical instruments / gear
+  {
+    anchor: /\b(guitar|bass|drum|piano|keyboard|synth|amp(lifier)?|pedal|instrument|band|music store)\b/i,
+    extra: [
+      "fender", "gibson", "stratocaster", "telecaster", "les paul", "martin",
+      "taylor", "yamaha", "roland", "marshall", "vox", "humbucker", "single coil",
+      "acoustic", "electric", "pickup", "neck", "fretboard", "tuning",
+    ],
+  },
 ];
 
 /**
@@ -158,7 +213,7 @@ function expandPreferenceQuery(query: string): string {
   // Skip assistant-recall and purely temporal queries — those need precise
   // lexical matching, not broad vocabulary expansion.
   const looksLikePreference =
-    /\b(prefer|like|usual|dietary|food|eat|allergen|exercise|workout|restriction|habit|style|default|tendency)\b/i.test(query) &&
+    /\b(prefer|like|usual|dietary|food|eat|allergen|exercise|workout|restriction|habit|style|default|tendency|recommend|suggest|tip|setup|equipment|accessor|complement|gear|build upon|upgrade|similar|comparable|interest(ed|ing)?|serve|look for|build on|previous|enhance)\b/i.test(query) &&
     !/\b(what did you|you (said|recommended|suggested|told me)|do you remember)\b/i.test(query);
 
   if (!looksLikePreference) return query;
