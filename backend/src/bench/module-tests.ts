@@ -518,10 +518,203 @@ async function testMemoryReconciler(): Promise<void> {
     empty.added.length === 0 && empty.updated.length === 0 &&
     empty.duplicates.length === 0 && empty.conflicts.length === 0);
 }
-async function testAudit(): Promise<void>            { console.log("\n=== audit ==="); console.log("  (not yet implemented)"); }
-async function testTags(): Promise<void>             { console.log("\n=== tags ==="); console.log("  (not yet implemented)"); }
-async function testLinks(): Promise<void>            { console.log("\n=== links ==="); console.log("  (not yet implemented)"); }
-async function testVersioning(): Promise<void>       { console.log("\n=== versioning ==="); console.log("  (not yet implemented)"); }
+// ─── audit ────────────────────────────────────────────────────────────────────
+
+async function testAudit(): Promise<void> {
+  console.log("\n=== audit ===");
+  await freshDb();
+
+  const id = insertMemory("diet_preference", "preference", "vegetarian");
+
+  // logAudit writes rows that round-trip through getAuditForItem
+  logAudit(id, "created", "initial extraction");
+  logAudit(id, "reconfirmed", "mentioned again");
+  logAudit(id, "pinned", "user pin");
+
+  const entries = getAuditForItem(id);
+  assert("getAuditForItem returns all 3 entries",
+    entries.length === 3,
+    `got ${entries.length}`);
+  // Ordering isn't stable across ties because datetime('now') is second-precision
+  // and three logAudit calls land in the same second. Check content, not order.
+  const actions = new Set(entries.map(e => e.action));
+  assert("all three actions recorded",
+    actions.has("created") && actions.has("reconfirmed") && actions.has("pinned"));
+  assert("detail text is preserved",
+    entries.some(e => e.details === "initial extraction"));
+
+  // getRecentAudit returns cross-item rows and joins memory details
+  const id2 = insertMemory("tone_style", "fact", "casual");
+  logAudit(id2, "created", "style note");
+
+  const recent = getRecentAudit(10);
+  assert("getRecentAudit surfaces across items",
+    recent.length >= 4,
+    `got ${recent.length}`);
+  assert("getRecentAudit enriches with memory_key from join",
+    recent.some((r: any) => r.memory_key === "diet_preference" || r.memory_key === "tone_style"));
+
+  // Empty memory id → empty result
+  const none = getAuditForItem("non-existent-id");
+  assert("getAuditForItem for missing id → []", none.length === 0);
+}
+
+// ─── tags ─────────────────────────────────────────────────────────────────────
+
+async function testTags(): Promise<void> {
+  console.log("\n=== tags ===");
+  await freshDb();
+
+  const id = insertMemory("seat_preference", "preference", "window seat");
+
+  addTag(id, "Travel");              // uppercase + capitalized
+  addTag(id, "  flight booking  ");  // whitespace + multi-word
+  addTag(id, "travel");              // duplicate of first (after normalization)
+
+  const tags = getTagsForItem(id);
+  assert("tags lowercased + trimmed + hyphenated",
+    tags.includes("travel") && tags.includes("flight-booking"),
+    `got ${JSON.stringify(tags)}`);
+  assert("duplicate tag ignored",
+    tags.filter(t => t === "travel").length === 1);
+
+  // getAllTags aggregates across items
+  const id2 = insertMemory("tone_style", "fact", "casual");
+  addTag(id2, "travel");
+  const all = getAllTags();
+  const travelCount = all.find(t => t.tag === "travel")?.count ?? 0;
+  assert("getAllTags counts 'travel' across 2 items",
+    travelCount === 2,
+    `got ${travelCount}`);
+
+  // getItemsByTag
+  const itemsWithTravel = getItemsByTag("TRAVEL");
+  assert("getItemsByTag normalizes lookup",
+    itemsWithTravel.length === 2,
+    `got ${itemsWithTravel.length}`);
+
+  // removeTag
+  removeTag(id, "travel");
+  const tagsAfter = getTagsForItem(id);
+  assert("removeTag drops the tag",
+    !tagsAfter.includes("travel"));
+
+  // Blank + whitespace-only tag rejected
+  const id3 = insertMemory("writing_style", "fact", "formal");
+  addTag(id3, "   ");
+  addTag(id3, "");
+  const blankTags = getTagsForItem(id3);
+  assert("blank tag ignored", blankTags.length === 0,
+    `got ${JSON.stringify(blankTags)}`);
+}
+
+// ─── links ────────────────────────────────────────────────────────────────────
+
+async function testLinks(): Promise<void> {
+  console.log("\n=== links ===");
+  await freshDb();
+
+  const a = insertMemory("a_seat", "preference", "aisle");
+  const b = insertMemory("b_airline", "preference", "United");
+  const c = insertMemory("c_meal", "preference", "vegan");
+
+  const link1 = createLink(a, b, "related_to", 0.8, "both travel prefs");
+  assert("createLink returns a valid MemoryLink",
+    link1.id.length > 0 && link1.source_id === a && link1.target_id === b);
+
+  // Idempotent re-create: same triple returns the same row
+  const link1Dup = createLink(a, b, "related_to", 0.9, "updated strength");
+  assert("re-creating the same link returns the same id",
+    link1Dup.id === link1.id);
+
+  // Strength updates on duplicate create
+  assert("duplicate createLink updates strength to 0.9",
+    link1Dup.strength === 0.9,
+    `got ${link1Dup.strength}`);
+
+  // getLinksFrom / getLinksTo
+  createLink(b, c, "refines", 0.7);
+  const fromA = getLinksFrom(a);
+  assert("getLinksFrom returns outgoing links only",
+    fromA.length === 1 && fromA[0].target_id === b);
+
+  const toB = getLinksTo(b);
+  assert("getLinksTo returns incoming links only",
+    toB.length === 1 && toB[0].source_id === a);
+
+  // findRelated: BFS traversal a → b → c
+  const related = findRelated(a, 2);
+  assert("findRelated traverses 2 hops and excludes source",
+    related.has(b) && related.has(c) && !related.has(a),
+    `got ${[...related].join(",")}`);
+
+  // Depth=1: only direct neighbours
+  const related1 = findRelated(a, 1);
+  assert("findRelated depth=1 returns only direct neighbour",
+    related1.has(b) && !related1.has(c));
+
+  // removeLink
+  const removed = removeLink(link1.id);
+  assert("removeLink succeeds on existing link", removed === true);
+  const removedAgain = removeLink(link1.id);
+  assert("removeLink returns false for non-existent link", removedAgain === false);
+  const fromAAfter = getLinksFrom(a);
+  assert("getLinksFrom reflects removal",
+    fromAAfter.length === 0,
+    `got ${fromAAfter.length}`);
+}
+
+// ─── versioning ───────────────────────────────────────────────────────────────
+
+async function testVersioning(): Promise<void> {
+  console.log("\n=== versioning ===");
+  await freshDb();
+  ensureVersionTable();
+
+  const id = insertMemory("seat", "preference", "aisle", { confidence: 0.7 });
+
+  // v1 snapshot of the initial state
+  const v1 = createVersion(id, "user");
+  assert("createVersion returns a MemoryVersion",
+    v1 !== null && v1!.version_number === 1 && v1!.value === "aisle");
+
+  // Mutate the item and snapshot v2
+  runSql("UPDATE memory_items SET value = ?, confidence = ? WHERE id = ?",
+    ["window", 0.85, id]);
+  const v2 = createVersion(id, "user");
+  assert("version_number increments on second snapshot",
+    v2 !== null && v2!.version_number === 2);
+
+  const versions = getVersions(id);
+  assert("getVersions returns all versions, newest first",
+    versions.length === 2 && versions[0].version_number === 2);
+  assert("getVersionCount matches",
+    getVersionCount(id) === 2);
+
+  // Revert to v1
+  const ok = revertToVersion(id, v1!.id);
+  assert("revertToVersion succeeds", ok === true);
+
+  const current = queryOne("SELECT value, confidence FROM memory_items WHERE id = ?", [id]) as any;
+  assert("item value reverted to v1",
+    current?.value === "aisle",
+    `got ${current?.value}`);
+
+  // Revert also snapshots current state before applying, so we have 3 versions
+  assert("revert leaves a v3 snapshot of pre-revert state",
+    getVersionCount(id) === 3,
+    `got ${getVersionCount(id)}`);
+
+  // Revert to non-existent version id fails cleanly
+  const badRevert = revertToVersion(id, "fake-version-id");
+  assert("revertToVersion returns false for unknown id", badRevert === false);
+
+  // Revert across memory items is rejected
+  const otherId = insertMemory("other", "fact", "x");
+  const badRevert2 = revertToVersion(otherId, v1!.id);
+  assert("revert rejects a version belonging to a different item",
+    badRevert2 === false);
+}
 async function testDuplicates(): Promise<void>       { console.log("\n=== duplicates ==="); console.log("  (not yet implemented)"); }
 async function testImportance(): Promise<void>       { console.log("\n=== importance ==="); console.log("  (not yet implemented)"); }
 async function testDecay(): Promise<void>            { console.log("\n=== decay ==="); console.log("  (not yet implemented)"); }
