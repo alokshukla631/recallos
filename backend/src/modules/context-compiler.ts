@@ -53,6 +53,10 @@ export interface TraceEntry {
   domain_boost: number;
   final_score: number;
   decision: "included" | "omitted";
+  // True when the item cleared the threshold via BM25 / domain / link / always-include
+  // rather than only via the durability floor or residual recency. Drives which
+  // items qualify for last_confirmed_at refresh (see auto-reconfirm block).
+  earned?: boolean;
   reason: string;
 }
 
@@ -249,6 +253,21 @@ export async function compileContext(
   // in on recency alone and pollute the context.
   const messageDomains = detectMessageDomains(currentMessage);
 
+  // Classify the query BEFORE structured scoring. The structured lane has to
+  // know whether this is an assistant_recall / temporal_history / episodic
+  // query so it can stop admitting unrelated durable preferences via the
+  // confidence floor or stale-reconfirm recency. Previously classification
+  // only ran for the verbatim lane, so the structured lane behaved uniformly
+  // across every query type and leaked noise into episodic/temporal queries.
+  const classification = classifyQuery(currentMessage);
+  const verbatimHeavy =
+    classification.type === "assistant_recall" ||
+    classification.type === "temporal_history" ||
+    classification.type === "episodic_search";
+  const broadProfileQuery =
+    classification.type === "preference_profile" ||
+    classification.type === "planning";
+
   const RELEVANCE_THRESHOLD = 0.1;
   const LINK_BOOST = 0.08;          // Boost for items linked to high-scoring items
   const DOMAIN_MATCH_BOOST = 0.1;   // Boost for items matching the message domain
@@ -259,15 +278,71 @@ export async function compileContext(
   // so it stays just above RELEVANCE_THRESHOLD even when BM25 is zero and the
   // item is months old.  Lower-confidence / session-scoped prefs still need
   // BM25 or recency to earn inclusion.
+  //
+  // IMPORTANT: the floor is only applied when an item is *eligible* for it —
+  // see preferenceFloorEligible() below. Prior to that fix it applied
+  // unconditionally and bled travel/music preferences into coding queries.
   const CONFIDENCE_FLOOR_FACTOR = 0.12;
   const CONFIDENCE_FLOOR_MIN    = 0.85;
+
+  // Per-query-type recency multipliers for structured preference/fact items.
+  // Verbatim-heavy queries should be answered from past conversation evidence,
+  // not from durable preferences that happen to have been reconfirmed recently.
+  // Balanced queries get a smaller dampening so preferences need lexical or
+  // domain signal to win, not just recency.
+  const STRUCTURED_RECENCY_FACTOR_VERBATIM = 0.25;
+  const STRUCTURED_RECENCY_FACTOR_BALANCED = 0.6;
+
+  /**
+   * Is this item eligible for the durable-preference confidence floor on the
+   * current query?
+   *
+   *  - assistant_recall / temporal_history / episodic_search   → never
+   *      (these queries should lean on the evidence lane; structured prefs
+   *       must earn inclusion via BM25 or domain match, not durability)
+   *  - message has detected domains AND item has a domain tag → only when
+   *    the item's domain matches a detected domain
+   *  - message has no detected domain AND query is a broad preference profile
+   *    or planning query → allowed (these want the full durable profile)
+   *  - otherwise (balanced / no domains / domain-less item) → allowed
+   */
+  function preferenceFloorEligible(item: MemoryItem): boolean {
+    if (item.type !== "preference") return false;
+    if (item.confidence < CONFIDENCE_FLOOR_MIN) return false;
+    if (item.scope !== "global" && item.scope !== "domain") return false;
+
+    // Verbatim-heavy queries never get the durability floor for preferences.
+    if (verbatimHeavy) return false;
+
+    // Domain-aware gating: if the query has detectable domains and the item
+    // is tagged with a domain, require a match. Domain-less items (no tag)
+    // remain eligible because they are the "general profile" memory.
+    if (messageDomains.size > 0 && item.domain) {
+      return messageDomains.has(item.domain);
+    }
+
+    // No detectable domain in the message: only allow the floor on queries
+    // that genuinely want the broad durable profile.
+    if (messageDomains.size === 0) {
+      return broadProfileQuery || classification.type === "balanced";
+    }
+
+    // Message has domains but the item doesn't — let it through only on
+    // broad profile/planning queries so we don't bleed tagless prefs into
+    // domain-specific asks.
+    return broadProfileQuery;
+  }
 
   const included: MemoryItem[] = [];
   const omitted: MemoryItem[] = [];
   const rationale: Record<string, string> = {};
   const trace: TraceEntry[] = [];
 
-  // Helper: compute domain-aware recency for an item
+  // Helper: compute domain-aware recency for an item.
+  // Also dampens recency for structured preference/fact items on verbatim-heavy
+  // queries and (more mildly) on balanced queries, so that a recently
+  // reconfirmed but off-topic preference cannot ride into an episodic /
+  // assistant-recall answer on recency alone.
   function domainAwareRecency(item: MemoryItem): { recency: number; domainBoost: number } {
     let recency = recencyBoost(item);
     let domainBoost = 0;
@@ -285,10 +360,26 @@ export async function compileContext(
       }
     }
 
+    // Structured recency dampening by query type. Preferences and facts are
+    // the items most susceptible to stale-reconfirm bleed; constraints /
+    // overrides / goals are authoritative and keep full recency.
+    if (item.type === "preference" || item.type === "fact") {
+      if (verbatimHeavy) {
+        recency *= STRUCTURED_RECENCY_FACTOR_VERBATIM;
+      } else if (classification.type === "balanced" && item.type === "preference") {
+        recency *= STRUCTURED_RECENCY_FACTOR_BALANCED;
+      }
+    }
+
     return { recency, domainBoost };
   }
 
-  // First pass: find items that score above threshold (these are "anchor" items)
+  // First pass: find items that score above threshold (these are "anchor" items).
+  // Anchors are defined WITHOUT the durability floor — we only want items that
+  // pulled themselves into consideration via real signals (BM25, recency,
+  // domain match). This also prevents the confidence floor from dragging
+  // unrelated preferences into the anchor set, which would then spread via
+  // link boosts.
   const anchorIds = new Set<string>();
   for (const item of allItems) {
     const bm25Score = scoreMap.get(item.id) ?? 0;
@@ -313,16 +404,28 @@ export async function compileContext(
     const linkBoost = linkedToAnchors.has(item.id) && !anchorIds.has(item.id) ? LINK_BOOST : 0;
 
     // Confidence floor: well-established global/domain preferences keep a
-    // minimum score so they are not evicted purely due to recency decay.
-    const confFloor =
-      item.type === "preference" &&
-      item.confidence >= CONFIDENCE_FLOOR_MIN &&
-      (item.scope === "global" || item.scope === "domain")
-        ? item.confidence * CONFIDENCE_FLOOR_FACTOR
-        : 0;
+    // minimum score so they are not evicted purely due to recency decay —
+    // but only when the item is *eligible* for the floor on this query
+    // (see preferenceFloorEligible). Off-domain / assistant-recall / temporal
+    // queries do not get the floor, which was the main leak path.
+    const confFloor = preferenceFloorEligible(item)
+      ? item.confidence * CONFIDENCE_FLOOR_FACTOR
+      : 0;
 
     const finalScore = bm25Score + recency + linkBoost + domainBoost + confFloor;
     const alwaysInclude = item.type === "override" || item.type === "constraint" || item.pinned === 1;
+
+    // "Earned inclusion" = admitted via signals that genuinely matched the
+    // current query (lexical, domain, link) or the item is authoritative
+    // (override / constraint / pinned). Items that cleared the threshold
+    // only because of the durability floor or residual recency do NOT count
+    // as earned — we will not refresh their last_confirmed_at.
+    const BM25_EARNED_THRESHOLD = 0.05;
+    const earnedInclusion =
+      alwaysInclude ||
+      bm25Score >= BM25_EARNED_THRESHOLD ||
+      domainBoost > 0 ||
+      linkBoost > 0;
 
     if (finalScore >= RELEVANCE_THRESHOLD || alwaysInclude) {
       included.push(item);
@@ -344,6 +447,7 @@ export async function compileContext(
         domain_boost: parseFloat(domainBoost.toFixed(4)),
         final_score: parseFloat(finalScore.toFixed(4)),
         decision: "included",
+        earned: earnedInclusion,
         reason,
       });
     } else {
@@ -361,10 +465,19 @@ export async function compileContext(
         domain_boost: parseFloat(domainBoost.toFixed(4)),
         final_score: parseFloat(finalScore.toFixed(4)),
         decision: "omitted",
+        earned: false,
         reason: `Score ${finalScore.toFixed(3)} below threshold (bm25=${bm25Score.toFixed(3)}, recency=${recency.toFixed(3)}, domain=${domainBoost.toFixed(3)}${confFloor > 0 ? `, conf_floor=${confFloor.toFixed(3)}` : ""})`,
       });
     }
   }
+
+  // Set of item ids that genuinely earned inclusion on this query. Only these
+  // will have last_confirmed_at refreshed below. Keeping the set in sync with
+  // the trace's earned=true flag means the debug view always explains which
+  // items the system treats as "relevance-anchored" for this turn.
+  const earnedIds = new Set<string>(
+    trace.filter((t) => t.decision === "included" && t.earned).map((t) => t.memory_item_id)
+  );
 
   // Sort trace: included first (by final score desc), then omitted (by final score desc)
   trace.sort((a, b) => {
@@ -430,20 +543,28 @@ export async function compileContext(
 
   const structuredContextText = lines.join("\n");
 
-  // Auto-reconfirm: update last_confirmed_at for all included items.
-  // This feeds back into the decay system - frequently used items stay fresh.
-  if (included.length > 0) {
+  // Auto-reconfirm: only items that *earned* inclusion via real signals
+  // (BM25 lexical match, domain boost, link boost, or authoritative types
+  // like override / constraint / pinned). Items admitted purely by the
+  // durability floor or residual recency do NOT get their last_confirmed_at
+  // refreshed — otherwise noisy inclusion would reinforce itself: a recently
+  // reconfirmed off-topic preference stays fresh, ranks higher on the next
+  // query, gets included again, refreshes again, and the leak compounds.
+  const reconfirmIds = included
+    .filter((i) => earnedIds.has(i.id))
+    .map((i) => i.id);
+  if (reconfirmIds.length > 0) {
     const now = new Date().toISOString();
-    const placeholders = included.map(() => "?").join(",");
+    const placeholders = reconfirmIds.map(() => "?").join(",");
     runSql(
       `UPDATE memory_items SET last_confirmed_at = ? WHERE id IN (${placeholders})`,
-      [now, ...included.map((i) => i.id)]
+      [now, ...reconfirmIds]
     );
   }
 
   // ─── Verbatim retrieval lane ───────────────────────────────────────────────
-  // Classify the query to determine retrieval strategy and snippet budget.
-  const classification = classifyQuery(currentMessage);
+  // `classification` was computed above so the structured lane could be
+  // query-aware. Re-use it here to drive snippet budget and role boosting.
 
   // Number of verbatim snippets to include scales with verbatim weight:
   //   assistant_recall / temporal_history → up to 5
