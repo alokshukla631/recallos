@@ -1255,10 +1255,246 @@ async function testSessionCleanup(): Promise<void> {
   assert("second expireSessionMemory call is a no-op",
     secondPass === 0, `got ${secondPass}`);
 }
-async function testPassport(): Promise<void>         { console.log("\n=== passport ==="); console.log("  (not yet implemented)"); }
-async function testSuggestions(): Promise<void>      { console.log("\n=== suggestions ==="); console.log("  (not yet implemented)"); }
-async function testPerf(): Promise<void>             { console.log("\n=== perf ==="); console.log("  (not yet implemented)"); }
-async function testWebhooks(): Promise<void>         { console.log("\n=== webhooks ==="); console.log("  (not yet implemented)"); }
+// ─── passport ─────────────────────────────────────────────────────────────────
+
+async function testPassport(): Promise<void> {
+  console.log("\n=== passport ===");
+  await freshDb();
+
+  // Seed a project, three memories (one filtered out), and a conflict
+  const proj = createProject({ name: "RecallOS", description: "memory layer", status: "active" });
+  const m1 = insertMemory("coffee", "preference", "black", {
+    scope: "global", confidence: 0.9,
+  });
+  const m2 = insertMemory("seat", "preference", "window", {
+    scope: "project", projectId: proj.id, confidence: 0.85,
+  });
+  const m3 = insertMemory("transient", "fact", "temp", {
+    scope: "session", status: "stale",   // not active → excluded
+  });
+  addTag(m1, "important");
+
+  // Schema-level 'conflicts' table (different from memory_conflicts used by the
+  // conflicts module — passport uses the schema-defined table).
+  runSql(
+    `INSERT INTO conflicts (id, key, memory_item_a_id, memory_item_b_id, resolution, explanation)
+     VALUES (?, 'coffee', ?, ?, 'unresolved', 'different values')`,
+    [uuidv4(), m1, m2]
+  );
+
+  const pp = exportPassport();
+  assert("passport format tag is recallos-passport-v1",
+    pp.format === "recallos-passport-v1");
+  assert("passport excludes non-active items",
+    pp.memory_items.every(i => i.status === "active"),
+    `statuses=${pp.memory_items.map(i => i.status).join(",")}`);
+  assert("passport stats match array lengths",
+    pp.stats.memory_items === pp.memory_items.length &&
+    pp.stats.projects === pp.projects.length &&
+    pp.stats.conflicts === pp.conflicts.length);
+  assert("passport includes 2 active memory items",
+    pp.memory_items.length === 2, `got ${pp.memory_items.length}`);
+  assert("project_name is populated on project-scoped memory",
+    pp.memory_items.find(i => i.key === "seat")?.project_name === "RecallOS");
+
+  // Filters: by type
+  const prefsOnly = exportPassport({ type: "preference" });
+  assert("exportPassport filters by type",
+    prefsOnly.memory_items.every(i => i.type === "preference"));
+
+  // Filters: by tag (joins through memory_tags)
+  const tagOnly = exportPassport({ tag: "important" });
+  assert("exportPassport filters by tag",
+    tagOnly.memory_items.length === 1 && tagOnly.memory_items[0].key === "coffee",
+    `got ${tagOnly.memory_items.length}`);
+  void m3;
+
+  // Markdown export — spot checks on structure
+  const md = exportPassportMarkdown();
+  assert("markdown export has header",
+    md.startsWith("# RecallOS Memory Export"));
+  assert("markdown export groups by type",
+    md.includes("## Preferences"));
+  assert("markdown export lists project",
+    md.includes("RecallOS"));
+
+  // Round-trip: fresh DB, importPassport should recreate projects + memories
+  await freshDb();
+  const imported = importPassport(pp);
+  assert("import creates the project",
+    imported.projects_created === 1);
+  assert("import creates all memory items",
+    imported.memories_created === pp.memory_items.length,
+    `created=${imported.memories_created} expected=${pp.memory_items.length}`);
+
+  // Re-importing into the same DB skips duplicates (same key+type+scope+value)
+  const imported2 = importPassport(pp);
+  assert("re-import skips existing projects",
+    imported2.projects_skipped === 1);
+  assert("re-import skips existing memories",
+    imported2.memories_skipped === pp.memory_items.length,
+    `skipped=${imported2.memories_skipped}`);
+
+  // Unknown format → throws
+  let threw = false;
+  try {
+    importPassport({ ...pp, format: "unknown-v0" } as unknown as Passport);
+  } catch {
+    threw = true;
+  }
+  assert("importPassport rejects unknown format", threw);
+}
+
+// ─── suggestions ──────────────────────────────────────────────────────────────
+
+async function testSuggestions(): Promise<void> {
+  console.log("\n=== suggestions ===");
+  await freshDb();
+
+  // Empty DB → no high-priority suggestions
+  const emptySugs = generateSuggestions();
+  assert("no suggestions for an empty memory set",
+    emptySugs.every(s => s.priority !== "high"),
+    `types=${emptySugs.map(s => s.type).join(",")}`);
+
+  // Seed duplicates → should surface a 'merge' suggestion (high priority)
+  insertMemory("seat", "preference", "prefer window seat flights");
+  insertMemory("seat", "preference", "prefer window seat always flights");
+
+  // Seed a decay candidate → should surface a 'decay' suggestion
+  insertMemory("lowv", "preference", "low", {
+    confidence: 0.1, createdDaysAgo: 60,
+  });
+
+  // Seed an unpinned high-importance item → should surface 'pin' suggestion
+  const h = insertMemory("hot", "preference", "high value", {
+    confidence: 0.95, createdDaysAgo: 80, lastConfirmedDaysAgo: 1,
+  });
+  addTag(h, "t1");
+  addTag(h, "t2");
+  addTag(h, "t3");
+
+  const sugs = generateSuggestions();
+  const types = sugs.map(s => s.type);
+  assert("suggests a merge for duplicates",
+    types.includes("merge"), `types=${types.join(",")}`);
+  assert("suggests decay for low-importance items",
+    types.includes("decay"), `types=${types.join(",")}`);
+
+  // Sorted: high priority first
+  const priorities = sugs.map(s => s.priority);
+  const pOrder = { high: 0, medium: 1, low: 2 };
+  for (let i = 0; i < priorities.length - 1; i++) {
+    assert(`priority ordering maintained at index ${i}`,
+      pOrder[priorities[i]] <= pOrder[priorities[i + 1]],
+      `order=${priorities.join(",")}`);
+  }
+
+  // Each suggestion has a title + description
+  assert("every suggestion has a title and description",
+    sugs.every(s => s.title.length > 0 && s.description.length > 0));
+}
+
+// ─── perf ─────────────────────────────────────────────────────────────────────
+
+async function testPerf(): Promise<void> {
+  console.log("\n=== perf ===");
+
+  const t = new PerfTimer();
+  t.begin("extract");
+  // Busy-wait ~3ms so stages have measurable duration
+  const spin = (ms: number) => {
+    const end = performance.now() + ms;
+    while (performance.now() < end) { /* spin */ }
+  };
+  spin(3);
+  t.begin("reconcile");      // auto-closes 'extract'
+  spin(3);
+  t.begin("compile");        // auto-closes 'reconcile'
+  spin(3);
+  const result = t.finish(); // auto-closes 'compile'
+
+  assert("PerfTimer recorded 3 stages",
+    result.stages.length === 3,
+    `stages=${result.stages.map(s => s.stage).join(",")}`);
+  assert("stage names recorded in order",
+    result.stages[0].stage === "extract" &&
+    result.stages[1].stage === "reconcile" &&
+    result.stages[2].stage === "compile");
+  assert("each stage has non-negative duration",
+    result.stages.every(s => s.duration_ms >= 0));
+  assert("total_ms >= sum of stage durations (approx)",
+    result.total_ms >= result.stages.reduce((a, s) => a + s.duration_ms, 0) - 2,
+    `total=${result.total_ms} sum=${result.stages.reduce((a, s) => a + s.duration_ms, 0)}`);
+
+  // Timer with no stages: finish() returns empty stages and a small total
+  const t2 = new PerfTimer();
+  const r2 = t2.finish();
+  assert("empty timer returns 0 stages",
+    r2.stages.length === 0);
+  assert("empty timer total_ms >= 0",
+    r2.total_ms >= 0);
+
+  // Calling end() with no open stage is a no-op
+  const t3 = new PerfTimer();
+  t3.end();
+  const r3 = t3.finish();
+  assert("end() with no open stage is a no-op",
+    r3.stages.length === 0);
+}
+
+// ─── webhooks ─────────────────────────────────────────────────────────────────
+
+async function testWebhooks(): Promise<void> {
+  console.log("\n=== webhooks ===");
+  await freshDb();
+
+  // registerWebhook: defaults to events=['*'] and active=true
+  const hook = registerWebhook("https://example.com/hook");
+  assert("registerWebhook returns an id, url, events, active",
+    hook.id.length > 0 && hook.url === "https://example.com/hook" &&
+    hook.active === true);
+  assert("default subscription is ['*']",
+    hook.events.length === 1 && hook.events[0] === "*");
+
+  // registerWebhook: explicit event list
+  const hook2 = registerWebhook("https://example.com/other", ["created", "superseded"]);
+  assert("explicit events persisted",
+    hook2.events.length === 2 &&
+    hook2.events.includes("created") &&
+    hook2.events.includes("superseded"));
+
+  // listWebhooks: decodes events back to an array, newest first
+  const list = listWebhooks();
+  assert("listWebhooks returns both webhooks",
+    list.length === 2, `got ${list.length}`);
+  assert("listWebhooks decodes events JSON to array",
+    Array.isArray(list[0].events) && Array.isArray(list[1].events));
+  assert("listWebhooks sorts newest-first",
+    list[0].id === hook2.id);
+
+  // toggleWebhook: flip active to false
+  assert("toggleWebhook returns true for existing id",
+    toggleWebhook(hook.id, false));
+  const toggled = listWebhooks().find(h => h.id === hook.id);
+  assert("toggleWebhook persists active=false",
+    toggled?.active === false, `active=${toggled?.active}`);
+
+  // toggleWebhook: unknown id
+  assert("toggleWebhook returns false for unknown id",
+    toggleWebhook("nope", true) === false);
+
+  // deleteWebhook
+  assert("deleteWebhook returns true for existing id",
+    deleteWebhook(hook.id));
+  const afterDelete = listWebhooks();
+  assert("deleteWebhook removes the row",
+    afterDelete.length === 1 && afterDelete[0].id === hook2.id,
+    `remaining=${afterDelete.length}`);
+
+  assert("deleteWebhook returns false for unknown id",
+    deleteWebhook("nope") === false);
+}
 
 main().catch((err) => {
   console.error(err);

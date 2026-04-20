@@ -315,12 +315,16 @@ export function importPassport(passport: Passport): ImportResult {
     result.memories_created++;
   }
 
-  // Import conflicts
+  // Import conflicts.
+  // memory_item_a_id/b_id are FKs into memory_items(id). The passport export
+  // intentionally strips the source ids (they aren't portable across DBs) so
+  // we insert NULL, which the FK allows, instead of '' which violates the FK
+  // under PRAGMA foreign_keys = ON (fix #45, triggered by fix #42).
   for (const conflict of passport.conflicts ?? []) {
     const id = uuidv4();
     runSql(
       `INSERT INTO conflicts (id, key, memory_item_a_id, memory_item_b_id, resolution, explanation)
-       VALUES (?, ?, '', '', ?, ?)`,
+       VALUES (?, ?, NULL, NULL, ?, ?)`,
       [id, conflict.key, conflict.resolution, conflict.explanation ?? null]
     );
     result.conflicts_created++;
