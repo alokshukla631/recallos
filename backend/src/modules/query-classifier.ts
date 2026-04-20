@@ -86,6 +86,11 @@ const PLANNING_PATTERNS: RegExp[] = [
 // Temporal reference patterns.
 // offsetDays: how far back from "now" the anchor is
 // windowDays: radius of the temporal boost window around the anchor
+//
+// Order matters — first match wins, so put the most specific patterns at
+// the top (e.g. "two weeks ago" before any generic week match). Don't tighten
+// the word boundaries at the end; LongMemEval questions sometimes have a
+// question mark or apostrophe immediately after the phrase.
 const TEMPORAL_PATTERNS: Array<{
   pattern: RegExp;
   label: string;
@@ -97,13 +102,30 @@ const TEMPORAL_PATTERNS: Array<{
   { pattern: /\bthis (morning|afternoon|evening)\b/i, label: "today",           offsetDays: 0,   windowDays: 1  },
   { pattern: /\byesterday\b/i,                        label: "yesterday",       offsetDays: 1,   windowDays: 1  },
   { pattern: /\blast night\b/i,                       label: "last night",      offsetDays: 1,   windowDays: 1  },
+  // "a couple of days ago" — anchor ~2 days back, wider window.
+  { pattern: /\ba? ?couple (of )?days? ago\b/i,       label: "a couple of days ago", offsetDays: 2, windowDays: 2 },
   { pattern: /\ba? ?few days? ago\b/i,                label: "a few days ago",  offsetDays: 3,   windowDays: 3  },
+  // Numeric N days ago — catches "10 days ago", "7 days ago", etc.
+  { pattern: /\b(\d{1,3}) days? ago\b/i,              label: "N days ago",      offsetDays: 0,   windowDays: 3  },
+  // Explicit "a week ago" / "one week ago".
+  { pattern: /\b(a|one|1) weeks? ago\b/i,             label: "a week ago",      offsetDays: 7,   windowDays: 4  },
+  // "N weeks ago" with either digit or spelled-out number up to ten.
+  { pattern: /\b(two|three|four|five|six|seven|eight|nine|ten|2|3|4|5|6|7|8|9|10) weeks? ago\b/i,
+    label: "N weeks ago", offsetDays: 0, windowDays: 6 },
+  // "last Saturday" / "last Monday" etc. — anchor ~4 days back on average;
+  // wide window so the gaussian still lands on the true day.
+  { pattern: /\blast (monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+    label: "last <dayname>", offsetDays: 4, windowDays: 4 },
+  // "over the weekend" / "this weekend" — a few days back.
+  { pattern: /\b(over|during) the (past |last )?weekend\b/i, label: "last weekend", offsetDays: 3, windowDays: 3 },
   { pattern: /\blast (week|7 days?)\b/i,              label: "last week",       offsetDays: 7,   windowDays: 5  },
-  { pattern: /\b2 weeks? ago\b/i,                     label: "2 weeks ago",     offsetDays: 14,  windowDays: 5  },
-  { pattern: /\b3 weeks? ago\b/i,                     label: "3 weeks ago",     offsetDays: 21,  windowDays: 5  },
+  // "the past month" / "during the past month" / "in the last month".
+  { pattern: /\b(over |during |in |throughout )?the (past|last) (month|30 days?)\b/i,
+    label: "past month", offsetDays: 15, windowDays: 20 },
   { pattern: /\blast month\b/i,                       label: "last month",      offsetDays: 30,  windowDays: 10 },
-  { pattern: /\b2 months? ago\b/i,                    label: "2 months ago",    offsetDays: 60,  windowDays: 14 },
-  { pattern: /\b3 months? ago\b/i,                    label: "3 months ago",    offsetDays: 90,  windowDays: 14 },
+  // "N months ago" with digit or spelled-out up to twelve.
+  { pattern: /\b(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|2|3|4|5|6|7|8|9|10|11|12) months? ago\b/i,
+    label: "N months ago", offsetDays: 0, windowDays: 20 },
   { pattern: /\bearlier this (week|month|year)\b/i,   label: "earlier",         offsetDays: 10,  windowDays: 10 },
   { pattern: /\brecently\b/i,                         label: "recently",        offsetDays: 7,   windowDays: 10 },
   { pattern: /\ba while (ago|back)\b/i,               label: "a while ago",     offsetDays: 30,  windowDays: 20 },
@@ -111,6 +133,14 @@ const TEMPORAL_PATTERNS: Array<{
   { pattern: /\bin the past\b/i,                      label: "in the past",     offsetDays: 14,  windowDays: 30 },
   { pattern: /\b(before|earlier|previously)\b/i,      label: "before",          offsetDays: 7,   windowDays: 30 },
 ];
+
+// Spelled-out-number → integer for the N-weeks / N-months / N-days patterns
+// above. Kept as a top-level constant so classifyQuery's inner loop can use
+// it without reallocating each call.
+const NUMBER_WORDS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8,
+  nine: 9, ten: 10, eleven: 11, twelve: 12,
+};
 
 // ─── Classifier ───────────────────────────────────────────────────────────────
 
@@ -125,15 +155,31 @@ export function classifyQuery(query: string, now: Date = new Date()): QueryClass
   const signals: string[] = [];
 
   // Detect temporal reference (first match wins since patterns are ordered
-  // from most-specific to most-general)
+  // from most-specific to most-general).
+  //
+  // For "N days/weeks/months ago" patterns the offset is computed from the
+  // captured number (digit or spelled-out). Their pattern entries keep
+  // offsetDays=0 as a sentinel and carry a label starting with "N ".
   let temporalAnchor: TemporalAnchor | undefined;
   for (const tp of TEMPORAL_PATTERNS) {
     const match = query.match(tp.pattern);
     if (match) {
+      let offsetDays = tp.offsetDays;
+      if (tp.label.startsWith("N ") && match[1]) {
+        const raw = match[1].toLowerCase();
+        const n = NUMBER_WORDS[raw] ?? parseInt(raw, 10);
+        if (Number.isFinite(n) && n > 0) {
+          const unit = tp.label.endsWith("days ago")   ? 1
+                     : tp.label.endsWith("weeks ago")  ? 7
+                     : tp.label.endsWith("months ago") ? 30
+                     : 1;
+          offsetDays = n * unit;
+        }
+      }
       signals.push(`temporal:${tp.label}`);
       temporalAnchor = {
         reference: match[0],
-        anchorDate: new Date(now.getTime() - tp.offsetDays * 24 * 60 * 60 * 1000),
+        anchorDate: new Date(now.getTime() - offsetDays * 24 * 60 * 60 * 1000),
         windowDays: tp.windowDays,
       };
       break;
