@@ -95,21 +95,61 @@ function parseLMEDate(s: string): Date {
 
 /**
  * Compute session-level rank from an event-level ranking.
- * Returns the 1-based rank of the first event whose conversation_id (= session
- * id) is in `goldSessions`, or null if none found.
+ *
+ * Two strategies:
+ *   - "first"     — first-occurrence fold (historical default; used when no
+ *                    final_score is carried on the snippets).
+ *   - "aggregate" — session score = sum of its top-3 event scores. Rewards
+ *                    sessions with multiple strong signals and smooths over
+ *                    the case where one rogue off-topic event outranks several
+ *                    moderately-relevant ones from the true session.
+ *
+ * Aggregate ranking is the fairer apples-to-apples comparison to vector stores
+ * like MemPalace's Chroma, which rank sessions (documents) as wholes rather
+ * than folding an event-level rank.
  */
 function sessionRankFromEvents(
-  snippetsOrdered: Array<{ conversation_id: string }>,
+  snippetsOrdered: Array<{ conversation_id: string; final_score?: number }>,
   goldSessions: Set<string>
 ): { rank: number | null; sessionOrder: string[] } {
-  const seen = new Set<string>();
-  const sessionOrder: string[] = [];
-  for (const s of snippetsOrdered) {
-    if (!seen.has(s.conversation_id)) {
-      seen.add(s.conversation_id);
-      sessionOrder.push(s.conversation_id);
+  // Score each session by sum of its top-3 event scores (if scores present),
+  // else fall back to first-occurrence.
+  const scored = snippetsOrdered.some((s) => typeof s.final_score === "number");
+
+  if (!scored) {
+    const seen = new Set<string>();
+    const sessionOrder: string[] = [];
+    for (const s of snippetsOrdered) {
+      if (!seen.has(s.conversation_id)) {
+        seen.add(s.conversation_id);
+        sessionOrder.push(s.conversation_id);
+      }
     }
+    for (let i = 0; i < sessionOrder.length; i++) {
+      if (goldSessions.has(sessionOrder[i])) {
+        return { rank: i + 1, sessionOrder };
+      }
+    }
+    return { rank: null, sessionOrder };
   }
+
+  // Aggregate: session score = sum of its top-3 event scores (in input order,
+  // which is already sorted desc by the retriever).
+  const TOP_K_PER_SESSION = 3;
+  const counts = new Map<string, number>();
+  const scores = new Map<string, number>();
+  for (const s of snippetsOrdered) {
+    const n = counts.get(s.conversation_id) ?? 0;
+    if (n >= TOP_K_PER_SESSION) continue;
+    counts.set(s.conversation_id, n + 1);
+    scores.set(
+      s.conversation_id,
+      (scores.get(s.conversation_id) ?? 0) + (s.final_score ?? 0)
+    );
+  }
+  const sessionOrder = Array.from(scores.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([id]) => id);
   for (let i = 0; i < sessionOrder.length; i++) {
     if (goldSessions.has(sessionOrder[i])) {
       return { rank: i + 1, sessionOrder };

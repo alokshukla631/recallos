@@ -3,3 +3,4 @@
 data/longmemeval/
 # Per-question result logs from bench runs
 longmemeval-*.jsonl
+longmemeval-*.log
