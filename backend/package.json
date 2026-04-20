@@ -12,7 +12,8 @@
     "bench:eval": "tsx src/bench/hybrid-eval.ts",
     "bench:regression": "tsx src/bench/regression-tests.ts",
     "bench:context": "tsx src/bench/context-relevance.ts",
-    "bench:all": "npm run bench && npm run bench:verbatim && npm run bench:eval && npm run bench:regression && npm run bench:context",
+    "bench:modules": "tsx src/bench/module-tests.ts",
+    "bench:all": "npm run bench && npm run bench:verbatim && npm run bench:eval && npm run bench:regression && npm run bench:context && npm run bench:modules",
     "mcp": "tsx src/mcp-server.ts"
   },
   "dependencies": {
