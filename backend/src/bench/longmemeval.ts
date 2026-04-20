@@ -36,6 +36,7 @@ import { v4 as uuidv4 } from "uuid";
 import { initDatabase, runSql } from "../db/index.js";
 import { classifyQuery } from "../modules/query-classifier.js";
 import { searchVerbatim } from "../modules/verbatim-retriever.js";
+import { generateQAAnswer, judgeAnswer, pickJudgeProvider } from "./lme-judge.js";
 
 // ─── Types from the official dataset ──────────────────────────────────────────
 
@@ -73,6 +74,14 @@ function flag(name: string): string | undefined {
 const LIMIT = flag("--limit") ? parseInt(flag("--limit")!, 10) : undefined;
 const CATEGORY_FILTER = flag("--category");
 const OUT_PATH = flag("--out");
+/**
+ * `--qa` turns on end-to-end QA scoring: the runner feeds top-K retrieved
+ * snippets + the question to an LLM (ANTHROPIC_API_KEY / OPENAI_API_KEY /
+ * GEMINI_API_KEY, in that order of preference) and then a judge compares the
+ * generated answer against the gold. Adds per-category accuracy to the
+ * report alongside retrieval metrics. No-op when no provider key is set.
+ */
+const QA_MODE = args.includes("--qa");
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -219,10 +228,12 @@ interface CategoryAgg {
   ndcg5: number;
   ndcg10: number;
   mrr: number;
+  qa_correct: number;
+  qa_judged: number;  // count of questions that made it through generate+judge
 }
 
 function emptyAgg(): CategoryAgg {
-  return { n: 0, r5: 0, r10: 0, ndcg5: 0, ndcg10: 0, mrr: 0 };
+  return { n: 0, r5: 0, r10: 0, ndcg5: 0, ndcg10: 0, mrr: 0, qa_correct: 0, qa_judged: 0 };
 }
 
 async function main(): Promise<void> {
@@ -254,10 +265,18 @@ async function main(): Promise<void> {
     questions = questions.slice(0, LIMIT);
   }
 
+  const qaProvider = QA_MODE ? pickJudgeProvider() : "none";
+  if (QA_MODE && qaProvider === "none") {
+    console.warn(
+      "--qa set but no provider API key in env. End-to-end QA scoring is disabled; retrieval metrics only.\n"
+    );
+  }
+
   console.log(
     `Running ${questions.length} questions` +
       (CATEGORY_FILTER ? ` (category=${CATEGORY_FILTER})` : "") +
       (LIMIT ? ` (limit=${LIMIT})` : "") +
+      (QA_MODE && qaProvider !== "none" ? ` (end-to-end QA via ${qaProvider})` : "") +
       "\n"
   );
 
@@ -289,6 +308,29 @@ async function main(): Promise<void> {
     const { rank } = sessionRankFromEvents(snippets, gold);
     const m = metrics(rank);
 
+    // End-to-end QA: feed top-K snippets to an LLM, judge the answer.
+    let qaCorrect: number | null = null;
+    let predictedAnswer = "";
+    if (QA_MODE && qaProvider !== "none") {
+      // Top-5 snippets, formatted as excerpts so the generator sees just what
+      // the retrieval layer chose. 1500-char cap per excerpt to keep prompts
+      // in the 8k-token ballpark for most providers.
+      const top5 = snippets.slice(0, 5);
+      const excerpts = top5
+        .map((s, idx) =>
+          `[${idx + 1}] (${s.role}, ${s.created_at.slice(0, 10)}) ${
+            s.content.slice(0, 1500)
+          }`
+        )
+        .join("\n\n");
+      const predicted = await generateQAAnswer(q.question, excerpts);
+      predictedAnswer = predicted ?? "";
+      if (predicted && !predicted.startsWith("generation-error")) {
+        const judged = await judgeAnswer(q.question, q.answer, predicted);
+        if (judged) qaCorrect = judged.correct;
+      }
+    }
+
     // Aggregate
     const bucket = perCategory.get(q.question_type) ?? emptyAgg();
     bucket.n += 1;
@@ -297,6 +339,10 @@ async function main(): Promise<void> {
     bucket.ndcg5 += m.ndcg_at_5;
     bucket.ndcg10 += m.ndcg_at_10;
     bucket.mrr += m.mrr;
+    if (qaCorrect !== null) {
+      bucket.qa_judged += 1;
+      bucket.qa_correct += qaCorrect;
+    }
     perCategory.set(q.question_type, bucket);
 
     perQuestionLog.push({
@@ -305,6 +351,8 @@ async function main(): Promise<void> {
       rank: m.rank,
       recall_at_5: m.recall_at_5,
       recall_at_10: m.recall_at_10,
+      qa_correct: qaCorrect,
+      qa_predicted: predictedAnswer,
       ndcg_at_5: m.ndcg_at_5,
       ndcg_at_10: m.ndcg_at_10,
       mrr: m.mrr,
@@ -326,8 +374,10 @@ async function main(): Promise<void> {
   console.log("\n");
 
   // ─── Report ────────────────────────────────────────────────────────────────
-  const header =
-    "Category                      N    R@5    R@10   NDCG@5 NDCG@10  MRR";
+  const qaActive = QA_MODE && qaProvider !== "none";
+  const header = qaActive
+    ? "Category                      N    R@5    R@10   NDCG@5 NDCG@10  MRR    QA-Acc"
+    : "Category                      N    R@5    R@10   NDCG@5 NDCG@10  MRR";
   const rule = "─".repeat(header.length);
   console.log(header);
   console.log(rule);
@@ -346,6 +396,9 @@ async function main(): Promise<void> {
     const b = perCategory.get(cat);
     if (!b || b.n === 0) continue;
     const avg = (v: number) => (v / b.n).toFixed(3);
+    const qaStr = qaActive && b.qa_judged > 0
+      ? `   ${(b.qa_correct / b.qa_judged).toFixed(3)} (n=${b.qa_judged})`
+      : qaActive ? "       —" : "";
     console.log(
       cat.padEnd(28) +
         String(b.n).padStart(3) +
@@ -358,7 +411,8 @@ async function main(): Promise<void> {
         "  " +
         avg(b.ndcg10).padStart(6) +
         "   " +
-        avg(b.mrr).padStart(5)
+        avg(b.mrr).padStart(5) +
+        qaStr
     );
     total.n += b.n;
     total.r5 += b.r5;
@@ -366,11 +420,16 @@ async function main(): Promise<void> {
     total.ndcg5 += b.ndcg5;
     total.ndcg10 += b.ndcg10;
     total.mrr += b.mrr;
+    total.qa_correct += b.qa_correct;
+    total.qa_judged += b.qa_judged;
   }
 
   console.log(rule);
   if (total.n > 0) {
     const avg = (v: number) => (v / total.n).toFixed(3);
+    const qaStr = qaActive && total.qa_judged > 0
+      ? `   ${(total.qa_correct / total.qa_judged).toFixed(3)} (n=${total.qa_judged})`
+      : qaActive ? "       —" : "";
     console.log(
       "Overall".padEnd(28) +
         String(total.n).padStart(3) +
@@ -383,7 +442,8 @@ async function main(): Promise<void> {
         "  " +
         avg(total.ndcg10).padStart(6) +
         "   " +
-        avg(total.mrr).padStart(5)
+        avg(total.mrr).padStart(5) +
+        qaStr
     );
   }
 
