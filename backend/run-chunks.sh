@@ -2,17 +2,21 @@
 # Sequential chunked run of the LongMemEval bench. Each chunk is a fresh
 # Node process so ONNX/transformers.js memory doesn't accumulate past the
 # OOM threshold we were hitting around question ~15-30 in single-process
-# runs. Chunk-00 was already run separately.
+# runs.
 #
 # Usage:  bash run-chunks.sh
 # Output: longmemeval-chunk-{00..09}.jsonl + longmemeval-tuned.jsonl (concat)
+#
+# Each chunk with ≥50 rows already on disk is skipped, so partial reruns
+# (e.g. after a classifier tweak that only touches one chunk's questions)
+# can just delete the relevant chunk jsonl and re-run this script.
 
-set -euo pipefail
+set -uo pipefail
 
 export USE_LOCAL_EMBEDDINGS=1
 export EMBEDDING_MAX_NEW_PER_CALL=300
 
-for i in 01 02 03 04 05 06 07 08 09; do
+for i in 00 01 02 03 04 05 06 07 08 09; do
   start=$((10#$i * 50))
   out="longmemeval-chunk-$i.jsonl"
   log="longmemeval-chunk-$i.log"
