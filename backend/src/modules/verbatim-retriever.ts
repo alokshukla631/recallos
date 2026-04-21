@@ -238,6 +238,8 @@ function expandPreferenceQuery(query: string): string {
 /**
  * Gaussian proximity boost peaking at 0.4 when the event is exactly at the
  * anchor date.  Decays within the window, then falls exponentially outside.
+ *
+ * Raw boost (before any BM25 gating — see temporalBoostGated below).
  */
 function temporalBoostFor(eventDate: Date, anchor: TemporalAnchor): number {
   const diffMs   = Math.abs(eventDate.getTime() - anchor.anchorDate.getTime());
@@ -250,6 +252,32 @@ function temporalBoostFor(eventDate: Date, anchor: TemporalAnchor): number {
 
   const excess = diffDays - anchor.windowDays;
   return 0.054 * Math.exp(-excess / Math.max(anchor.windowDays, 1));
+}
+
+/**
+ * Apply a soft BM25 gate to the temporal boost.
+ *
+ * Empirically, for queries like "Who did I meet at lunch last Tuesday?", the
+ * gold event always has *some* lexical signal (it literally mentions "lunch"),
+ * and the false positives that get promoted by a pure gaussian boost are
+ * events in the same date window with no lexical match at all.  Scaling the
+ * boost by a saturating function of BM25 keeps the full temporal reward for
+ * events with any lexical hit while killing it for events that match on date
+ * only.
+ *
+ *   bm25=0      → factor 0.30  (temporal alone can no longer outrank a solid
+ *                               lexical match from outside the window)
+ *   bm25≥0.10   → factor 1.00  (full gaussian boost)
+ *   in between  → linear
+ *
+ * Purely subtractive on the low-BM25 tail; events with non-trivial lexical
+ * match are unaffected, so the 9 classifier wins from the prior tuning step
+ * are preserved.
+ */
+function temporalBoostGated(rawBoost: number, bm25: number): number {
+  if (rawBoost <= 0) return rawBoost;
+  const factor = 0.3 + 0.7 * Math.min(1, Math.max(0, bm25) * 10);
+  return rawBoost * factor;
 }
 
 // ─── Role boost ───────────────────────────────────────────────────────────────
@@ -413,9 +441,10 @@ export async function searchVerbatim(
 
   for (const event of events) {
     const bm25       = bm25Norm.get(event.id) ?? 0;
-    const temporal   = temporalAnchor
+    const temporalRaw = temporalAnchor
       ? temporalBoostFor(new Date(event.created_at), temporalAnchor)
       : 0;
+    const temporal   = temporalBoostGated(temporalRaw, bm25);
     const preference = preferenceBoostFor(event.content);
     const role       = roleBoostFor(event.role, isAssistantQuery);
 
