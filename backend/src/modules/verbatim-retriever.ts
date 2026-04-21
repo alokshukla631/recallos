@@ -205,6 +205,41 @@ const PREFERENCE_QUERY_EXPANSIONS: Array<{ anchor: RegExp; extra: string[] }> = 
       "bow", "strings", "reed", "orchestra", "ensemble", "scale", "etude",
     ],
   },
+  // Visual art / painting / creative inspiration. Preference questions in
+  // LongMemEval phrase these as "feeling stuck with my paintings, any ideas
+  // for inspiration?" — no preference verb in sight, so this anchor is
+  // also what pulls them through the gate (via "paint" / "inspiration").
+  {
+    anchor: /\b(paint(ing|ings)?|drawings?|sketch(es|ing)?|canvas|palette|art(work|works)?|artist(ic|s)?|creative|inspiration|muse|gallery|exhibition)\b/i,
+    extra: [
+      "oil", "acrylic", "watercolor", "charcoal", "pastel", "brush",
+      "impressionist", "abstract", "realism", "still life", "landscape",
+      "portrait", "composition", "color palette", "easel", "studio",
+    ],
+  },
+  // Cocktails / drinks / bar preferences. "Any suggestions for a cocktail"
+  // is a preference query the earlier gate would miss without this anchor.
+  {
+    anchor: /\b(cocktails?|drinks?|beverages?|bars?|mixolog(y|ist)|aperitif|nightcap|mocktails?|spirits?|wines?|beers?|liquors?|smoothies?)\b/i,
+    extra: [
+      "gin", "vodka", "whiskey", "bourbon", "rum", "tequila", "mezcal",
+      "martini", "margarita", "negroni", "old fashioned", "manhattan",
+      "mojito", "daiquiri", "spritz", "rye", "vermouth", "bitters",
+      "garnish", "shaken", "stirred", "on the rocks", "neat",
+    ],
+  },
+  // Home / furniture / room layout. "Rearranging the furniture in my
+  // bedroom, any tips?" — tips fires the gate, and this anchor pulls in
+  // the layout vocabulary.
+  {
+    anchor: /\b(furnitures?|bedrooms?|living rooms?|kitchens?|home office|sofas?|couch(es)?|chairs?|tables?|beds?|desks?|shelf|shelves|rooms?|spaces?|decorat(e|ing|ion)|rearrang(e|ing)|layout|interior)\b/i,
+    extra: [
+      "feng shui", "minimalist", "cozy", "modern", "mid-century",
+      "scandinavian", "industrial", "rustic", "farmhouse", "bohemian",
+      "lighting", "rug", "curtain", "mirror", "artwork", "plant",
+      "storage", "nightstand", "dresser", "wardrobe", "headboard",
+    ],
+  },
 ];
 
 /**
@@ -217,7 +252,7 @@ function expandPreferenceQuery(query: string): string {
   // Skip assistant-recall and purely temporal queries — those need precise
   // lexical matching, not broad vocabulary expansion.
   const looksLikePreference =
-    /\b(prefer|like|usual|dietary|food|eat|allergen|exercise|workouts?|restrictions?|habits?|styles?|default|tendenc(y|ies)|recommend|suggest|tips?|setups?|equipment|accessor|complement|gear|build upon|upgrades?|similar|comparable|interest(ed|ing)?|serve|look for|build on|previous|enhance|practic(e|ing)|dedicate)\b/i.test(query) &&
+    /\b(prefer|like|usual|dietary|food|eat|allergen|exercise|workouts?|restrictions?|habits?|styles?|default|tendenc(y|ies)|recommends?|recommendations?|suggests?|suggestions?|tips?|setups?|equipment|accessor(y|ies)|complement|gear|build upon|upgrades?|similar|comparable|interest(ed|ing)?|serve|look for|build on|previous|enhance|practic(e|ing)|dedicate|ideas?|inspiration|stuck)\b/i.test(query) &&
     !/\b(what did you|you (said|recommended|suggested|told me)|do you remember)\b/i.test(query);
 
   if (!looksLikePreference) return query;
