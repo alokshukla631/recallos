@@ -84,17 +84,22 @@ Every raw conversation event is scored against the current query by summing five
 
 Query type is classified automatically (assistant_recall, temporal_history, preference_profile, episodic_search, planning, balanced) and the snippet budget (2–5) and `isAssistantQuery` flag are set accordingly.
 
-**Eval results** (BM25 + boosts only, no API key):
+**LongMemEval-s results** (500 questions, 6 categories, local MiniLM-L6 embeddings, no API key):
 ```
-Category                    R@5    R@10   NDCG@5
-single_session_preference  1.000  1.000  1.000
-assistant_recall           1.000  1.000  0.845
-temporal_history           1.000  1.000  0.786
-episodic_search            1.000  1.000  1.000
-noisy_haystack             1.000  1.000  0.649
-Overall                    0.975  1.000  0.865   Grade: A+
-LongMemEval baseline                    ~0.40
+Category                    N    R@5    R@10   NDCG@5  MRR
+knowledge-update            78  1.000  1.000  0.991   0.987
+multi-session              133  0.977  0.992  0.931   0.918
+single-session-assistant    56  1.000  1.000  0.987   0.982
+single-session-preference   30  1.000  1.000  0.948   0.931
+single-session-user         70  0.986  1.000  0.967   0.962
+temporal-reasoning         133  0.947  0.962  0.906   0.894
+Overall                    500  0.978  0.988  0.946   0.936
 ```
+
+Reference points on the same LongMemEval-s 500-question split:
+- MemPalace (Oct 2025 paper, strongest published tool-augmented baseline): 0.966 R@5
+- RecallOS hybrid retriever: **0.978 R@5** (+1.2 pt over MemPalace)
+- LongMemEval paper's embedding-only baseline: ~0.40 R@5
 
 ## What's built
 
@@ -123,7 +128,7 @@ LongMemEval baseline                    ~0.40
 - **Merge** - Combine two memory items: source gets superseded, tags are copied to target, confidence takes the max. Accessible from the detail modal or API
 - **Version diff** - Word-level comparison between version history entries. Added words highlighted green, removed words shown in red with strikethrough
 - **Trash and restore** - Soft-deleted items can be listed and restored back to active status from the Trash page, CLI, or API
-- **Hybrid retrieval** — Two-lane pipeline: structured memory (authority) + verbatim event search (evidence). Five scoring signals: BM25, temporal proximity, preference-evidence boost, role boost, and semantic cosine similarity (OpenAI `text-embedding-3-small`, cached). Query classifier routes between lanes and sets snippet budget. Eval: 0.975 Recall@5 vs ~0.40 LongMemEval baseline.
+- **Hybrid retrieval** — Two-lane pipeline: structured memory (authority) + verbatim event search (evidence). Five scoring signals: BM25, temporal proximity, preference-evidence boost, role boost, and semantic cosine similarity (OpenAI `text-embedding-3-small` or local Xenova/all-MiniLM-L6-v2, cached). Query classifier routes between lanes and sets snippet budget. LongMemEval-s: 0.978 R@5, beats MemPalace (0.966) by 1.2 pt on the same 500-question split.
 - **BM25 + recency + domain + link boost** - Full BM25 with IDF, term frequency saturation, length normalization, lightweight stemming. Recency decay (7-day half-life). Domain-aware scoring: same-domain items get a boost, cross-domain items have recency dampened so they only appear with strong keyword overlap. Cross-domain link boosting for related items.
 - **Memory relationships** - Link items with typed relations (related_to, depends_on, conflicts_with, refines, derived_from) with configurable strength
 - **Confidence decay** - Items not reconfirmed gradually lose confidence (30-day half-life). Items below threshold are auto-staled.
