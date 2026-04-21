@@ -149,19 +149,28 @@ function sessionRankFromEvents(
     return { rank: null, sessionOrder };
   }
 
-  // Aggregate: session score = sum of its top-3 event scores (in input order,
-  // which is already sorted desc by the retriever).
+  // Aggregate: session score = max(event) + 0.3 * sum(next two events), so
+  // a session with one strong hit beats a session with three mediocre hits,
+  // but a session with two or three real matches still tips over one with a
+  // single slightly-higher event. Pure sum-of-top-3 was too generous to
+  // "thematically close but wrong session" candidates (see regressions on
+  // multi-session iPad-case and single-session-assistant Djinn questions
+  // after switching from first-occurrence to sum aggregation).
   const TOP_K_PER_SESSION = 3;
-  const counts = new Map<string, number>();
-  const scores = new Map<string, number>();
+  const perSessionEvents = new Map<string, number[]>();
   for (const s of snippetsOrdered) {
-    const n = counts.get(s.conversation_id) ?? 0;
-    if (n >= TOP_K_PER_SESSION) continue;
-    counts.set(s.conversation_id, n + 1);
-    scores.set(
-      s.conversation_id,
-      (scores.get(s.conversation_id) ?? 0) + (s.final_score ?? 0)
-    );
+    const arr = perSessionEvents.get(s.conversation_id) ?? [];
+    if (arr.length >= TOP_K_PER_SESSION) continue;
+    arr.push(s.final_score ?? 0);
+    perSessionEvents.set(s.conversation_id, arr);
+  }
+  const scores = new Map<string, number>();
+  for (const [convId, evScores] of perSessionEvents) {
+    // evScores is already in retriever-descending order (we iterate in that
+    // order above), so evScores[0] is the session's max.
+    const max = evScores[0] ?? 0;
+    const rest = evScores.slice(1).reduce((a, b) => a + b, 0);
+    scores.set(convId, max + 0.3 * rest);
   }
   const sessionOrder = Array.from(scores.entries())
     .sort((a, b) => b[1] - a[1])
