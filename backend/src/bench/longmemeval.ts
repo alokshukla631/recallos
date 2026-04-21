@@ -25,8 +25,14 @@
  *
  * Run with: npm run bench:longmemeval  (from backend/)
  *   Flags:  --limit N   run only the first N questions (smoke test)
+ *           --start N   skip the first N questions (for chunked runs)
  *           --category X  only run questions whose question_type === X
  *           --out path.jsonl  write per-question results to disk
+ *
+ * Chunked runs: combining --start and --limit lets you invoke the bench as
+ * several sequential shell commands that each process a disjoint slice. This
+ * avoids ONNX/runtime memory accumulation on long runs that would otherwise
+ * OOM around question ~30-50 in a single process.
  */
 
 import fs from "fs";
@@ -72,6 +78,7 @@ function flag(name: string): string | undefined {
 }
 
 const LIMIT = flag("--limit") ? parseInt(flag("--limit")!, 10) : undefined;
+const START = flag("--start") ? parseInt(flag("--start")!, 10) : 0;
 const CATEGORY_FILTER = flag("--category");
 const OUT_PATH = flag("--out");
 /**
@@ -261,6 +268,9 @@ async function main(): Promise<void> {
   if (CATEGORY_FILTER) {
     questions = questions.filter((q) => q.question_type === CATEGORY_FILTER);
   }
+  if (START > 0) {
+    questions = questions.slice(START);
+  }
   if (LIMIT) {
     questions = questions.slice(0, LIMIT);
   }
@@ -275,6 +285,7 @@ async function main(): Promise<void> {
   console.log(
     `Running ${questions.length} questions` +
       (CATEGORY_FILTER ? ` (category=${CATEGORY_FILTER})` : "") +
+      (START > 0 ? ` (start=${START})` : "") +
       (LIMIT ? ` (limit=${LIMIT})` : "") +
       (QA_MODE && qaProvider !== "none" ? ` (end-to-end QA via ${qaProvider})` : "") +
       "\n"
