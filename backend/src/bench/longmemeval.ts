@@ -284,50 +284,74 @@ async function main(): Promise<void> {
   const perQuestionLog: Array<Record<string, unknown>> = [];
 
   const t0 = performance.now();
+  // Track failures separately so a single bad question doesn't lose the whole
+  // run — particularly important for long background bench invocations that
+  // can take multiple hours.
+  let failed = 0;
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i];
 
     // Fresh DB per question — haystacks are independent.
     const dbPath = path.join(os.tmpdir(), `recallos-lme-${uuidv4()}.db`);
-    await initDatabase(dbPath);
 
-    await seedHaystack(q);
+    let classification: ReturnType<typeof classifyQuery>;
+    let snippets: Awaited<ReturnType<typeof searchVerbatim>>;
+    let m: ReturnType<typeof metrics>;
+    let rank: number | null;
+    try {
+      await initDatabase(dbPath);
+      await seedHaystack(q);
 
-    const classification = classifyQuery(q.question);
-    const isAssistantQuery =
-      q.question_type === "single-session-assistant" ||
-      classification.type === "assistant_recall";
+      classification = classifyQuery(q.question);
+      const isAssistantQuery =
+        q.question_type === "single-session-assistant" ||
+        classification.type === "assistant_recall";
 
-    const snippets = await searchVerbatim(q.question, {
-      maxResults: 50,
-      temporalAnchor: classification.temporalAnchor,
-      isAssistantQuery,
-    });
+      snippets = await searchVerbatim(q.question, {
+        maxResults: 50,
+        temporalAnchor: classification.temporalAnchor,
+        isAssistantQuery,
+      });
 
-    const gold = new Set(q.answer_session_ids);
-    const { rank } = sessionRankFromEvents(snippets, gold);
-    const m = metrics(rank);
+      const gold = new Set(q.answer_session_ids);
+      ({ rank } = sessionRankFromEvents(snippets, gold));
+      m = metrics(rank);
+    } catch (err) {
+      failed++;
+      // Log, skip aggregation for this question, continue.
+      const errMsg = err instanceof Error ? err.stack ?? err.message : String(err);
+      console.error(`\n[error] question ${q.question_id} (${q.question_type}): ${errMsg}`);
+      try { fs.unlinkSync(dbPath); } catch { /* ignore */ }
+      continue;
+    }
 
     // End-to-end QA: feed top-K snippets to an LLM, judge the answer.
+    // Wrapped independently so a judge/provider transient failure doesn't
+    // lose the retrieval score for this question.
     let qaCorrect: number | null = null;
     let predictedAnswer = "";
     if (QA_MODE && qaProvider !== "none") {
-      // Top-5 snippets, formatted as excerpts so the generator sees just what
-      // the retrieval layer chose. 1500-char cap per excerpt to keep prompts
-      // in the 8k-token ballpark for most providers.
-      const top5 = snippets.slice(0, 5);
-      const excerpts = top5
-        .map((s, idx) =>
-          `[${idx + 1}] (${s.role}, ${s.created_at.slice(0, 10)}) ${
-            s.content.slice(0, 1500)
-          }`
-        )
-        .join("\n\n");
-      const predicted = await generateQAAnswer(q.question, excerpts);
-      predictedAnswer = predicted ?? "";
-      if (predicted && !predicted.startsWith("generation-error")) {
-        const judged = await judgeAnswer(q.question, q.answer, predicted);
-        if (judged) qaCorrect = judged.correct;
+      try {
+        // Top-5 snippets, formatted as excerpts so the generator sees just
+        // what the retrieval layer chose. 1500-char cap per excerpt to keep
+        // prompts in the 8k-token ballpark for most providers.
+        const top5 = snippets.slice(0, 5);
+        const excerpts = top5
+          .map((s, idx) =>
+            `[${idx + 1}] (${s.role}, ${s.created_at.slice(0, 10)}) ${
+              s.content.slice(0, 1500)
+            }`
+          )
+          .join("\n\n");
+        const predicted = await generateQAAnswer(q.question, excerpts);
+        predictedAnswer = predicted ?? "";
+        if (predicted && !predicted.startsWith("generation-error")) {
+          const judged = await judgeAnswer(q.question, q.answer, predicted);
+          if (judged) qaCorrect = judged.correct;
+        }
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.error(`\n[qa-error] question ${q.question_id}: ${errMsg}`);
       }
     }
 
@@ -359,19 +383,35 @@ async function main(): Promise<void> {
       classifier_type: classification.type,
     });
 
-    // Progress indicator
+    // Progress indicator — use \n so a crash leaves the last progress line
+    // intact in the log rather than getting partially overwritten by \r.
     if ((i + 1) % 10 === 0 || i + 1 === questions.length) {
       const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
-      process.stdout.write(
-        `\r[${i + 1}/${questions.length}] ${elapsed}s elapsed`
+      console.log(
+        `[${i + 1}/${questions.length}] ${elapsed}s elapsed` +
+          (failed > 0 ? ` (skipped=${failed})` : "")
       );
+      // Flush the per-question log every 50 questions so a later crash
+      // doesn't lose hours of retrieval scoring. We overwrite the file each
+      // time rather than append — cheap when OUT_PATH is small JSONL.
+      if (OUT_PATH && (i + 1) % 50 === 0) {
+        try {
+          fs.writeFileSync(
+            OUT_PATH,
+            perQuestionLog.map((r) => JSON.stringify(r)).join("\n") + "\n"
+          );
+        } catch { /* ignore */ }
+      }
     }
 
     // Clean up the temp DB file so we don't fill /tmp
     try { fs.unlinkSync(dbPath); } catch { /* ignore */ }
   }
 
-  console.log("\n");
+  console.log("");
+  if (failed > 0) {
+    console.log(`⚠  ${failed} question(s) skipped due to errors (see [error] lines above)\n`);
+  }
 
   // ─── Report ────────────────────────────────────────────────────────────────
   const qaActive = QA_MODE && qaProvider !== "none";
