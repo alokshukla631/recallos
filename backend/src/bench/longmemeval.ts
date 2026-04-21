@@ -80,6 +80,14 @@ function flag(name: string): string | undefined {
 const LIMIT = flag("--limit") ? parseInt(flag("--limit")!, 10) : undefined;
 const START = flag("--start") ? parseInt(flag("--start")!, 10) : 0;
 const CATEGORY_FILTER = flag("--category");
+/**
+ * `--ids id1,id2,…` runs only the listed question_ids. Takes priority over
+ * --category / --start / --limit, useful when debugging a regression:
+ *   npx tsx src/bench/longmemeval.ts --ids gpt4_468eb064,60bf93ed_abs --out /tmp/trace.jsonl
+ */
+const IDS_FILTER = flag("--ids")
+  ? new Set(flag("--ids")!.split(",").map((s) => s.trim()).filter(Boolean))
+  : null;
 const OUT_PATH = flag("--out");
 /**
  * `--qa` turns on end-to-end QA scoring: the runner feeds top-K retrieved
@@ -274,14 +282,18 @@ async function main(): Promise<void> {
   ) as LMEQuestion[];
 
   let questions = allQuestions;
-  if (CATEGORY_FILTER) {
-    questions = questions.filter((q) => q.question_type === CATEGORY_FILTER);
-  }
-  if (START > 0) {
-    questions = questions.slice(START);
-  }
-  if (LIMIT) {
-    questions = questions.slice(0, LIMIT);
+  if (IDS_FILTER) {
+    questions = questions.filter((q) => IDS_FILTER.has(q.question_id));
+  } else {
+    if (CATEGORY_FILTER) {
+      questions = questions.filter((q) => q.question_type === CATEGORY_FILTER);
+    }
+    if (START > 0) {
+      questions = questions.slice(START);
+    }
+    if (LIMIT) {
+      questions = questions.slice(0, LIMIT);
+    }
   }
 
   const qaProvider = QA_MODE ? pickJudgeProvider() : "none";
