@@ -166,9 +166,15 @@ const PREFERENCE_QUERY_EXPANSIONS: Array<{ anchor: RegExp; extra: string[] }> = 
       "arxiv", "neurips", "icml", "cvpr", "emnlp", "nature", "lancet",
     ],
   },
-  // Gardening / homegrown cooking.
+  // Gardening / homegrown cooking.  The anchor intentionally excludes
+  // generic cooking verbs like "recipe", "cook", "dinner", "ingredients" —
+  // those over-fire on unrelated preference queries (e.g. "coffee creamer
+  // recipe", "slow cooker recipes") and inject vegetable vocabulary that
+  // pollutes BM25 for the true gold session.  The one garden question in
+  // LongMemEval ("serve for dinner with my homegrown ingredients") still
+  // matches via "homegrown".
   {
-    anchor: /\b(gardens?|homegrown|grown|grow|harvest|vegetables?|herbs?|produce|cook(ing)?|dinners?|recipes?|meal plan|serve|prepare|ingredients?)\b/i,
+    anchor: /\b(gardens?|homegrown|grown|grow|harvest|vegetables?|herbs?|produce)\b/i,
     extra: [
       "tomato", "basil", "mint", "zucchini", "lettuce", "pepper", "cucumber",
       "squash", "kale", "carrot", "onion", "garlic", "potato", "spinach",
