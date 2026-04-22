@@ -1,6 +1,9 @@
 
-# LongMemEval dataset (264MB) — downloaded locally, see bench:longmemeval
+# Downloaded benchmark datasets — kept local, not tracked
 data/longmemeval/
+data/locomo/
 # Per-question result logs from bench runs
 longmemeval-*.jsonl
 longmemeval-*.log
+locomo-*.jsonl
+locomo-*.log
