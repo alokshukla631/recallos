@@ -17,7 +17,7 @@
     "bench:longmemeval": "tsx src/bench/longmemeval.ts",
     "bench:guard": "tsx src/bench/regression-guard.ts",
     "bench:judge-tests": "tsx src/bench/lme-judge-tests.ts",
-    "bench:all": "npm run bench && npm run bench:verbatim && npm run bench:eval && npm run bench:regression && npm run bench:context && npm run bench:modules && npm run bench:e2e && npm run bench:judge-tests",
+    "bench:all": "npm run bench && npm run bench:verbatim && npm run bench:eval && npm run bench:regression && npm run bench:context && npm run bench:modules && npm run bench:e2e && npm run bench:guard && npm run bench:judge-tests",
     "mcp": "tsx src/mcp-server.ts"
   },
   "dependencies": {

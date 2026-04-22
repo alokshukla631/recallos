@@ -51,12 +51,17 @@ npm run dev:frontend  # http://localhost:5173
 npm run bench          # 5 structured memory scenarios
 npm run bench:verbatim # 60 verbatim retrieval assertions
 npm run bench:eval     # LongMemEval-compatible eval (40 cases, 6 categories)
+npm run bench:guard    # 13-question regression canary (~90 s) — run before PRs
 npm run bench:all      # all three suites in sequence
 ```
 
 No API keys needed. The eval suite measures Recall@5/10, NDCG, and MRR across
 single_session_preference, assistant_recall, temporal_history, episodic_search,
 and noisy_haystack categories.
+
+See [docs/07-retrieval-technique.md](docs/07-retrieval-technique.md) for the
+full technique note covering the five-signal hybrid recipe and why it beats
+MemPalace by 1.2 pt on LongMemEval-s.
 
 ## How it works
 
