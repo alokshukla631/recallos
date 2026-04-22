@@ -33,6 +33,23 @@ import {
 } from "./embedding-store.js";
 import type { TemporalAnchor } from "./query-classifier.js";
 
+// ─── Ablation / signal-disable switches ──────────────────────────────────────
+// Set DISABLE_SIGNALS="bm25,temporal,preference,role,semantic" (any subset) to
+// zero out individual signals at scoring time.  Used by bench/ablation.ts to
+// measure each signal's contribution to overall retrieval quality.  Evaluated
+// once at module load — kill and re-spawn the process to change.
+const DISABLED_SIGNALS: ReadonlySet<string> = new Set(
+  (process.env.DISABLE_SIGNALS ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+);
+const SIG_BM25       = !DISABLED_SIGNALS.has("bm25");
+const SIG_TEMPORAL   = !DISABLED_SIGNALS.has("temporal");
+const SIG_PREFERENCE = !DISABLED_SIGNALS.has("preference");
+const SIG_ROLE       = !DISABLED_SIGNALS.has("role");
+const SIG_SEMANTIC   = !DISABLED_SIGNALS.has("semantic");
+
 // ─── Public types ─────────────────────────────────────────────────────────────
 
 export interface VerbatimSnippet {
@@ -481,17 +498,24 @@ export async function searchVerbatim(
   const scored: ScoredEntry[] = [];
 
   for (const event of events) {
-    const bm25       = bm25Norm.get(event.id) ?? 0;
-    const temporalRaw = temporalAnchor
+    const bm25Live   = bm25Norm.get(event.id) ?? 0;
+    const bm25       = SIG_BM25 ? bm25Live : 0;
+    const temporalRaw = SIG_TEMPORAL && temporalAnchor
       ? temporalBoostFor(new Date(event.created_at), temporalAnchor)
       : 0;
-    const temporal   = temporalBoostGated(temporalRaw, bm25);
-    const preference = preferenceBoostFor(event.content);
-    const role       = roleBoostFor(event.role, isAssistantQuery);
+    // Temporal gating uses the live BM25 even if BM25 signal is disabled,
+    // so temporal's own behaviour isn't accidentally affected by a BM25
+    // ablation — we want to measure each signal's marginal contribution,
+    // not the interaction.
+    const temporal   = SIG_TEMPORAL
+      ? temporalBoostGated(temporalRaw, bm25Live)
+      : 0;
+    const preference = SIG_PREFERENCE ? preferenceBoostFor(event.content) : 0;
+    const role       = SIG_ROLE ? roleBoostFor(event.role, isAssistantQuery) : 0;
 
     // Signal 5: semantic boost — map raw cosine similarity to [0, 0.35]
     const eventVec = embeddingMap?.get(event.id);
-    const semantic = queryVec && eventVec
+    const semantic = SIG_SEMANTIC && queryVec && eventVec
       ? semanticBoostFor(cosineSimilarity(queryVec, eventVec))
       : 0;
 
