@@ -115,6 +115,17 @@ benchmark the retriever was never tuned on.  The ~20pt gap vs
 LongMemEval is the honest measure of how much of our tuning is
 domain-specific.
 
+**End-to-end QA accuracy** (50-question single-session-user slice, Anthropic
+Claude Sonnet as judge and answerer, retrieval → top-5 snippets → LLM):
+```
+Category                      N    R@5    QA-Acc
+single-session-user          50  1.000   0.900
+```
+All 5 QA failures had R@5 = 1.000 (the retriever surfaced the right session
+at rank 1), so the error is on the generation side — the LLM either refused
+("I don't know") or gave a partial answer.  The retriever is not the
+bottleneck at this scale.
+
 ## What's built
 
 ### Pages
