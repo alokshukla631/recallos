@@ -101,6 +101,20 @@ Reference points on the same LongMemEval-s 500-question split:
 - RecallOS hybrid retriever: **0.978 R@5** (+1.2 pt over MemPalace)
 - LongMemEval paper's embedding-only baseline: ~0.40 R@5
 
+**Cross-benchmark generalization check — LoCoMo** (10 multi-session conversations, 1982 QA pairs, zero retriever tuning on this dataset):
+```
+                         Turn-level   Session-level
+Overall          R@5         0.518          0.777
+                 R@10        0.586          0.824
+                 MRR         0.399          0.672
+```
+LoCoMo's native scoring is turn-level (find the exact dia_id) which is
+strictly harder than LongMemEval's session-level scoring.  The session-
+level row above is the apples-to-apples comparison — 0.777 on a
+benchmark the retriever was never tuned on.  The ~20pt gap vs
+LongMemEval is the honest measure of how much of our tuning is
+domain-specific.
+
 ## What's built
 
 ### Pages
