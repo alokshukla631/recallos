@@ -43,6 +43,7 @@ import { initDatabase, runSql } from "../db/index.js";
 import { classifyQuery } from "../modules/query-classifier.js";
 import { searchVerbatim } from "../modules/verbatim-retriever.js";
 import { generateQAAnswer, judgeAnswer, pickJudgeProvider } from "./lme-judge.js";
+import { loadProviderKeysIntoEnv } from "./load-provider-env.js";
 
 // ─── Types from the official dataset ──────────────────────────────────────────
 
@@ -296,10 +297,16 @@ async function main(): Promise<void> {
     }
   }
 
+  if (QA_MODE) {
+    const loaded = await loadProviderKeysIntoEnv();
+    if (loaded.length > 0) {
+      console.log(`Loaded provider keys from recallos.db: ${loaded.join(", ")}`);
+    }
+  }
   const qaProvider = QA_MODE ? pickJudgeProvider() : "none";
   if (QA_MODE && qaProvider === "none") {
     console.warn(
-      "--qa set but no provider API key in env. End-to-end QA scoring is disabled; retrieval metrics only.\n"
+      "--qa set but no provider API key in env or recallos.db. End-to-end QA scoring is disabled; retrieval metrics only.\n"
     );
   }
 
