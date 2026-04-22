@@ -10,3 +10,4 @@ locomo-*.log
 ablation-*.jsonl
 ablation-*.log
 ablation-*.json
+regression-guard-*.jsonl
