@@ -82,6 +82,18 @@ const LIMIT = flag("--limit") ? parseInt(flag("--limit")!, 10) : undefined;
 const START = flag("--start") ? parseInt(flag("--start")!, 10) : 0;
 const CATEGORY_FILTER = flag("--category");
 /**
+ * `--stratified` picks the first N/(num categories) questions from each
+ * category instead of slicing the dataset linearly.  Useful for ablations
+ * where you need each signal to be exercised — a flat `--limit 50` only
+ * hits single-session-user (the dataset is grouped by category) and so
+ * temporal / preference / role ablations show 0 effect, which says
+ * nothing about those signals' actual contribution.
+ *
+ *   npx tsx src/bench/longmemeval.ts --stratified  (default 60 = 10/cat)
+ *   npx tsx src/bench/longmemeval.ts --stratified --limit 120  (20/cat)
+ */
+const STRATIFIED = args.includes("--stratified");
+/**
  * `--ids id1,id2,…` runs only the listed question_ids. Takes priority over
  * --category / --start / --limit, useful when debugging a regression:
  *   npx tsx src/bench/longmemeval.ts --ids gpt4_468eb064,60bf93ed_abs --out /tmp/trace.jsonl
@@ -285,6 +297,21 @@ async function main(): Promise<void> {
   let questions = allQuestions;
   if (IDS_FILTER) {
     questions = questions.filter((q) => IDS_FILTER.has(q.question_id));
+  } else if (STRATIFIED) {
+    // Group by category, keep the first floor(LIMIT / numCategories) of each.
+    // Default to 10 per category (60 total across 6 cats) when no --limit.
+    const grouped = new Map<string, LMEQuestion[]>();
+    for (const q of allQuestions) {
+      const list = grouped.get(q.question_type) ?? [];
+      list.push(q);
+      grouped.set(q.question_type, list);
+    }
+    const cats = Array.from(grouped.keys()).sort();
+    const total = LIMIT ?? cats.length * 10;
+    const perCat = Math.max(1, Math.floor(total / cats.length));
+    const picks: LMEQuestion[] = [];
+    for (const c of cats) picks.push(...(grouped.get(c) ?? []).slice(0, perCat));
+    questions = picks;
   } else {
     if (CATEGORY_FILTER) {
       questions = questions.filter((q) => q.question_type === CATEGORY_FILTER);

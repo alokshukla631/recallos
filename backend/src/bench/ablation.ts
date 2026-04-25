@@ -36,6 +36,14 @@ function flag(name: string): string | undefined {
 }
 const LIMIT = flag("--limit") ? parseInt(flag("--limit")!, 10) : 50;
 const CATEGORY = flag("--category");
+/**
+ * `--stratified` makes each subprocess pick the first floor(LIMIT/6) questions
+ * from each of the 6 LongMemEval categories instead of slicing linearly from
+ * the start.  Without this, a 50-question ablation only exercises BM25 on
+ * single-session-user and reports 0 contribution for temporal / preference
+ * / role / semantic — which is meaningless.
+ */
+const STRATIFIED = args.includes("--stratified");
 
 const SIGNALS = ["bm25", "temporal", "preference", "role", "semantic"] as const;
 type Signal = typeof SIGNALS[number];
@@ -51,10 +59,12 @@ interface RunSummary {
 
 /** Kick off a child tsx process, wait for it to exit, return its stdout. */
 function runBenchOnce(label: string, disableSignals: string): Promise<{ out: string; err: string; code: number }> {
-  const outPath = `ablation-${label}-limit${LIMIT}${CATEGORY ? `-${CATEGORY}` : ""}.jsonl`;
+  const tag = `${STRATIFIED ? "strat" : "limit"}${LIMIT}${CATEGORY ? `-${CATEGORY}` : ""}`;
+  const outPath = `ablation-${label}-${tag}.jsonl`;
   const env = { ...process.env, USE_LOCAL_EMBEDDINGS: "1", EMBEDDING_MAX_NEW_PER_CALL: "300", DISABLE_SIGNALS: disableSignals };
   const argv = ["tsx", "src/bench/longmemeval.ts", "--limit", String(LIMIT), "--out", outPath];
   if (CATEGORY) argv.push("--category", CATEGORY);
+  if (STRATIFIED) argv.push("--stratified");
 
   return new Promise((resolve) => {
     const child = spawn("npx", argv, { env, cwd: process.cwd(), shell: true });
@@ -96,20 +106,24 @@ function summarize(label: string, jsonlPath: string): RunSummary {
 }
 
 async function main(): Promise<void> {
-  console.log(`=== Signal ablation: limit=${LIMIT}${CATEGORY ? ` category=${CATEGORY}` : ""} ===\n`);
+  const tag = `${STRATIFIED ? "strat" : "limit"}${LIMIT}${CATEGORY ? `-${CATEGORY}` : ""}`;
+  console.log(
+    `=== Signal ablation: limit=${LIMIT}${CATEGORY ? ` category=${CATEGORY}` : ""}` +
+      `${STRATIFIED ? " (stratified across categories)" : ""} ===\n`
+  );
   const summaries: RunSummary[] = [];
 
   // Baseline first.
   console.log(">>> Run 1/6: baseline (all signals enabled)");
   await runBenchOnce("baseline", "");
-  summaries.push(summarize("baseline", `ablation-baseline-limit${LIMIT}${CATEGORY ? `-${CATEGORY}` : ""}.jsonl`));
+  summaries.push(summarize("baseline", `ablation-baseline-${tag}.jsonl`));
 
   // One signal-off run per signal.
   for (let i = 0; i < SIGNALS.length; i++) {
     const sig: Signal = SIGNALS[i];
     console.log(`\n>>> Run ${i + 2}/6: no-${sig}`);
     await runBenchOnce(`no-${sig}`, sig);
-    summaries.push(summarize(`no-${sig}`, `ablation-no-${sig}-limit${LIMIT}${CATEGORY ? `-${CATEGORY}` : ""}.jsonl`));
+    summaries.push(summarize(`no-${sig}`, `ablation-no-${sig}-${tag}.jsonl`));
   }
 
   // ─── Report ────────────────────────────────────────────────────────────────
@@ -150,8 +164,15 @@ async function main(): Promise<void> {
   }
 
   // Write the summary as JSON so the writeup/regression scripts can pick it up.
-  const summaryPath = `ablation-summary-limit${LIMIT}${CATEGORY ? `-${CATEGORY}` : ""}.json`;
-  fs.writeFileSync(summaryPath, JSON.stringify({ limit: LIMIT, category: CATEGORY ?? null, summaries, contribs }, null, 2));
+  const summaryPath = `ablation-summary-${tag}.json`;
+  fs.writeFileSync(
+    summaryPath,
+    JSON.stringify(
+      { limit: LIMIT, category: CATEGORY ?? null, stratified: STRATIFIED, summaries, contribs },
+      null,
+      2
+    )
+  );
   console.log(`\nSummary written to ${summaryPath}`);
 }
 
