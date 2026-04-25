@@ -177,32 +177,56 @@ Retrieval is not the bottleneck at this scale; context-selection
 (which *turns* from the gold session make it into the top-k snippets)
 and generation are.
 
-### Per-signal ablation — single-session-user slice (50 Q)
+### Per-signal ablation — stratified slice (60 Q, 10 per category)
 
 ```
-Run             N    R@5    R@10   NDCG@5  MRR    Δ R@5 vs baseline
-baseline       50  1.000  1.000  0.981   0.975       —
-no-bm25        50  0.520  0.640  0.444   0.435   -0.480
-no-temporal    50  1.000  1.000  0.981   0.975   +0.000
-no-preference  50  1.000  1.000  0.981   0.975   +0.000
-no-role        50  1.000  1.000  0.981   0.975   +0.000
-no-semantic    50  1.000  1.000  0.981   0.975   +0.000
+Run             N    R@5    R@10   NDCG@5  MRR    Δ R@5   Δ MRR
+baseline       60  1.000  1.000  0.988   0.983     —       —
+no-bm25        60  0.617  0.717  0.539   0.525  -0.383   -0.458
+no-temporal    60  1.000  1.000  0.988   0.983  +0.000   +0.000
+no-preference  60  1.000  1.000  0.988   0.983  +0.000   +0.000
+no-role        60  1.000  1.000  0.975   0.967  +0.000   -0.016
+no-semantic    60  1.000  1.000  0.961   0.947  +0.000   -0.036
 ```
 
-Two reads, in tension:
+Per-category R@5 with no BM25 (the only ablation that moves the needle on
+recall):
 
-- **BM25 is the dominant signal on this slice.**  Removing it drops
-  R@5 by 0.48 and MRR by 0.54.  The remaining 0.52 R@5 with no BM25
-  comes from semantic cosine + role boost finding *some* of the right
-  sessions, but not most.
-- **The +0.000 entries for the other four signals are an artifact of
-  the slice, not evidence.**  LongMemEval's question file is grouped
-  by category, so `--limit 50` only hits single-session-user — and
-  those questions don't have temporal anchors, don't ask for
-  preferences, aren't assistant-recall, and are short enough that
-  BM25 alone disambiguates.  A proper ablation needs a stratified
-  sample across all 6 categories (`--stratified` flag in the runner;
-  a ~110-minute run that's pending at time of writing).
+```
+                          baseline   no-bm25
+single-session-user        1.000      0.700
+single-session-assistant   1.000      0.600
+single-session-preference  1.000      0.600
+multi-session              1.000      0.400
+temporal-reasoning         1.000      0.600
+knowledge-update           1.000      0.800
+```
+
+Three reads:
+
+- **BM25 is by far the dominant signal.**  Removing it drops overall
+  R@5 from 1.000 to 0.617 (-0.38) and MRR from 0.983 to 0.525 (-0.46).
+  Multi-session takes the biggest hit (R@5 0.400) — without lexical
+  anchoring, "the conversation about iPad case" is indistinguishable
+  from any other gadget conversation.
+- **The other four signals are functionally redundant for R@5 on the
+  easy slice.**  The additive sum has enough headroom that ablating
+  any single non-BM25 signal still leaves the gold session in top-5.
+  This is *not* evidence that the signals are useless — it's evidence
+  that the slice is at the R@5 ceiling.
+- **Where the other signals show up is MRR, not R@5.**  no-role drops
+  MRR by 0.016, no-semantic by 0.036 — meaning some of the rank-1
+  hits become rank-2 or rank-3 hits.  These signals stack up to
+  *promote* the right session within the top 5; BM25 *gates* whether
+  it gets into the top 5 at all.
+
+The full R@5 contribution of the four "soft" signals would be visible
+only on a hard slice — questions that the v4 baseline gets at rank
+2-10 instead of 1.  On LongMemEval-s that's the residual ~3% (≈14 of
+500 questions across temporal-reasoning and multi-session).  Per-
+question diffing of `ablation-no-*-strat60.jsonl` against
+`ablation-baseline-strat60.jsonl` is the way to see those individual
+ranking flips.
 
 ## What didn't help
 
