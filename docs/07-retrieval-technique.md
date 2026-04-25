@@ -177,6 +177,33 @@ Retrieval is not the bottleneck at this scale; context-selection
 (which *turns* from the gold session make it into the top-k snippets)
 and generation are.
 
+### Per-signal ablation — single-session-user slice (50 Q)
+
+```
+Run             N    R@5    R@10   NDCG@5  MRR    Δ R@5 vs baseline
+baseline       50  1.000  1.000  0.981   0.975       —
+no-bm25        50  0.520  0.640  0.444   0.435   -0.480
+no-temporal    50  1.000  1.000  0.981   0.975   +0.000
+no-preference  50  1.000  1.000  0.981   0.975   +0.000
+no-role        50  1.000  1.000  0.981   0.975   +0.000
+no-semantic    50  1.000  1.000  0.981   0.975   +0.000
+```
+
+Two reads, in tension:
+
+- **BM25 is the dominant signal on this slice.**  Removing it drops
+  R@5 by 0.48 and MRR by 0.54.  The remaining 0.52 R@5 with no BM25
+  comes from semantic cosine + role boost finding *some* of the right
+  sessions, but not most.
+- **The +0.000 entries for the other four signals are an artifact of
+  the slice, not evidence.**  LongMemEval's question file is grouped
+  by category, so `--limit 50` only hits single-session-user — and
+  those questions don't have temporal anchors, don't ask for
+  preferences, aren't assistant-recall, and are short enough that
+  BM25 alone disambiguates.  A proper ablation needs a stratified
+  sample across all 6 categories (`--stratified` flag in the runner;
+  a ~110-minute run that's pending at time of writing).
+
 ## What didn't help
 
 - **Learned combiner over the five signals.**  Tried a small logistic
@@ -222,8 +249,14 @@ npx tsx src/bench/locomo.ts --limit 10 --out locomo-final.jsonl
 # End-to-end QA (needs a provider key in Settings or env)
 npx tsx src/bench/longmemeval.ts --limit 50 --qa --out longmemeval-qa-50.jsonl
 
-# Per-signal ablation (≈75 min on CPU)
+# Per-signal ablation, single-category (≈90 min on CPU)
 npx tsx src/bench/ablation.ts --limit 50
+
+# Per-signal ablation, stratified across all 6 categories (≈110 min)
+npx tsx src/bench/ablation.ts --stratified --limit 60
+
+# Regression guard (13 canary questions, ≈90 s — run before PRs)
+npm run bench:guard
 ```
 
 Everything runs locally, zero cloud dependencies.  Raw per-question
