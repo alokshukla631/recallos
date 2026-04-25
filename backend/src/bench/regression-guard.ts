@@ -15,9 +15,11 @@
  *     it from R@5=0 back to R@5=1 at rank 3.  Pinned here so any
  *     future broadening of that anchor gets caught immediately.
  *
- * Runtime: ≈ 60–90 s on local MiniLM-L6 embeddings (13 questions ×
- * ~6 s each of seeding + scoring).  Cheap enough to run before every
- * PR, slow enough that we don't run it on every save.
+ * Runtime: ≈ 5 min on local MiniLM-L6 embeddings (13 questions × ~24 s
+ * each of seeding + scoring; per-question seeding rebuilds the full
+ * 500-conversation haystack since LongMemEval-s ships per-question
+ * haystacks).  Cheap enough to run before opening a PR, too slow to
+ * run on every save.
  *
  * Usage:
  *   npx tsx src/bench/regression-guard.ts

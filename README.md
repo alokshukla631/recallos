@@ -51,7 +51,7 @@ npm run dev:frontend  # http://localhost:5173
 npm run bench          # 5 structured memory scenarios
 npm run bench:verbatim # 60 verbatim retrieval assertions
 npm run bench:eval     # LongMemEval-compatible eval (40 cases, 6 categories)
-npm run bench:guard    # 13-question regression canary (~90 s) — run before PRs
+npm run bench:guard    # 13-question regression canary (~5 min) — run before PRs
 npm run bench:all      # all three suites in sequence
 ```
 

@@ -279,7 +279,7 @@ npx tsx src/bench/ablation.ts --limit 50
 # Per-signal ablation, stratified across all 6 categories (≈110 min)
 npx tsx src/bench/ablation.ts --stratified --limit 60
 
-# Regression guard (13 canary questions, ≈90 s — run before PRs)
+# Regression guard (13 canary questions, ≈5 min — run before PRs)
 npm run bench:guard
 ```
 
