@@ -1,6 +1,6 @@
 {
   "name": "recallos",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "RecallOS - local-first AI memory and context layer (desktop runner)",
   "scripts": {

@@ -1,6 +1,6 @@
 {
   "name": "recallos-backend",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "RecallOS backend - local-first AI memory and context layer",
   "main": "dist/index.js",
   "scripts": {

@@ -1,6 +1,6 @@
 {
   "name": "recallos-cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "RecallOS CLI - manage memory, trips, and chat from the terminal",
   "type": "module",
   "bin": {
