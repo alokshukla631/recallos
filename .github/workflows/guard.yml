@@ -1,0 +1,54 @@
+name: regression-guard
+
+# Pinned-rank check for 13 canary LongMemEval-s questions across all 6
+# categories. See backend/src/bench/regression-guard.ts.
+#
+# Manual trigger only because the LongMemEval-s dataset is not redistributable
+# from this repo (see backend/.gitignore). To run this in CI, drop a copy of
+# longmemeval_s.json into the workflow workspace via secrets/artifact/cache
+# and rerun via the Actions tab.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dataset_url:
+        description: "URL to longmemeval_s.json (optional; skip if already cached)"
+        required: false
+        type: string
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm install --no-audit --no-fund
+
+      - name: Fetch dataset
+        if: ${{ inputs.dataset_url != '' }}
+        working-directory: backend
+        run: |
+          mkdir -p data/longmemeval
+          curl -L "${{ inputs.dataset_url }}" -o data/longmemeval/longmemeval_s.json
+
+      - name: Verify dataset present
+        working-directory: backend
+        run: |
+          if [ ! -f data/longmemeval/longmemeval_s.json ]; then
+            echo "::error::longmemeval_s.json missing — pass dataset_url or pre-stage the file."
+            exit 1
+          fi
+
+      - name: Run regression guard
+        working-directory: backend
+        run: npm run bench:guard
